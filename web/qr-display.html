@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conlecta QR Display</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="qr-display-body">
+  <div class="display-crystal-scene" aria-hidden="true">
+    <i class="crystal c1"></i>
+    <i class="crystal c2"></i>
+    <i class="crystal c3"></i>
+    <i class="crystal c4"></i>
+    <i class="crystal c5"></i>
+    <i class="crystal c6"></i>
+    <i class="crystal c7"></i>
+    <i class="crystal c8"></i>
+    <span class="particle p1"></span>
+    <span class="particle p2"></span>
+    <span class="particle p3"></span>
+    <span class="particle p4"></span>
+    <span class="particle p5"></span>
+    <span class="particle p6"></span>
+    <span class="particle p7"></span>
+    <span class="particle p8"></span>
+    <span class="particle p9"></span>
+    <span class="particle p10"></span>
+    <span class="particle p11"></span>
+    <span class="particle p12"></span>
+  </div>
+  <main class="display-shell">
+    <section class="display-stage">
+      <div class="display-splash" id="display-splash">
+        <img class="js-display-logo" src="/assets/ConlectaPosLogo.png" alt="">
+        <strong>Conlecta POS</strong>
+        <span>Payment Display</span>
+      </div>
+
+      <div class="display-media">
+        <video id="display-video" src="/assets/videos/Splash.mp4" autoplay muted loop playsinline></video>
+      </div>
+
+      <div class="display-stage-qr" id="display-stage-qr" hidden>
+        <div class="stage-qr-card">
+          <img id="display-stage-qr-img" alt="QRIS payment code">
+          <strong id="display-stage-total">Rp 0</strong>
+          <span>Scan QRIS untuk membayar</span>
+        </div>
+      </div>
+
+      <div class="display-stage-event" id="display-stage-event" hidden>
+        <div class="stage-event-card">
+          <span id="display-stage-event-kicker">Payment</span>
+          <strong id="display-stage-event-title">Payment Success</strong>
+          <p id="display-stage-event-message">Payment completed.</p>
+          <em id="display-stage-event-total">Rp 0</em>
+        </div>
+      </div>
+
+      <div class="display-stage-copy" hidden>
+        <h1 id="display-hero-title"></h1>
+        <p id="display-status"></p>
+      </div>
+
+      <div class="display-bottom-bar">
+        <div>
+          <strong id="display-bottom-shop">Conlecta</strong>
+          <span id="display-bottom-address">Point of Sale</span>
+        </div>
+        <div class="display-online">ONLINE</div>
+      </div>
+    </section>
+
+    <aside class="display-panel">
+      <div class="display-brand">
+        <img class="js-display-logo" src="/assets/ConlectaPosLogo.png" alt="">
+        <div>
+          <h2 id="display-shop">Conlecta</h2>
+          <p class="muted">Point of Sale</p>
+        </div>
+      </div>
+
+      <div class="display-table-head">
+        <span>Item</span>
+        <span>Qty</span>
+        <span>Harga</span>
+      </div>
+      <div class="display-items" id="display-items"></div>
+
+      <div class="display-total">
+        <span>Total Payment</span>
+        <strong id="display-total">Rp 0</strong>
+      </div>
+
+      <div class="display-event-panel" id="display-event-panel" hidden>
+        <span id="display-event-kicker">Payment</span>
+        <strong id="display-event-title">Payment Success</strong>
+        <p id="display-event-message">Payment completed.</p>
+        <dl>
+          <div><dt>Total</dt><dd id="display-event-total">Rp 0</dd></div>
+        </dl>
+      </div>
+
+      <div class="display-payment-area">
+        <div class="payment-logo-grid" id="display-payment-logos"></div>
+      </div>
+
+      <p class="display-hint" id="display-hint"></p>
+
+      <div class="marquee">
+        <span id="display-marquee">CONLECTA POS - QRIS tersedia - Pembayaran aman dan cepat</span>
+      </div>
+
+      <footer class="display-footer">
+        <span id="display-clock">--:--:--</span>
+        <span id="display-version-label">Conlecta Version</span>
+      </footer>
+    </aside>
+  </main>
+
+  <script src="/qr-display.js"></script>
+</body>
+</html>

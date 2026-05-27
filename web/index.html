@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conlecta Web POS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-bg"></div>
+  <div class="bg-scene" aria-hidden="true">
+    <div class="bg-gradient"></div>
+    <div class="crystal c1"></div>
+    <div class="crystal c2"></div>
+    <div class="crystal c3"></div>
+    <div class="crystal c4"></div>
+    <div class="crystal c5"></div>
+    <div class="crystal c6"></div>
+    <div class="crystal c7"></div>
+    <div class="crystal c8"></div>
+    <div class="particle p1"></div>
+    <div class="particle p2"></div>
+    <div class="particle p3"></div>
+    <div class="particle p4"></div>
+    <div class="particle p5"></div>
+    <div class="particle p6"></div>
+    <div class="particle p7"></div>
+    <div class="particle p8"></div>
+    <div class="particle p9"></div>
+    <div class="particle p10"></div>
+    <div class="particle p11"></div>
+    <div class="particle p12"></div>
+    <div id="particles-container"></div>
+  </div>
+
+  <section id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-copy">
+        <img class="auth-logo conlecta-identity-logo" id="auth-logo" src="/assets/ConlectaPosLogo.png" alt="Conlecta POS identity">
+        <p class="eyebrow">Secure Conlecta access</p>
+        <h1>Conlecta POS</h1>
+        <p class="muted">Cashier, stock, QRIS payment, history, PDF, settings, and logs in one web workspace.</p>
+      </div>
+      <form class="auth-form active" id="login-form" autocomplete="off">
+        <div class="auth-form-head">
+          <img class="form-logo conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="Conlecta POS identity">
+          <h2>Welcome back</h2>
+          <p class="muted">Enter your account password to continue.</p>
+        </div>
+        <label class="field auth-field">
+          <span>Email or Username</span>
+          <span class="auth-input-wrap">
+            <span class="auth-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M4 6h16v12H4z"></path>
+                <path d="m4 7 8 6 8-6"></path>
+              </svg>
+            </span>
+            <input id="login-id" type="text" autocomplete="off" required>
+          </span>
+        </label>
+        <label class="field auth-field">
+          <span>Password</span>
+          <span class="auth-input-wrap">
+            <span class="auth-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+              </svg>
+            </span>
+            <input id="login-password" type="password" autocomplete="off" required>
+            <button class="auth-mask-btn" type="button" data-action="toggle-login-password" aria-label="Show password" aria-pressed="false">
+              <svg class="eye-open" viewBox="0 0 24 24" focusable="false">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"></path>
+                <circle cx="12" cy="12" r="2.5"></circle>
+              </svg>
+              <svg class="eye-closed" viewBox="0 0 24 24" focusable="false">
+                <path d="m3 3 18 18"></path>
+                <path d="M10.6 10.6A2.5 2.5 0 0 0 12 14.5c.7 0 1.3-.3 1.8-.8"></path>
+                <path d="M7.2 7.6C4.2 9.3 2.5 12 2.5 12s3.5 6 9.5 6c1.6 0 3-.4 4.2-1"></path>
+                <path d="M14 6.2c4.7.9 7.5 5.8 7.5 5.8a15 15 0 0 1-2.1 2.7"></path>
+              </svg>
+            </button>
+          </span>
+        </label>
+        <button class="btn primary wide auth-primary" type="submit">Login</button>
+        <p class="auth-status" id="login-status"></p>
+      </form>
+      <form class="auth-form" id="pin-form" autocomplete="off">
+        <div class="auth-form-head">
+          <img class="form-logo conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="Conlecta POS identity">
+          <h2>Enter PIN</h2>
+          <p class="muted" id="pin-target">Masukkan 6 digit PIN.</p>
+        </div>
+        <div class="otp-row pin-row" aria-label="6 digit PIN code">
+          <input class="pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code">
+          <input class="pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+        </div>
+        <input id="pin-code" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" hidden>
+        <div class="otp-actions">
+          <button class="text-btn" type="button" data-action="forgot-pin">Forgot PIN</button>
+          <button class="text-btn" type="button" data-action="back-login">Back to login</button>
+        </div>
+        <p class="auth-status" id="pin-status"></p>
+      </form>
+      <form class="auth-form" id="pin-register-form" autocomplete="off">
+        <div class="auth-form-head">
+          <img class="form-logo conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="Conlecta POS identity">
+          <h2>Register PIN</h2>
+          <p class="muted" id="pin-register-target">Buat PIN 6 angka untuk login berikutnya.</p>
+        </div>
+        <label class="field auth-field">
+          <span>New PIN</span>
+          <div class="otp-row pin-row compact" aria-label="New 6 digit PIN">
+            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          </div>
+        </label>
+        <label class="field auth-field">
+          <span>Confirm PIN</span>
+          <div class="otp-row pin-row compact" aria-label="Confirm 6 digit PIN">
+            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          </div>
+        </label>
+        <input id="pin-new-code" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" hidden>
+        <input id="pin-confirm-code" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" hidden>
+        <div class="otp-actions">
+          <span></span>
+          <button class="text-btn" type="button" data-action="back-login">Back to login</button>
+        </div>
+        <p class="auth-status" id="pin-register-status"></p>
+      </form>
+      <form class="auth-form" id="otp-form">
+        <div class="auth-form-head">
+          <img class="form-logo conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="Conlecta POS identity">
+          <h2>Verify OTP</h2>
+          <p class="muted" id="otp-target">OTP sent to your email.</p>
+        </div>
+        <p class="otp-countdown" id="otp-countdown">OTP berlaku 60 detik.</p>
+        <div class="otp-row" aria-label="6 digit OTP code">
+          <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code">
+          <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+          <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+          <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+          <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+          <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+        </div>
+        <input id="otp-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" hidden>
+        <button class="btn primary wide auth-primary" type="submit">Verify OTP</button>
+        <div class="otp-actions">
+          <button class="text-btn" id="otp-resend" type="button" data-action="resend-otp" disabled>Resend OTP</button>
+          <button class="text-btn" type="button" data-action="back-login">Back to login</button>
+        </div>
+        <p class="auth-status" id="otp-status"></p>
+      </form>
+    </div>
+  </section>
+
+  <div id="app" class="app-shell is-locked">
+    <header class="topbar">
+      <button class="brand" type="button" data-page="cashier" aria-label="Open cashier">
+        <img class="brand-logo js-brand-logo" src="/assets/ConlectaPosLogo.png" alt="">
+        <span>
+          <span class="brand-name js-brand-name">Conlecta</span>
+          <span class="brand-sub">Point of Sale</span>
+        </span>
+      </button>
+
+      <div class="clock-pill" id="clock">--:--:--</div>
+      <div class="user-pill" id="user-pill">Kasir: -</div>
+
+      <nav class="topnav" aria-label="Main navigation">
+        <button class="nav-btn" type="button" data-action="sync-data">Sync</button>
+        <button class="nav-btn system-admin-only" type="button" data-page="system-admin">System Admin</button>
+        <button class="nav-btn pos-only active" type="button" data-page="cashier">Cashier</button>
+        <button class="nav-btn pos-only" type="button" data-action="open-qr-display">QR Display</button>
+        <button class="nav-btn pos-only" type="button" data-page="stock">Stock</button>
+        <button class="nav-btn pos-only" type="button" data-page="analytics">Analytics</button>
+        <button class="nav-btn pos-only" type="button" data-page="history">History</button>
+        <button class="nav-btn pos-only" type="button" data-page="settings">Settings</button>
+        <button class="nav-btn pos-only" type="button" data-page="log">Log</button>
+        <button class="nav-btn danger" type="button" data-action="logout">Logout</button>
+      </nav>
+    </header>
+
+    <main class="page-wrap">
+      <section class="page active" id="page-cashier" aria-label="Cashier">
+        <div class="cashier-hero">
+          <div>
+            <p class="eyebrow">Cashier</p>
+            <h1 id="cashier-name">Kasir: Cashier</h1>
+            <p class="muted">
+              Session:
+              <strong id="session-sales">0</strong> sales -
+              <strong id="session-revenue">Rp 0</strong>
+            </p>
+          </div>
+          <div class="hero-total">
+            <span id="top-total-label">Total Due</span>
+            <strong id="top-total">Rp 0</strong>
+            <small id="top-count">0 item</small>
+          </div>
+        </div>
+
+        <div class="cashier-grid">
+          <section class="catalog-panel panel">
+            <div class="panel-head catalog-head">
+              <div>
+                <p class="eyebrow">Katalog</p>
+                <h2>Product Catalog</h2>
+              </div>
+              <span class="hint">Tap item controls to update cart</span>
+            </div>
+
+            <div class="catalog-tools">
+              <label class="search-field">
+                <span>Search</span>
+                <input id="search-input" type="search" placeholder="Cari produk...">
+              </label>
+              <div class="segmented" role="group" aria-label="Catalog filter">
+                <button class="seg active" type="button" data-filter="all">All</button>
+                <button class="seg" type="button" data-filter="low">Low stock</button>
+                <button class="seg" type="button" data-filter="cart">In cart</button>
+              </div>
+            </div>
+
+            <div class="product-grid" id="product-grid">
+              <div class="empty-state">Loading products...</div>
+            </div>
+          </section>
+
+          <aside class="checkout-panel panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Checkout</p>
+                <h2 id="txn-label">TXN -</h2>
+              </div>
+            </div>
+
+            <div class="checkout-form">
+              <div class="customer-inline">
+                <label class="field">
+                  <span>Customer Name</span>
+                  <input id="customer-name" type="text" autocomplete="name">
+                </label>
+                <label class="field">
+                  <span>Customer Email (optional)</span>
+                  <input id="customer-email" type="email" autocomplete="email">
+                </label>
+              </div>
+
+              <label class="field cash-field">
+                <span>Cash Received <em id="cash-hint">Blank = QRIS</em></span>
+                <span class="money-input">
+                  <b>Rp</b>
+                  <input id="cash-received" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+                </span>
+              </label>
+
+              <div class="balance-row" id="balance-row">
+                <span id="balance-label">Total Due</span>
+                <strong id="balance-value">Rp 0</strong>
+              </div>
+            </div>
+
+            <div class="cart-title">
+              <span>Cart items</span>
+              <button class="text-btn" type="button" data-action="clear-cart">Clear cart</button>
+            </div>
+            <div class="cart-list" id="cart-list"></div>
+
+            <div class="checkout-footer">
+              <div class="checkout-total">
+                <span>Payment total</span>
+                <strong id="checkout-total">Rp 0</strong>
+              </div>
+              <button class="btn primary wide" type="button" id="pay-button" data-action="primary-pay">Generate QRIS payment</button>
+              <div class="qr-actions" id="qr-actions" hidden>
+                <button class="btn ghost" type="button" data-action="check-payment">Check Status</button>
+                <button class="btn danger-soft" type="button" data-action="dismiss-qr">Dismiss QR</button>
+              </div>
+              <p class="hotkeys">F2 search - F5 pay/generate QR - Esc dismiss</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="page" id="page-system-admin" aria-label="System Admin">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">System Admin</p>
+            <h1>Merchant Control</h1>
+          </div>
+          <div class="page-actions">
+            <button class="btn primary" type="button" data-action="new-system-merchant">Add Merchant</button>
+            <button class="btn ghost" type="button" data-action="sync-data">Refresh</button>
+          </div>
+        </div>
+
+        <div class="system-admin-tabs segmented">
+          <button class="seg active" type="button" data-system-tab="merchants">Merchants</button>
+          <button class="seg" type="button" data-system-tab="transactions">Transaction Edit</button>
+        </div>
+
+        <div class="system-admin-section active" id="system-admin-merchants">
+        <div class="system-admin-grid">
+          <section class="panel system-list-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Merchants</p>
+                <h2>Merchant List</h2>
+              </div>
+            </div>
+            <div class="system-merchant-list" id="system-merchant-list"></div>
+          </section>
+
+          <section class="panel system-detail-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Merchant Detail</p>
+                <h2 id="system-merchant-title">Select merchant</h2>
+              </div>
+              <button class="btn primary" type="button" data-action="save-system-merchant">Save Merchant</button>
+            </div>
+
+            <div class="system-detail-grid">
+              <div class="brand-upload system-logo-upload">
+                <img id="system-merchant-logo-preview" src="/assets/ConlectaPosLogo.png" alt="">
+                <div>
+                  <strong>Merchant Logo</strong>
+                  <p class="muted">Used for POS header and QR Display. Login/PIN/OTP remains locked to Conlecta Identity.</p>
+                  <input id="system-merchant-logo-file" type="file" accept="image/*" hidden>
+                  <button class="btn ghost" type="button" data-action="pick-system-merchant-logo">Upload Logo</button>
+                </div>
+              </div>
+              <label class="field"><span>Merchant ID</span><input id="system-merchant-id" type="text" placeholder="merchant_id"></label>
+              <label class="field"><span>Merchant Name</span><input id="system-merchant-name" type="text" placeholder="Merchant name"></label>
+            </div>
+
+            <div class="system-section-title">
+              <div>
+                <p class="eyebrow">Accounts</p>
+                <h3>Create Account</h3>
+              </div>
+            </div>
+            <div class="system-account-create">
+              <label class="field"><span>Account Name</span><input id="system-account-name" type="text"></label>
+              <label class="field"><span>Email</span><input id="system-account-email" type="email"></label>
+              <label class="field"><span>Password</span><input id="system-account-password" type="password"></label>
+              <label class="check-row inline-check"><input id="system-account-admin" type="checkbox"><span>Merchant Admin</span></label>
+              <button class="btn primary" type="button" data-action="create-system-account">Create Account</button>
+            </div>
+
+            <div class="system-account-list" id="system-account-list"></div>
+
+            <div class="system-version-panel">
+              <div>
+                <p class="eyebrow">Global Version</p>
+                <h3>Version Message</h3>
+              </div>
+              <div class="system-version-grid">
+                <label class="field"><span>Version</span><input id="system-version-number" type="text"></label>
+                <label class="field"><span>Title</span><input id="system-version-title" type="text"></label>
+                <label class="field wide"><span>Change Note</span><input id="system-version-change" type="text"></label>
+                <button class="btn primary" type="button" data-action="save-system-version">Save Version</button>
+              </div>
+            </div>
+          </section>
+        </div>
+        </div>
+
+        <div class="system-admin-section" id="system-admin-transactions">
+          <section class="panel system-transaction-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Transaction Edit</p>
+                <h2>Edit & Update</h2>
+              </div>
+              <button class="btn primary" type="button" data-action="load-system-transactions">Load Transactions</button>
+            </div>
+            <div class="system-transaction-filter">
+              <label class="field"><span>Merchant</span><select id="system-txn-merchant"></select></label>
+              <label class="field"><span>Search TXN / Customer</span><input id="system-txn-search" type="search"></label>
+            </div>
+            <div class="system-transaction-grid">
+              <div class="system-transaction-list" id="system-txn-list"></div>
+              <div class="system-transaction-editor" id="system-txn-editor">
+                <div class="empty-state">Filter merchant dulu, lalu pilih transaksi.</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="page" id="page-stock" aria-label="Stock">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Stock</p>
+            <h1>Stock Manager</h1>
+          </div>
+          <button class="btn ghost" type="button" data-action="reload-stock">Refresh</button>
+        </div>
+
+        <div class="stock-tabs segmented">
+          <button class="seg active" type="button" data-stock-tab="items">Items</button>
+          <button class="seg" type="button" data-stock-tab="vendors">Vendors</button>
+          <button class="seg" type="button" data-stock-tab="invoice">Vendor Invoice</button>
+        </div>
+
+        <div class="stock-section active" id="stock-section-items">
+        <div class="stock-grid">
+          <form class="panel stock-form" id="stock-form">
+            <p class="eyebrow">Add / Update Item</p>
+            <label class="image-picker" for="stock-image">
+              <span id="stock-image-preview">Choose image</span>
+              <small>PNG, JPG, WEBP</small>
+            </label>
+            <input id="stock-image" type="file" accept="image/*" hidden>
+            <label class="field">
+              <span>Item Name</span>
+              <input id="stock-name" type="text" required>
+            </label>
+            <label class="field">
+              <span>Price (Rp)</span>
+              <input id="stock-price" type="text" inputmode="numeric">
+            </label>
+            <label class="field">
+              <span>Harga Beli / Modal (Rp)</span>
+              <input id="stock-capital" type="text" inputmode="numeric">
+            </label>
+            <label class="field">
+              <span>Stock Qty</span>
+              <input id="stock-qty" type="number" step="1">
+            </label>
+            <label class="field">
+              <span>Vendor</span>
+              <select id="stock-vendor"></select>
+            </label>
+            <div class="button-row">
+              <button class="btn primary" type="submit">Save / Update</button>
+              <button class="btn danger-soft" type="button" data-action="delete-stock">Delete Selected</button>
+            </div>
+          </form>
+
+          <section class="panel stock-list-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Current Stock</p>
+                <h2 id="stock-count">0 items</h2>
+              </div>
+            </div>
+            <div class="stock-list" id="stock-list"></div>
+          </section>
+        </div>
+        </div>
+
+        <section class="stock-section panel vendor-panel" id="stock-section-vendors">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Vendors</p>
+              <h2>Vendor Management</h2>
+            </div>
+          </div>
+          <div class="inline-form">
+            <label class="field">
+              <span>Vendor Name</span>
+              <input id="vendor-name" type="text">
+            </label>
+            <button class="btn primary" type="button" data-action="add-vendor">Add Vendor</button>
+          </div>
+          <div class="stock-list vendor-list" id="vendor-list"></div>
+        </section>
+
+        <section class="stock-section panel vendor-panel" id="stock-section-invoice">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Vendor Invoice</p>
+              <h2>Export Vendor Purchase Lines</h2>
+            </div>
+            <button class="btn ghost" type="button" data-action="export-vendor-pdf">Export PDF</button>
+          </div>
+          <div class="filter-panel embedded">
+            <label class="field">
+              <span>Vendor</span>
+              <select id="invoice-vendor"></select>
+            </label>
+            <label class="field">
+              <span>From</span>
+              <input id="invoice-from" type="datetime-local">
+            </label>
+            <label class="field">
+              <span>To</span>
+              <input id="invoice-to" type="datetime-local">
+            </label>
+            <button class="btn primary" type="button" data-action="build-vendor-invoice">Build Table</button>
+          </div>
+          <div class="stats-grid compact" id="vendor-invoice-stats"></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>TXN</th>
+                  <th>Date</th>
+                  <th>Method</th>
+                  <th>Vendor</th>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Modal</th>
+                  <th>Vendor Cost</th>
+                  <th>Gross</th>
+                  <th>Discount</th>
+                  <th>Subtotal</th>
+                  <th>Profit</th>
+                </tr>
+              </thead>
+              <tbody id="vendor-invoice-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="page" id="page-analytics" aria-label="Analytics">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Analytics</p>
+            <h1>Sales Analyst</h1>
+          </div>
+          <div class="button-row">
+            <button class="btn ghost" type="button" data-action="export-analytics-data">Export Data</button>
+            <button class="btn ghost" type="button" data-action="sync-data">Refresh</button>
+          </div>
+        </div>
+
+        <div class="panel filter-panel analytics-filter">
+          <label class="field">
+            <span>From</span>
+            <input id="analytics-from" type="datetime-local">
+          </label>
+          <label class="field">
+            <span>To</span>
+            <input id="analytics-to" type="datetime-local">
+          </label>
+          <label class="field">
+            <span>Method</span>
+            <select id="analytics-method">
+              <option value="">All</option>
+              <option value="QRIS">QRIS</option>
+              <option value="Cash">Cash</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Rank By</span>
+            <select id="analytics-metric">
+              <option value="profit">Profit</option>
+              <option value="revenue">Revenue</option>
+              <option value="vendor_cost">Vendor Cost</option>
+              <option value="qris_cost">QRIS Cost</option>
+              <option value="cost">Total Cost</option>
+              <option value="qty">Qty Sold</option>
+              <option value="margin">Margin %</option>
+            </select>
+          </label>
+          <label class="field small-field">
+            <span>Top</span>
+            <input id="analytics-limit" type="number" min="3" max="20" step="1" value="8">
+          </label>
+          <button class="btn primary" type="button" data-action="apply-analytics-filter">Apply</button>
+          <button class="btn ghost" type="button" data-action="reset-analytics-filter">Reset</button>
+        </div>
+
+        <div class="stats-grid analytics-stats" id="analytics-stats"></div>
+
+        <div class="analytics-grid">
+          <section class="panel analytics-panel analytics-main-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Top Performance</p>
+                <h2 id="analytics-bars-title">Top Products</h2>
+              </div>
+            </div>
+            <div class="analytics-bars" id="analytics-bars"></div>
+          </section>
+
+          <section class="panel analytics-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Payment Mix</p>
+                <h2>Cash vs QRIS</h2>
+              </div>
+            </div>
+            <div class="analytics-donut-wrap">
+              <div class="analytics-donut" id="analytics-method-donut">
+                <div id="analytics-method-text"><strong>0%</strong><span>Cash</span><small>0 cash / 0 QRIS</small></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel analytics-panel analytics-trend-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Trend</p>
+                <h2>Revenue & Profit</h2>
+              </div>
+              <div class="chart-legend">
+                <span><i class="revenue"></i>Revenue</span>
+                <span><i class="profit"></i>Profit</span>
+              </div>
+            </div>
+            <div class="analytics-trend" id="analytics-trend"></div>
+          </section>
+        </div>
+
+        <div class="table-wrap panel analytics-table">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Revenue</th>
+                <th>Vendor Cost</th>
+                <th>QRIS Cost</th>
+                <th>Total Cost</th>
+                <th>Profit</th>
+                <th>Margin</th>
+                <th>TXN</th>
+              </tr>
+            </thead>
+            <tbody id="analytics-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="page" id="page-history" aria-label="History">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">History</p>
+            <h1>Payment History</h1>
+          </div>
+          <button class="btn ghost" type="button" data-action="reload-history">Reload</button>
+        </div>
+
+        <div class="stats-grid" id="history-stats"></div>
+
+        <div class="panel filter-panel">
+          <label class="field">
+            <span>TXN ID</span>
+            <input id="history-search" type="search" placeholder="Transaction ID">
+          </label>
+          <label class="field">
+            <span>QR ID</span>
+            <input id="history-qr" type="search" placeholder="QR ID">
+          </label>
+          <label class="field">
+            <span>Customer</span>
+            <input id="history-customer" type="search" placeholder="Customer name">
+          </label>
+          <label class="field">
+            <span>Method</span>
+            <select id="history-method">
+              <option value="">All</option>
+              <option value="QRIS">QRIS</option>
+              <option value="Cash">Cash</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Cashier</span>
+            <select id="history-cashier"></select>
+          </label>
+          <label class="field">
+            <span>From</span>
+            <input id="history-from" type="datetime-local">
+          </label>
+          <label class="field">
+            <span>To</span>
+            <input id="history-to" type="datetime-local">
+          </label>
+          <button class="btn primary" type="button" data-action="apply-history-filter">Search</button>
+          <button class="btn ghost" type="button" data-action="reset-history-filter">Reset</button>
+          <button class="btn ghost" type="button" data-action="export-history-pdf">Export PDF</button>
+        </div>
+
+        <div class="table-wrap panel">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Transaction ID</th>
+                <th>QR ID</th>
+                <th>Method</th>
+                <th>Customer</th>
+                <th>Amount</th>
+                <th>Discount</th>
+                <th>Cash</th>
+                <th>Change</th>
+                <th>Cashier</th>
+                <th>Updated At</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="page" id="page-settings" aria-label="Settings">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Settings</p>
+            <h1>Conlecta Settings</h1>
+          </div>
+          <button class="btn primary" type="button" data-action="save-settings">Save Settings</button>
+        </div>
+
+        <div class="settings-grid">
+          <nav class="settings-tabs" aria-label="Settings sections">
+            <button class="tab active" type="button" data-settings-tab="shop">Shop</button>
+            <button class="tab" type="button" data-settings-tab="qris">QRIS</button>
+            <button class="tab" type="button" data-settings-tab="accounts">Accounts</button>
+            <button class="tab" type="button" data-settings-tab="display">Display</button>
+            <button class="tab" type="button" data-settings-tab="email">Email</button>
+          </nav>
+
+          <div class="panel settings-panel">
+            <section class="settings-section active" id="settings-shop">
+              <h2>Shop Info</h2>
+              <label class="field"><span>Shop Name</span><input id="set-shop-name" type="text"></label>
+              <label class="field"><span>Address</span><input id="set-shop-address" type="text"></label>
+              <label class="field"><span>Postcode</span><input id="set-shop-postcode" type="text"></label>
+              <label class="field"><span>Default Customer Prefix</span><input id="set-customer-prefix" type="text"></label>
+              <label class="field"><span>Admin Password for Store Name / Logo</span><input id="set-admin-password" type="password"></label>
+              <div class="brand-upload">
+                <img id="brand-preview" src="/assets/ConlectaPosLogo.png" alt="">
+                <div>
+                  <strong>Brand header logo</strong>
+                  <p class="muted">Dipakai di topbar dan QR display. Login/PIN/OTP tetap memakai ConlectaPosLogo sebagai Conlecta Identity.</p>
+                  <input id="brand-logo-file" type="file" accept="image/*" hidden>
+                  <button class="btn ghost" type="button" data-action="pick-brand-logo">Upload Logo</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-section" id="settings-qris">
+              <h2>QRIS Environment</h2>
+              <p class="muted">QRIS diproses lewat server pembayaran.</p>
+              <div class="info-list">
+                <div><span>Env variable</span><strong>CONLECTA_QRIS_VPS_URL</strong></div>
+                <div><span>Payment env</span><strong id="qris-env-status">Belum dicek</strong></div>
+              </div>
+              <div class="button-row">
+                <button class="btn ghost" type="button" data-action="check-qris-env">Check Env</button>
+              </div>
+            </section>
+
+            <section class="settings-section" id="settings-accounts">
+              <h2>Register Account</h2>
+              <p class="muted">Verifikasi admin dulu sebelum form account baru ditampilkan.</p>
+              <div class="info-list merchant-info">
+                <div><span>Merchant</span><strong id="account-merchant-name">Conlecta</strong></div>
+                <div><span>Merchant ID</span><strong id="account-merchant-id">conlecta</strong></div>
+              </div>
+              <div class="account-gate" id="account-gate">
+                <label class="field"><span>Admin Password</span><input id="reg-admin-password" type="password"></label>
+                <button class="btn primary" type="button" data-action="unlock-account-form">Unlock Form</button>
+              </div>
+              <div class="register-grid hidden" id="account-create-form">
+                <label class="field"><span>Account Name</span><input id="reg-name" type="text"></label>
+                <label class="field"><span>Email</span><input id="reg-email" type="email"></label>
+                <label class="field"><span>Password</span><input id="reg-password" type="password"></label>
+                <label class="field"><span>Confirm Password</span><input id="reg-confirm" type="password"></label>
+                <button class="btn primary" type="button" data-action="register-account">Add Account</button>
+              </div>
+              <p class="auth-status" id="register-status"></p>
+            </section>
+
+            <section class="settings-section" id="settings-display">
+              <h2>QR Display</h2>
+              <label class="field">
+                <span>Theme</span>
+                <select id="set-active-theme">
+                  <option value="deep_space">Deep Space</option>
+                  <option value="warm_terminal">Warm Terminal</option>
+                  <option value="midnight_teal">Midnight Teal</option>
+                </select>
+              </label>
+              <label class="field"><span>Marquee Line 1</span><input class="marquee-input" type="text"></label>
+              <label class="field"><span>Marquee Line 2</span><input class="marquee-input" type="text"></label>
+              <label class="field"><span>Marquee Line 3</span><input class="marquee-input" type="text"></label>
+              <div class="asset-box">
+                <div>
+                  <strong>Payment display images</strong>
+                  <p class="muted">Tampil di bawah total QR Display saat QR belum aktif.</p>
+                </div>
+                <div class="asset-preview" id="payment-image-preview"></div>
+                <input id="payment-image-files" type="file" accept="image/*" multiple hidden>
+                <div class="button-row">
+                  <button class="btn ghost" type="button" data-action="pick-payment-images">Choose Pictures</button>
+                  <button class="btn ghost" type="button" data-action="use-sample-payment-images">Use Sample Icons</button>
+                  <button class="btn danger-soft" type="button" data-action="clear-payment-images">Clear Custom</button>
+                </div>
+              </div>
+              <div class="asset-box">
+                <div>
+                  <strong>Video playlist</strong>
+                  <p class="muted">Diputar di sisi kiri QR Display saat standby.</p>
+                </div>
+                <input id="video-upload-file" type="file" accept="video/mp4,video/webm,video/quicktime" hidden>
+                <div class="button-row">
+                  <button class="btn ghost" type="button" data-action="pick-video-upload">Upload Video</button>
+                  <button class="btn ghost" type="button" data-action="scan-assets">Scan Assets</button>
+                </div>
+                <div class="asset-list" id="video-asset-list"></div>
+              </div>
+              <button class="btn ghost" type="button" data-action="open-qr-display">Open QR Display New Tab</button>
+            </section>
+
+            <section class="settings-section" id="settings-email">
+              <h2>Email Templates</h2>
+              <p class="muted">Template OTP dan receipt dipakai untuk email user.</p>
+              <label class="field">
+                <span>Template</span>
+                <select id="email-template-key">
+                  <option value="otp">OTP Login</option>
+                  <option value="receipt">Receipt Email</option>
+                </select>
+              </label>
+              <label class="field"><span>Subject</span><input id="email-subject" type="text"></label>
+              <div class="register-grid">
+                <label class="field"><span>Primary Color</span><input id="email-primary-color" type="text"></label>
+                <label class="field"><span>Primary Text</span><input id="email-primary-text" type="text"></label>
+                <label class="field"><span>Background</span><input id="email-bg-color" type="text"></label>
+                <label class="field"><span>Secondary Color</span><input id="email-secondary-color" type="text"></label>
+                <label class="field"><span>Logo Path</span><input id="email-logo-path" type="text"></label>
+                <label class="field"><span>Logo Align</span><input id="email-logo-align" type="text"></label>
+              </div>
+              <label class="field"><span>HTML Override</span><textarea id="email-html-override" rows="8"></textarea></label>
+              <div class="button-row">
+                <button class="btn ghost" type="button" data-action="load-email-template">Load Template</button>
+                <button class="btn primary" type="button" data-action="save-email-template">Save Template</button>
+              </div>
+              <p class="auth-status" id="email-template-status"></p>
+            </section>
+
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-log" aria-label="Log">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Log</p>
+            <h1>Session Log</h1>
+          </div>
+          <div class="button-row compact">
+            <button class="btn ghost" type="button" data-action="refresh-log">Refresh</button>
+            <button class="btn ghost" type="button" data-action="export-log">Export</button>
+            <button class="btn danger-soft" type="button" data-action="clear-log">Clear</button>
+          </div>
+        </div>
+        <div class="panel log-panel">
+          <div class="log-unlock" id="log-unlock">
+            <label class="field">
+              <span>Account Password</span>
+              <input id="log-admin-password" type="password">
+            </label>
+            <button class="btn primary" type="button" data-action="unlock-log">Unlock Session Log</button>
+          </div>
+          <div class="log-filter">
+            <button class="seg active" type="button" data-log-level="">All</button>
+            <button class="seg" type="button" data-log-level="INFO">Info</button>
+            <button class="seg" type="button" data-log-level="WARNING">Warning</button>
+            <button class="seg" type="button" data-log-level="ERROR">Error</button>
+            <input id="log-search" type="search" placeholder="Filter log...">
+          </div>
+          <pre id="log-viewer"></pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <section class="modal" id="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+      <div class="success-mark">OK</div>
+      <p class="eyebrow">Payment Success</p>
+      <h2 id="payment-title">Payment Success</h2>
+      <p id="payment-subtitle" class="modal-subtitle">Cash Paid</p>
+      <div class="cash-change-alert" id="modal-cash-change-alert" hidden>
+        <span>Kembalian</span>
+        <strong id="modal-cash-change">Rp 0</strong>
+      </div>
+      <dl class="payment-detail">
+        <div><dt>TXN</dt><dd id="modal-txn">-</dd></div>
+        <div><dt>Customer</dt><dd id="modal-customer">-</dd></div>
+        <div><dt>Email Sent To</dt><dd id="modal-email">-</dd></div>
+        <div><dt>Amount</dt><dd id="modal-amount">Rp 0</dd></div>
+        <div><dt>Cash Paid</dt><dd id="modal-cash">-</dd></div>
+        <div><dt>Change</dt><dd id="modal-change">-</dd></div>
+      </dl>
+      <button class="btn primary wide ok-btn" type="button" data-action="close-modal">OK</button>
+    </section>
+
+    <section class="modal qr-cashier-modal" id="qr-modal" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title" hidden>
+      <p class="eyebrow">QRIS Payment</p>
+      <h2 id="qr-modal-title">Scan untuk bayar</h2>
+      <p id="qr-modal-status" class="modal-subtitle">Menunggu pembayaran</p>
+      <div class="cashier-qr-frame">
+        <img id="qr-modal-img" src="" alt="QRIS payment code">
+      </div>
+      <dl class="payment-detail">
+        <div><dt>TXN</dt><dd id="qr-modal-txn">-</dd></div>
+        <div><dt>QR ID</dt><dd id="qr-modal-id">-</dd></div>
+        <div><dt>Total</dt><dd id="qr-modal-total">Rp 0</dd></div>
+      </dl>
+      <div class="button-row">
+        <button class="btn ghost" type="button" data-action="check-payment">Check Status</button>
+        <button class="btn danger-soft" type="button" data-action="dismiss-qr">Dismiss QR</button>
+      </div>
+    </section>
+
+    <section class="modal dismiss-modal" id="dismiss-modal" role="dialog" aria-modal="true" aria-labelledby="dismiss-title" hidden>
+      <button class="modal-close" type="button" data-action="close-modal" aria-label="Close">x</button>
+      <div class="dismiss-mark">QR</div>
+      <p class="eyebrow">QRIS Payment</p>
+      <h2 id="dismiss-title">QR Dismissed</h2>
+      <p id="dismiss-subtitle" class="modal-subtitle">Payment request closed.</p>
+      <dl class="payment-detail">
+        <div><dt>TXN</dt><dd id="dismiss-txn">-</dd></div>
+        <div><dt>QR ID</dt><dd id="dismiss-qr-id">-</dd></div>
+        <div><dt>Total</dt><dd id="dismiss-total">Rp 0</dd></div>
+      </dl>
+      <button class="btn primary wide ok-btn" type="button" data-action="close-modal">OK</button>
+    </section>
+
+    <section class="modal detail-modal" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title" hidden>
+      <button class="modal-close" type="button" data-action="close-modal" aria-label="Close">x</button>
+      <p class="eyebrow">Transaction Detail</p>
+      <h2 id="detail-title">Transaction</h2>
+      <div class="detail-summary" id="detail-summary"></div>
+      <div class="detail-items" id="detail-items"></div>
+      <div class="button-row">
+        <button class="btn ghost" type="button" data-action="download-receipt">Receipt PDF</button>
+        <button class="btn primary" type="button" data-action="close-modal">Close</button>
+      </div>
+    </section>
+
+    <section class="modal" id="logout-modal" role="dialog" aria-modal="true" aria-labelledby="logout-title" hidden>
+      <button class="modal-close" type="button" data-action="close-modal" aria-label="Close">x</button>
+      <p class="eyebrow">Session</p>
+      <h2 id="logout-title">Keluar dari workspace?</h2>
+      <p class="muted">Logout akan menutup session account ini.</p>
+      <div class="button-row">
+        <button class="btn danger-soft" type="button" data-action="confirm-logout">Exit</button>
+        <button class="btn ghost" type="button" data-action="close-modal">Cancel</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="loading-overlay" id="loading-overlay" hidden>
+    <div class="loading-card">
+      <img class="js-brand-logo" src="/assets/ConlectaPosLogo.png" alt="">
+      <div class="loading-ring"></div>
+      <strong id="loading-title">Processing</strong>
+      <span id="loading-message">Mohon tunggu...</span>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
