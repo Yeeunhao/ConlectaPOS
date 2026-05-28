@@ -2127,9 +2127,6 @@ def _complete_login(acc):
         "last_seen_ts": now_ts,
         "session_day": _session_business_day(),
     }
-    state = load_state()
-    state["auth"] = auth
-    save_state(state)
     log.info("Web login complete: account=%s merchant=%s", acc["id"], merchant_id)
     return auth
 

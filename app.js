@@ -103,7 +103,17 @@ let hasBootstrapped = false;
 let authEpoch = 0;
 let cashierNoticeTimer = null;
 let cashierNoticeRecord = null;
+const DEVICE_ID_KEY = "conlecta_device_id";
+function getDeviceId() {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
 
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+
+  return id;
+}
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -424,7 +434,10 @@ async function api(path, options = {}) {
   delete cleanOptions.loading;
 
   const init = {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Conlecta-Device-Id": getDeviceId(),
+},
     ...cleanOptions,
   };
 
