@@ -1,8 +1,7 @@
 .env
 database.env
 
-token.json
-oauth_token.json
+
 oauth_credentials.json
 client_secret.json
 
