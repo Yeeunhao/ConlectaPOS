@@ -4,12 +4,18 @@ module.exports = async function handler(req, res) {
   try {
     const payload = req.body || {};
 
-   function expiredAtJakarta(minutes = 30) {
-  const d = new Date(Date.now() + minutes * 60 * 1000);
-  const jakarta = new Date(d.getTime() + 7 * 60 * 60 * 1000);
-  return jakarta.toISOString().slice(0, 19) + "+07:00";
-}
+function expiredAtJakarta(minutes = 30) {
+  const d = new Date(Date.now() + minutes * 60 * 1000 + 7 * 60 * 60 * 1000);
 
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const hour = String(d.getUTCHours()).padStart(2, "0");
+  const minute = String(d.getUTCMinutes()).padStart(2, "0");
+  const second = String(d.getUTCSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
 const expiredAt = expiredAtJakarta(30);
 
 const upstream = await fetch(`${process.env.API_BASE_URL}/qris/generate`, {
