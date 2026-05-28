@@ -4669,7 +4669,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 auth["last_activity_ts"] = _auth_last_activity_ts(auth, acc)
                 auth["session_day"] = auth.get("session_day") or _session_business_day()
                 mid = normalize_merchant_id(auth.get("merchant_id") or mid)
-            if (state.get("auth") or {}).get("role") == "system_admin":
+            if (auth or {}).get("role") == "system_admin":
                 save_state(state)
                 return self.send_json({
                     "ok": True,
@@ -4688,20 +4688,27 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                     "logs": [],
                     "assets": scan_asset_payload(),
                 })
+
             bucket = _ensure_daily_session(state, mid)
             display_event = current_display_event(state, mid)
             active_qr = current_active_qr(state, mid)
+
             products = load_stock(merchant_id=mid)
+            history = load_history_for_merchant(mid)
+            vendors = load_vendors(merchant_id=mid)
+
             bucket["products"] = products
-            _sync_legacy_state_for_default(state, mid)
+            bucket["history"] = history[:1000]
+
             save_state(state)
+
             return self.send_json({
                 "ok": True,
                 "auth": auth,
                 "settings": settings_payload(merchant_id=mid),
                 "products": products,
-                "vendors": load_vendors(merchant_id=mid),
-                "history": load_history(),
+                "vendors": vendors,
+                "history": history,
                 "active_qr": active_qr,
                 "display_event": display_event,
                 "session": bucket.get("session", {"sales": 0, "revenue": 0}),
@@ -4712,15 +4719,27 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "assets": scan_asset_payload(),
             })
         if path == "/api/stock":
-            return self.send_json({"ok": True, "products": load_stock(force=True)})
+            state = load_state()
+            auth = self.get_device_auth(state)
+            auth = validate_stored_auth({**state, "auth": auth}) if auth else None
+            mid = normalize_merchant_id((auth or {}).get("merchant_id"))
+            return self.send_json({"ok": True, "products": load_stock(force=True, merchant_id=mid)})
         if path == "/api/vendors":
-            return self.send_json({"ok": True, "vendors": load_vendors()})
+            state = load_state()
+            auth = self.get_device_auth(state)
+            auth = validate_stored_auth({**state, "auth": auth}) if auth else None
+            mid = normalize_merchant_id((auth or {}).get("merchant_id"))
+            return self.send_json({"ok": True, "vendors": load_vendors(merchant_id=mid)})
         if path == "/api/assets":
             return self.send_json({"ok": True, "assets": scan_asset_payload(), "settings": settings_payload()})
         if path == "/api/email-templates":
             return self.send_json({"ok": True, "templates": load_email_templates()})
         if path == "/api/history":
-            return self.send_json({"ok": True, "history": load_history()})
+            state = load_state()
+            auth = self.get_device_auth(state)
+            auth = validate_stored_auth({**state, "auth": auth}) if auth else None
+            mid = normalize_merchant_id((auth or {}).get("merchant_id"))
+            return self.send_json({"ok": True, "history": load_history_for_merchant(mid)})
         if path == "/api/system-admin/transactions":
             try:
                 payload = admin_transactions_payload((query.get("merchant_id") or [""])[0])
