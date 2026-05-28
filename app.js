@@ -1821,35 +1821,40 @@ async function generateQR() {
     showToast("Keranjang kosong", "error");
     return;
   }
-const result = await api("/qris/generate", {
-  method: "POST",
-  body: payload
-});
 
-const qr = result.data;
+  const payload = checkoutPayload("QRIS");
 
-state.activeQr = sanitizeActiveQr({
-  id: qr.id,
-  qr_id: qr.id,
-  txn_id: qr.reff_no,
-  amount: qr.amount,
-  qr_data: qr.qr_data,
-  qr_image: qr.qr_data,
-  status: qr.status,
-  expired_at: qr.expired_at,
-  items: payload.items,
-  customer_name: payload.customer_name,
-  customer_email: payload.customer_email,
-  cashier_name: payload.cashier_name,
-  message: "QRIS generated",
-  created_ts: Math.floor(Date.now() / 1000),
-});
+  const result = await api("/qris/generate", {
+    method: "POST",
+    body: payload
+  });
 
-forgetClosedQr(state.activeQr);
+  const qr = result.data;
+
+  state.activeQr = sanitizeActiveQr({
+    id: qr.id,
+    qr_id: qr.id,
+    txn_id: qr.reff_no,
+    amount: qr.amount,
+    qr_data: qr.qr_data,
+    qr_image: qr.qr_data,
+    status: qr.status,
+    expired_at: qr.expired_at,
+    items: payload.items,
+    customer_name: payload.customer_name,
+    customer_email: payload.customer_email,
+    cashier_name: payload.cashier_name,
+    message: "QRIS generated",
+    created_ts: Math.floor(Date.now() / 1000),
+  });
+
+  forgetClosedQr(state.activeQr);
+
   if (!state.activeQr) {
     showToast("QRIS gagal ditampilkan. Coba generate ulang.", "error");
     return;
   }
+
   setDisplayEvent(null);
   state.currentTxn = state.activeQr.txn_id;
   $("#txn-label").textContent = state.currentTxn;
@@ -1860,7 +1865,7 @@ forgetClosedQr(state.activeQr);
   renderCart();
   updateTotals();
   showQrModal(state.activeQr);
-  showToast(result.active_qr.message || "QRIS generated");
+  showToast(state.activeQr.message || "QRIS generated");
 }
 
 function isPaidStatus(status) {
