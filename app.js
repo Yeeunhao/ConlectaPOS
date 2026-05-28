@@ -1828,18 +1828,12 @@ async function generateQR() {
 
   const payload = checkoutPayload("QRIS");
 
-async function generateQR() {
-  if (!cartEntries().length) {
-    showToast("Keranjang kosong", "error");
-    return;
-  }
-
-  const payload = checkoutPayload("QRIS");
-
   const result = await api("/api/qr/generate", {
     method: "POST",
     body: payload
   });
+
+  console.log("QR GENERATE RESULT:", result);
 
   forgetClosedQr(result.active_qr);
   state.activeQr = sanitizeActiveQr(result.active_qr);
@@ -1851,7 +1845,6 @@ async function generateQR() {
 
   setDisplayEvent(null);
   state.currentTxn = state.activeQr.txn_id;
-
   $("#txn-label").textContent = state.currentTxn;
 
   updateQrActions();
@@ -1862,19 +1855,6 @@ async function generateQR() {
   updateTotals();
   showQrModal(state.activeQr);
 
-  showToast(state.activeQr.message || "QRIS generated");
-}
-
-  setDisplayEvent(null);
-  state.currentTxn = state.activeQr.txn_id;
-  $("#txn-label").textContent = state.currentTxn;
-  updateQrActions();
-  publishDisplayState();
-  startQrPolling();
-  renderCatalog();
-  renderCart();
-  updateTotals();
-  showQrModal(state.activeQr);
   showToast(state.activeQr.message || "QRIS generated");
 }
 
