@@ -44,8 +44,14 @@ def _env_config():
 
 def is_configured():
     cfg = _env_config()
-    return bool(psycopg and (cfg.get("conninfo") or (cfg.get("host") and cfg.get("dbname") and cfg.get("user"))))
-
+    if cfg.get("conninfo"):
+        return True
+    return all([
+        cfg.get("host"),
+        cfg.get("dbname"),
+        cfg.get("user"),
+        cfg.get("password"),
+    ])
 
 def connect(row_factory=None):
     if not is_configured():
