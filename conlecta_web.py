@@ -4526,10 +4526,15 @@ def safe_path(root, request_path):
 class ConlectaWebHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "*")
-        self.send_header("Access-Control-Allow-Headers", "*")
-        super().end_headers()
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    super().end_headers()
+
     server_version = "ConlectaWeb/2.0"
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.end_headers()
 
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
