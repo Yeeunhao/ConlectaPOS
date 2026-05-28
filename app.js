@@ -416,7 +416,7 @@ function readFileAsDataUrl(file) {
 }
 
 async function api(path, options = {}) {
-  const API = "http://34.128.90.163:8000"
+  const res = await fetch(path, init);
   const loadingMessage = options.loading === false
     ? ""
     : options.loading || ((options.method || "GET").toUpperCase() !== "GET" ? "Memproses..." : "");
@@ -431,7 +431,6 @@ async function api(path, options = {}) {
   }
   if (loadingMessage) showLoading(loadingMessage);
   try {
-    const res = await fetch(API + path, init);
     const type = res.headers.get("content-type") || "";
     const payload = type.includes("application/json") ? await res.json() : await res.text();
     if (!res.ok || payload.ok === false) {
