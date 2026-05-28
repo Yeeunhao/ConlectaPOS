@@ -1821,13 +1821,31 @@ async function generateQR() {
     showToast("Keranjang kosong", "error");
     return;
   }
-  const payload = checkoutPayload("QRIS");
-  const result = await api("/qris/generate", {
-    method: "POST",
-    body: payload
-  });
-  forgetClosedQr(result.active_qr);
-  state.activeQr = sanitizeActiveQr(result.active_qr);
+const result = await api("/qris/generate", {
+  method: "POST",
+  body: payload
+});
+
+const qr = result.data;
+
+state.activeQr = sanitizeActiveQr({
+  id: qr.id,
+  qr_id: qr.id,
+  txn_id: qr.reff_no,
+  amount: qr.amount,
+  qr_data: qr.qr_data,
+  qr_image: qr.qr_data,
+  status: qr.status,
+  expired_at: qr.expired_at,
+  items: payload.items,
+  customer_name: payload.customer_name,
+  customer_email: payload.customer_email,
+  cashier_name: payload.cashier_name,
+  message: "QRIS generated",
+  created_ts: Math.floor(Date.now() / 1000),
+});
+
+forgetClosedQr(state.activeQr);
   if (!state.activeQr) {
     showToast("QRIS gagal ditampilkan. Coba generate ulang.", "error");
     return;
