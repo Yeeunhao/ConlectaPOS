@@ -406,7 +406,9 @@ function renderDisplay() {
     $("#display-event-message").textContent = validation || eventMessage;
     $("#display-event-total").textContent = formatRp(event.amount);
   } else if (hasActiveQr) {
-    $("#display-stage-qr-img").src = active.qr_image;
+    $("#display-stage-qr-img").src =
+    active.qr_image ||
+    `https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(active.qr_data)}`;
     $("#display-stage-total").textContent = formatRp(active.amount);
     stageQr.hidden = false;
     stageEvent.hidden = true;

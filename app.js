@@ -2058,7 +2058,9 @@ function showQrModal(active = state.activeQr) {
   $("#dismiss-modal").hidden = true;
   $("#logout-modal").hidden = true;
   $("#qr-modal").hidden = false;
-  $("#qr-modal-img").src = active.qr_image;
+  $("#qr-modal-img").src =
+  active.qr_image ||
+  `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(active.qr_data)}`;
   $("#qr-modal-txn").textContent = active.txn_id || "-";
   $("#qr-modal-id").textContent = active.id || "-";
   $("#qr-modal-total").textContent = formatRp(active.amount);

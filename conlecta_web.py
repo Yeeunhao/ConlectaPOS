@@ -2816,13 +2816,16 @@ def load_and_validate_stock_for_items(items, merchant_id=None):
     return products, lookup
 
 
-def next_customer_name(state):
-    mid = current_merchant_id()
-    bucket = _state_tenant_bucket(state, mid)
-    bucket["customer_counter"] = _int_money(bucket.get("customer_counter")) + 1
-    _sync_legacy_state_for_default(state, mid)
-    prefix = str(load_settings(mid).get("default_customer_prefix") or "Conlecta Customer")
-    return f"{prefix} {bucket['customer_counter']}"
+def next_customer_name(merchant_id=None):
+    mid = merchant_id or current_merchant_id()
+    state = load_state()
+    bucket = _ensure_daily_session(state, mid)
+
+    seq = int(bucket.get("customer_seq", 0)) + 1
+    bucket["customer_seq"] = seq
+    save_state(state)
+
+    return f"Customer {seq:03d}"
 
 
 def _sheet_headers(ws, required_headers):
