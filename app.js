@@ -1736,8 +1736,9 @@ function checkoutPayload(method) {
   const lineDiscountTotal = entries.reduce((sum, item) => sum + Number(item.line_discount || 0), 0);
   const cash = parseMoney($("#cash-received").value);
   const change = Math.max(0, cash - total);
+
   return {
-  ...getCustomerSnapshot(),
+    ...getCustomerSnapshot(),
     txn_id: state.currentTxn || "",
     amount: total,
     gross,
@@ -1749,7 +1750,6 @@ function checkoutPayload(method) {
     items: entries,
   };
 }
-
 async function payCash() {
   if (!cartEntries().length) {
     showToast("Keranjang kosong", "error");
@@ -1797,13 +1797,17 @@ function publishDisplayState() {
     cashierNotice: cashierNoticeRecord ? cashierNoticePayload(cashierNoticeRecord, true) : null,
     version: state.version,
   };
+
   if (state.activeQr) localStorage.setItem("conlecta_active_qr", JSON.stringify(state.activeQr));
   else localStorage.removeItem("conlecta_active_qr");
+
   if (state.displayEvent) localStorage.setItem("conlecta_display_event", JSON.stringify(state.displayEvent));
   else localStorage.removeItem("conlecta_display_event");
+
   localStorage.setItem("conlecta_version", JSON.stringify(state.version || {}));
   localStorage.setItem("conlecta_settings", JSON.stringify(state.settings || {}));
   localStorage.setItem("conlecta_display_preview", JSON.stringify(preview));
+
   qrChannel?.postMessage({ type: "display-state", ...payload });
 }
 
@@ -1824,36 +1828,42 @@ async function generateQR() {
 
   const payload = checkoutPayload("QRIS");
 
-  const result = await api("/qris/generate", {
+async function generateQR() {
+  if (!cartEntries().length) {
+    showToast("Keranjang kosong", "error");
+    return;
+  }
+
+  const payload = checkoutPayload("QRIS");
+
+  const result = await api("/api/qr/generate", {
     method: "POST",
     body: payload
   });
 
-  const qr = result.data;
-
-  state.activeQr = sanitizeActiveQr({
-    id: qr.id,
-    qr_id: qr.id,
-    txn_id: qr.reff_no,
-    amount: qr.amount,
-    qr_data: qr.qr_data,
-    qr_image: qr.qr_data,
-    status: qr.status,
-    expired_at: qr.expired_at,
-    items: payload.items,
-    customer_name: payload.customer_name,
-    customer_email: payload.customer_email,
-    cashier_name: payload.cashier_name,
-    message: "QRIS generated",
-    created_ts: Math.floor(Date.now() / 1000),
-  });
-
-  forgetClosedQr(state.activeQr);
+  forgetClosedQr(result.active_qr);
+  state.activeQr = sanitizeActiveQr(result.active_qr);
 
   if (!state.activeQr) {
-    showToast("QRIS gagal ditampilkan. Coba generate ulang.", "error");
+    showToast("QRIS gagal ditampilkan", "error");
     return;
   }
+
+  setDisplayEvent(null);
+  state.currentTxn = state.activeQr.txn_id;
+
+  $("#txn-label").textContent = state.currentTxn;
+
+  updateQrActions();
+  publishDisplayState();
+  startQrPolling();
+  renderCatalog();
+  renderCart();
+  updateTotals();
+  showQrModal(state.activeQr);
+
+  showToast(state.activeQr.message || "QRIS generated");
+}
 
   setDisplayEvent(null);
   state.currentTxn = state.activeQr.txn_id;
