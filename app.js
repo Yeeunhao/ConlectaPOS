@@ -1822,7 +1822,10 @@ async function generateQR() {
     return;
   }
   const payload = checkoutPayload("QRIS");
-  const result = await api("/api/qr/generate", { method: "POST", body: payload });
+  const result = await api("/qris/generate", {
+    method: "POST",
+    body: payload
+  });
   forgetClosedQr(result.active_qr);
   state.activeQr = sanitizeActiveQr(result.active_qr);
   if (!state.activeQr) {
