@@ -4,22 +4,25 @@ module.exports = async function handler(req, res) {
   try {
     const payload = req.body || {};
 
-    const expiredAt =
-      payload.expired_at ||
-      new Date(Date.now() + 30 * 60 * 1000).toISOString();
+   function expiredAtJakarta(minutes = 30) {
+  const d = new Date(Date.now() + minutes * 60 * 1000);
+  const jakarta = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+  return jakarta.toISOString().slice(0, 19) + "+07:00";
+}
 
-    const upstream = await fetch(`${process.env.API_BASE_URL}/qris/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: payload.amount,
-        expired_at: expiredAt,
-        merchant_reff_no: payload.txn_id || undefined,
-      }),
-    });
+const expiredAt = expiredAtJakarta(30);
 
-    const json = await upstream.json();
+const upstream = await fetch(`${process.env.API_BASE_URL}/qris/generate`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    amount: payload.amount,
+    expired_at: expiredAt,
+    merchant_reff_no: payload.txn_id || undefined,
+  }),
+});
 
+const json = await upstream.json();
     if (!upstream.ok) {
       return res.status(upstream.status).json(json);
     }
