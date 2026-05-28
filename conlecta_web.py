@@ -4524,6 +4524,11 @@ def safe_path(root, request_path):
 
 
 class ConlectaWebHandler(SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "*")
+        self.send_header("Access-Control-Allow-Headers", "*")
+        super().end_headers()
     server_version = "ConlectaWeb/2.0"
 
     def log_message(self, fmt, *args):
