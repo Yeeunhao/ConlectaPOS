@@ -23,7 +23,6 @@ const upstream = await fetch(`${process.env.API_BASE_URL}/qris/generate`, {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
     amount: payload.amount,
-    expired_at: expiredAt,
     merchant_reff_no: payload.txn_id || undefined,
   }),
 });
@@ -48,6 +47,7 @@ const json = await upstream.json();
       width: 320,
       margin: 1,
     });
+    console.log("QR IMAGE GENERATED:", qrImage?.slice(0, 50));
 
     const active_qr = {
       mode: "vps",
