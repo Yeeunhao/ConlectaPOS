@@ -416,32 +416,38 @@ function readFileAsDataUrl(file) {
 }
 
 async function api(path, options = {}) {
-  const res = await fetch(path, init);
   const loadingMessage = options.loading === false
     ? ""
     : options.loading || ((options.method || "GET").toUpperCase() !== "GET" ? "Memproses..." : "");
+
   const cleanOptions = { ...options };
   delete cleanOptions.loading;
+
   const init = {
     headers: { "Content-Type": "application/json" },
     ...cleanOptions,
   };
+
   if (init.body && typeof init.body !== "string") {
     init.body = JSON.stringify(init.body);
   }
+
   if (loadingMessage) showLoading(loadingMessage);
+
   try {
+    const res = await fetch(path, init);
     const type = res.headers.get("content-type") || "";
     const payload = type.includes("application/json") ? await res.json() : await res.text();
+
     if (!res.ok || payload.ok === false) {
       throw new Error(payload.error || payload.message || `HTTP ${res.status}`);
     }
+
     return payload;
   } finally {
     if (loadingMessage) hideLoading();
   }
 }
-
 function showToast(message, type = "success", duration = 3200) {
   const toast = $("#toast");
   if (!toast) return;
