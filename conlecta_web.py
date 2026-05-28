@@ -274,6 +274,20 @@ def _int_money(value, default=0):
         return int(float(text or default))
     except Exception:
         return default
+def is_system_admin_auth(auth):
+    return (
+        str((auth or {}).get("email") or "").strip().lower()
+        == SYSTEM_ADMIN_EMAIL.lower()
+    ) or (auth or {}).get("role") == "system_admin"
+
+def request_system_admin(self, state=None):
+    state = state or load_state()
+    auth = self.request_auth(state, required=True)
+
+    if not is_system_admin_auth(auth):
+        raise PermissionError("System admin access required.")
+
+    return auth
 
 
 def format_rupiah(value):
@@ -1620,7 +1634,7 @@ def _clear_other_merchant_admins(ws, merchant_id, keep_account_id=""):
         log.warning("clear merchant admin flags failed for %s: %s", mid, exc)
 
 
-def verify_admin_password(password, merchant_id=None):
+def verify_admin_password(password, mid):
     mid = normalize_merchant_id(merchant_id or current_merchant_id())
     admin = _merchant_admin_account(mid)
     if not admin:
@@ -3151,11 +3165,12 @@ def send_receipt_email(record, email):
         log.warning("send_receipt_email call failed: %s", exc)
 
 
-def save_transaction(payload, payment_method):
+def save_transaction(payload, payment_method, merchant_id=None, auth=None):
     global _stock_cache, _stock_cache_ts
     payment_method = normalize_payment_method(payment_method)
     state = load_state()
-    mid = current_merchant_id()
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    auth = auth or {}
     bucket = _ensure_daily_session(state, mid)
     amount = _int_money(payload.get("amount"))
     cash_received = _int_money(payload.get("cash_received"))
@@ -3168,9 +3183,9 @@ def save_transaction(payload, payment_method):
     if amount <= 0:
         amount = sum(item["subtotal"] for item in items)
     payment_fee = calc_qris_fee(amount) if payment_method == PAYMENT_METHOD_QRIS else 0
-    customer_name = str(payload.get("customer_name") or "").strip() or next_customer_name(state)
+    customer_name = str(payload.get("customer_name") or "").strip() or next_customer_name(state, merchant_id=mid)
     customer_email = str(payload.get("customer_email") or "").strip()
-    auth = state.get("auth") or {}
+    auth = auth or {}
     txn_id = str(payload.get("txn_id") or generate_txn_id())
     qr_id = str(payload.get("qr_id") or "")
     updated_at = datetime.now().isoformat(timespec="seconds")
@@ -4487,8 +4502,8 @@ def display_settings_payload(merchant_id=None):
     return settings
 
 
-def save_brand_logo(data):
-    mid = current_merchant_id()
+def save_brand_logo(data, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
     data_url = str(data.get("data_url") or "")
     filename = str(data.get("filename") or "brand_logo.png")
     if "," in data_url:
@@ -4532,6 +4547,24 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.end_headers()
+    
+    def request_auth(self, state=None, required=True):
+        state = state or load_state()
+        auth = self.get_device_auth(state)
+
+        if auth:
+            state["auth"] = auth
+            auth = validate_stored_auth(state)
+            state["auth"] = None
+
+        if required and not auth:
+            raise PermissionError("Session login tidak valid. Silakan login ulang.")
+
+        return auth
+
+    def request_merchant_id(self, state=None):
+        auth = self.request_auth(state, required=True)
+        return normalize_merchant_id(auth.get("merchant_id")), auth
 
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
@@ -4878,7 +4911,8 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(msg, 403)
             return self.send_json({"ok": True})
         if path == "/api/account/register":
-            mid = current_merchant_id()
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
             ok, msg = verify_admin_password(data.get("admin_password"), mid)
             if not ok:
                 return self.send_error_json(msg, 403)
@@ -4937,7 +4971,8 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             delete_vendor(data.get("vendor_id"))
             return self.send_json({"ok": True, "vendors": load_vendors()})
         if path == "/api/settings":
-            mid = current_merchant_id()
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
             incoming = dict(data.get("settings", data) or {})
             current = load_settings(mid)
             identity_changed = (
@@ -4950,11 +4985,17 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             incoming.pop("admin_password", None)
             return self.send_json({"ok": True, "settings": save_settings(incoming, mid)})
         if path == "/api/brand-logo":
-            mid = current_merchant_id()
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+
             ok, msg = verify_admin_password(data.get("admin_password"), mid)
             if not ok:
                 return self.send_error_json(msg, 403)
-            return self.send_json({"ok": True, "settings": save_brand_logo(data)})
+
+            return self.send_json({
+                "ok": True,
+                "settings": save_brand_logo(data, merchant_id=mid)
+            })
         if path == "/api/payment-images":
             return self.send_json({"ok": True, "settings": save_payment_images(data)})
         if path == "/api/video-upload":
@@ -4970,20 +5011,56 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             saved = save_email_template(data.get("key"), data.get("template", {}))
             return self.send_json({"ok": True, "saved": saved, "templates": load_email_templates()})
         if path == "/api/stock/save":
-            products = save_stock(data.get("products", []), current_merchant_id())
-            return self.send_json({"ok": True, "products": products})
+            state = load_state()
+
+            auth = self.get_device_auth(state)
+
+            if auth:
+                state["auth"] = auth
+                auth = validate_stored_auth(state)
+                state["auth"] = None
+
+            if not auth:
+                return self.send_error_json(
+                    "Session login tidak valid. Silakan login ulang.",
+                    401
+                )
+
+            mid = normalize_merchant_id(auth.get("merchant_id"))
+
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+
+            products = save_stock(
+                data.get("products", []),
+                merchant_id=mid
+            )
+
+            return self.send_json({
+                "ok": True,
+                "products": products
+            })
         if path == "/api/checkout/cash":
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+
             try:
-                record = save_transaction(data, PAYMENT_METHOD_CASH)
+                record = save_transaction(
+                    data,
+                    PAYMENT_METHOD_CASH,
+                    merchant_id=mid,
+                    auth=auth
+                )
             except Exception as exc:
                 return self.send_error_json(exc, 400)
-            mid = current_merchant_id()
-            state = load_state()
+
             bucket = _ensure_daily_session(state, mid)
             display_event = current_display_event(state, mid)
             save_state(state)
+
             return self.send_json({
-                "ok": True, "record": record,
+                "ok": True,
+                "record": record,
                 "products": bucket.get("products", []),
                 "history": bucket.get("history", []),
                 "session": bucket.get("session"),
@@ -4994,7 +5071,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 record = save_transaction(data, PAYMENT_METHOD_QRIS)
             except Exception as exc:
                 return self.send_error_json(exc, 400)
-            mid = current_merchant_id()
+            mid, auth = self.request_merchant_id(state)
             state = load_state()
             bucket = _ensure_daily_session(state, mid)
             display_event = current_display_event(state, mid)
@@ -5005,17 +5082,32 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "history": bucket.get("history", []),
                 "session": bucket.get("session"),
                 "display_event": display_event,
-            })
+            }) 
         if path == "/api/qr/generate":
-            mid = current_merchant_id()
+            state = load_state()
+            auth = self.get_device_auth(state)
+
+            if auth:
+                state["auth"] = auth
+                auth = validate_stored_auth(state)
+                state["auth"] = None
+
+            if not auth:
+                return self.send_error_json("Session login tidak valid. Silakan login ulang.", 401)
+
+            mid = normalize_merchant_id(auth.get("merchant_id"))
+
             items = normalize_items(data.get("items", []), PAYMENT_METHOD_QRIS)
             if not items:
                 return self.send_error_json("Keranjang kosong.", 400)
+
             try:
                 load_and_validate_stock_for_items(items, merchant_id=mid)
             except Exception as exc:
                 return self.send_error_json(exc, 400)
+
             qris = generate_qris(data)
+
             active = dict(qris)
             active.update({
                 "merchant_id": mid,
@@ -5025,20 +5117,22 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "items": items,
                 "customer_name": str(data.get("customer_name", "") or ""),
                 "customer_email": str(data.get("customer_email", "") or ""),
-                "cashier_name": str(data.get("cashier_name", "") or (load_state().get("auth") or {}).get("name") or "Cashier"),
+                "cashier_name": str(data.get("cashier_name", "") or auth.get("name") or "Cashier"),
                 "updated_at": datetime.now().isoformat(timespec="seconds"),
             })
-            state = load_state()
+
             bucket = _ensure_daily_session(state, mid)
             _forget_closed_qr(bucket, active)
             bucket["active_qr"] = active
             bucket["display_event"] = None
+
             _sync_legacy_state_for_default(state, mid)
             save_state(state)
-            return self.send_json({"ok": True, "active_qr": active})
+
+            return self.send_json({"ok": True, "active_qr": active}) 
         if path == "/api/qr/dismiss":
-            mid = current_merchant_id()
             state = load_state()
+            mid, auth = self.request_merchant_id(state)
             bucket = _ensure_daily_session(state, mid)
             active = current_active_qr(state, mid)
             if not active:
@@ -5061,9 +5155,25 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             save_state(state)
             return self.send_json({"ok": True, "cashier_notice": notice})
         if path == "/api/history/export.pdf":
-            txn_ids = {str(txn_id) for txn_id in data.get("txn_ids", []) if str(txn_id)}
-            records = [record for record in load_history() if not txn_ids or str(record.get("txn_id")) in txn_ids]
-            return self.send_bytes(make_history_export_pdf(records), "application/pdf", "invoice-history.pdf")
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+
+            txn_ids = {
+                str(txn_id)
+                for txn_id in data.get("txn_ids", [])
+                if str(txn_id)
+            }
+
+            records = [
+                record for record in load_history_for_merchant(mid)
+                if not txn_ids or str(record.get("txn_id")) in txn_ids
+            ]
+
+            return self.send_bytes(
+                make_history_export_pdf(records),
+                "application/pdf",
+                "invoice-history.pdf"
+            )
         if path == "/api/logs/read":
             ok, msg = verify_system_log_password(data.get("admin_password"))
             if not ok:
