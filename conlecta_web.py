@@ -4535,6 +4535,24 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
+    
+    def device_id(self):
+        return self.headers.get("X-Conlecta-Device-Id", "").strip()
+    def get_device_auth(self, state):
+        did = self.device_id()
+        if not did:
+            return None
+        return (state.get("auth_by_device") or {}).get(did)
+    
+    def set_device_auth(self, state, auth):
+        did = self.device_id()
+        if not did:
+            return
+        auth_by_device = state.setdefault("auth_by_device", {})
+        auth_by_device[did] = auth
+
+        state["auth"] = None
+
 
     def read_json(self):
         length = int(self.headers.get("Content-Length") or 0)
@@ -4628,7 +4646,11 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             })
         if path == "/api/bootstrap":
             state = load_state()
-            auth = validate_stored_auth(state)
+            auth = self.get_device_auth(state)
+            if auth:
+                state["auth"] = auth
+                auth = validate_stored_auth(state)
+                state["auth"] = None
             mid = normalize_merchant_id((auth or {}).get("merchant_id") or DEFAULT_MERCHANT_ID)
             if auth:
                 acc = _find_account_by_id(auth.get("id")) if auth.get("id") else None
@@ -4651,7 +4673,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 save_state(state)
                 return self.send_json({
                     "ok": True,
-                    "auth": state.get("auth"),
+                    "auth": auth,
                     "settings": settings_payload(merchant_id=DEFAULT_MERCHANT_ID),
                     "products": [],
                     "vendors": [],
@@ -4675,7 +4697,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             save_state(state)
             return self.send_json({
                 "ok": True,
-                "auth": state.get("auth"),
+                "auth": auth,
                 "settings": settings_payload(merchant_id=mid),
                 "products": products,
                 "vendors": load_vendors(merchant_id=mid),
@@ -4778,6 +4800,9 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             if verified.get("pending"):
                 return self.send_json({"ok": True, "pending": verified["pending"], "message": "OTP benar. Register PIN baru."})
             auth = verified.get("auth") or {}
+            state = load_state()
+            self.set_device_auth(state, auth)
+            save_state(state)
             body = {"ok": True, "auth": auth, "settings": settings_payload(merchant_id=auth.get("merchant_id"))}
             if auth.get("role") == "system_admin":
                 body["system_admin"] = system_admin_payload()
@@ -4787,6 +4812,9 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 auth = verify_login_pin(data.get("account_id"), data.get("pin"))
             except Exception as exc:
                 return self.send_error_json(exc, 400)
+            state = load_state()
+            self.set_device_auth(state, auth)
+            save_state(state)
             body = {"ok": True, "auth": auth, "settings": settings_payload(merchant_id=auth.get("merchant_id"))}
             if auth.get("role") == "system_admin":
                 body["system_admin"] = system_admin_payload()
@@ -4794,6 +4822,9 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         if path == "/api/auth/register-pin":
             try:
                 auth = register_login_pin(data.get("account_id"), data.get("pin"), data.get("confirm_pin"))
+                state = load_state()
+                self.set_device_auth(state, auth)
+                save_state(state)
             except Exception as exc:
                 return self.send_error_json(exc, 400)
             body = {"ok": True, "auth": auth, "settings": settings_payload(merchant_id=auth.get("merchant_id"))}
@@ -4801,11 +4832,22 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 body["system_admin"] = system_admin_payload()
             return self.send_json(body)
         if path == "/api/auth/logout":
-            logout_current_account()
+            state = load_state()
+            did = self.device_id()
+            if did and isinstance(state.get("auth_by_device"), dict):
+                state["auth_by_device"].pop(did, None)
+            state["auth"] = None
+            save_state(state)
             return self.send_json({"ok": True})
         if path == "/api/auth/heartbeat":
             state = load_state()
-            auth = validate_stored_auth(state, refresh_seen=True, activity_ts=data.get("last_activity_ts"))
+            auth = self.get_device_auth(state)
+            if auth:
+                state["auth"] = auth
+                auth = validate_stored_auth(state, refresh_seen=True, activity_ts=data.get("last_activity_ts"))
+                state["auth"] = None
+                if auth:
+                    self.set_device_auth(state, auth)
             save_state(state)
             return self.send_json({"ok": True, "auth": auth})
         if path == "/api/auth/local-exit":
