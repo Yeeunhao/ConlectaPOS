@@ -1737,7 +1737,7 @@ function checkoutPayload(method) {
   const cash = parseMoney($("#cash-received").value);
   const change = Math.max(0, cash - total);
   return {
-    ...getCustomerSnapshot(),
+  ...getCustomerSnapshot(),
     txn_id: state.currentTxn || "",
     amount: total,
     gross,
