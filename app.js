@@ -92,6 +92,7 @@ let dismissCooldownTimer = null;
 let otpVerifying = false;
 let pinVerifying = false;
 let pinRegistering = false;
+let pinRegisterStep = 1;
 let lastActivityTs = Date.now();
 let lastActivitySyncTs = 0;
 let activityHeartbeatPending = false;
@@ -701,6 +702,7 @@ function showLoginStep(step, { updateRoute = true } = {}) {
   $("#otp-form").classList.toggle("active", step === "otp");
   $("#pin-form")?.classList.toggle("active", step === "pin");
   $("#pin-register-form")?.classList.toggle("active", step === "pin-register");
+  if (step === "pin-register") setPinRegisterStep(1);
   if (step === "login") stopOtpTimer();
   if (!state.auth && updateRoute) {
     const route = step === "otp" ? "/otp" : (step === "pin" ? "/pin" : (step === "pin-register" ? "/pin-register" : "/login"));
@@ -922,8 +924,46 @@ function getPinConfirmCode() {
 
 function clearPinRegisterCode(focus = false) {
   setPinRegisterCode("", "");
+  setPinRegisterStep(1);
   $$(".pin-row").forEach((row) => row.classList.remove("is-error"));
   if (focus) focusDigitInput(pinNewInputs());
+}
+
+function setPinRegisterStep(step) {
+  pinRegisterStep = step === 2 ? 2 : 1;
+  $("#pin-register-step1")?.classList.toggle("hidden", pinRegisterStep !== 1);
+  $("#pin-register-step2")?.classList.toggle("hidden", pinRegisterStep !== 2);
+  const indicator = $("#pin-step-indicator");
+  if (indicator) indicator.textContent = `Langkah ${pinRegisterStep} dari 2`;
+  $("#pin-register-status").textContent = "";
+  if (pinRegisterStep === 1) {
+    focusDigitInput(pinNewInputs());
+  } else {
+    focusDigitInput(pinConfirmInputs());
+  }
+}
+
+function pinRegisterContinue() {
+  const pin = getPinRegisterCode();
+  if (pin.length !== 6) {
+    markDigitError(pinNewInputs());
+    $("#pin-register-status").textContent = "Masukkan PIN 6 angka.";
+    focusDigitInput(pinNewInputs());
+    return;
+  }
+  setPinRegisterStep(2);
+}
+
+function pinRegisterBack() {
+  setDigitCode(pinConfirmInputs(), "#pin-confirm-code", "");
+  setPinRegisterStep(1);
+}
+
+function maybeAutoAdvancePinRegister() {
+  if (pinRegisterStep !== 1) return;
+  if (getPinRegisterCode().length === 6) {
+    pinRegisterContinue();
+  }
 }
 
 function maybeAutoSubmitPin() {
@@ -935,6 +975,7 @@ function maybeAutoSubmitPin() {
 }
 
 function maybeAutoRegisterPin() {
+  if (pinRegisterStep !== 2) return;
   const pin = getPinRegisterCode();
   const confirm = getPinConfirmCode();
   if (pin.length !== 6 || confirm.length !== 6 || !state.pendingLogin?.account_id) return;
@@ -1002,7 +1043,7 @@ function bindDigitInputs(inputs, hiddenSelector, autoSubmit) {
 
 function bindPinInputs() {
   bindDigitInputs(pinInputs(), "#pin-code", maybeAutoSubmitPin);
-  bindDigitInputs(pinNewInputs(), "#pin-new-code", maybeAutoRegisterPin);
+  bindDigitInputs(pinNewInputs(), "#pin-new-code", maybeAutoAdvancePinRegister);
   bindDigitInputs(pinConfirmInputs(), "#pin-confirm-code", maybeAutoRegisterPin);
 }
 
@@ -1339,9 +1380,22 @@ async function registerPinSubmit(event) {
     showLoginStep("login");
     return;
   }
+  if (pinRegisterStep === 1) {
+    pinRegisterContinue();
+    return;
+  }
   const pin = getPinRegisterCode();
   const confirm = getPinConfirmCode();
-  if (pin.length !== 6 || confirm.length !== 6) return;
+  if (pin.length !== 6) {
+    setPinRegisterStep(1);
+    $("#pin-register-status").textContent = "Masukkan PIN 6 angka.";
+    return;
+  }
+  if (confirm.length !== 6) {
+    $("#pin-register-status").textContent = "Konfirmasi PIN 6 angka.";
+    focusDigitInput(pinConfirmInputs());
+    return;
+  }
   if (pin !== confirm) {
     markDigitError(pinConfirmInputs());
     $("#pin-register-status").textContent = "Konfirmasi PIN tidak sama.";
@@ -4099,6 +4153,8 @@ function bindEvents() {
   $("#pin-register-form")?.addEventListener("submit", (event) => registerPinSubmit(event).catch((err) => {
     $("#pin-register-status").textContent = err.message;
   }));
+  $("#pin-register-continue")?.addEventListener("click", pinRegisterContinue);
+  $("#pin-register-back")?.addEventListener("click", pinRegisterBack);
   bindOtpInputs();
   bindPinInputs();
 

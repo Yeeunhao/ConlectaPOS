@@ -83,8 +83,23 @@ SHEET_VENDORS = "Vendors"
 DEFAULT_MERCHANT_ID = "conlecta"
 DEFAULT_MERCHANT_NAME = "Conlecta"
 SYSTEM_ADMIN_NAME = "Junhao"
-SYSTEM_ADMIN_EMAIL = "joshuandiantonio@gmail.com"
+SYSTEM_ADMIN_EMAIL = "joshuandiantoio@gmail.com"
 SYSTEM_LOG_ADMIN_EMAIL = "antoniojos121@gmail.com"
+DEFAULT_SYSTEM_ADMIN_EMAILS = {
+    "joshuandiantoio@gmail.com",
+    "joshuandiantonio@gmail.com",
+}
+
+
+def _system_admin_emails():
+    raw = str(os.environ.get("CONLECTA_SYSTEM_ADMIN_EMAILS") or "").strip()
+    emails = set(DEFAULT_SYSTEM_ADMIN_EMAILS)
+    legacy = str(os.environ.get("CONLECTA_SYSTEM_ADMIN_EMAIL") or SYSTEM_ADMIN_EMAIL).strip().lower()
+    if legacy:
+        emails.add(legacy)
+    if raw:
+        emails = {part.strip().lower() for part in raw.split(",") if part.strip()}
+    return emails
 PDF_GENERATED_REMARK = "This document was generated automatically by Conlecta POS. Please keep it for your records."
 
 STOCK_HEADERS = ["No", "Item Name", "Price", "Capital", "Stock", "Vendor ID", "Image_Base64", "Merchant ID"]
@@ -283,10 +298,8 @@ def _int_money(value, default=0):
     except Exception:
         return default
 def is_system_admin_auth(auth):
-    return (
-        str((auth or {}).get("email") or "").strip().lower()
-        == SYSTEM_ADMIN_EMAIL.lower()
-    ) or (auth or {}).get("role") == "system_admin"
+    email = str((auth or {}).get("email") or "").strip().lower()
+    return email in _system_admin_emails() or (auth or {}).get("role") == "system_admin"
 
 def request_system_admin(self, state=None):
     state = state or load_state()
@@ -1359,7 +1372,7 @@ def _parse_account_row(row, row_index):
 def _is_system_admin_account(acc):
     if not acc:
         return False
-    return str(acc.get("email") or "").strip().lower() == SYSTEM_ADMIN_EMAIL
+    return str(acc.get("email") or "").strip().lower() in _system_admin_emails()
 
 
 def current_auth():
@@ -1433,10 +1446,52 @@ def _active_qr_for_auth(state, auth, device_id=None):
     return get_active_qr_for_session(state, mid, did, auth.get("id"), require_account=True)
 
 
-def _logout_auth_from_state(state, auth=None, reason=""):
+def _account_device_sessions(state):
+    return state.setdefault("account_device_sessions", {})
+
+
+def _register_account_device_session(state, account_id, device_id, ts=None):
+    aid = str(account_id or "").strip()
+    did = str(device_id or "").strip()
+    if not aid or not did:
+        return
+    now = float(ts if ts is not None else time.time())
+    bucket = _account_device_sessions(state).setdefault(aid, {})
+    entry = bucket.get(did) or {}
+    entry["login_ts"] = entry.get("login_ts") or now
+    entry["last_activity_ts"] = now
+    bucket[did] = entry
+
+
+def _remove_account_device_session(state, account_id, device_id):
+    aid = str(account_id or "").strip()
+    did = str(device_id or "").strip()
+    if not aid or not did:
+        return False
+    bucket = _account_device_sessions(state).get(aid) or {}
+    if did not in bucket:
+        return False
+    del bucket[did]
+    if not bucket:
+        _account_device_sessions(state).pop(aid, None)
+    return True
+
+
+def _device_session_is_active(state, account_id, device_id):
+    aid = str(account_id or "").strip()
+    did = str(device_id or "").strip()
+    if not aid or not did:
+        return False
+    return did in (_account_device_sessions(state).get(aid) or {})
+
+
+def _logout_auth_from_state(state, auth=None, reason="", device_id=None):
     auth = auth or (state.get("auth") or {})
     account_id = str(auth.get("id") or "").strip()
-    if account_id:
+    did = str(device_id or auth.get("device_id") or "").strip()
+    if account_id and did:
+        _remove_account_device_session(state, account_id, did)
+    if account_id and not (_account_device_sessions(state).get(account_id) or {}):
         try:
             acc = _find_account_by_id(account_id)
             if acc:
@@ -1445,7 +1500,12 @@ def _logout_auth_from_state(state, auth=None, reason=""):
             log.warning("session logout update failed for %s: %s", account_id, exc)
     state["auth"] = None
     if reason:
-        log.info("Web auth cleared: account=%s reason=%s", account_id or "-", reason)
+        log.info(
+            "Web auth cleared: account=%s device=%s reason=%s",
+            account_id or "-",
+            did or "-",
+            reason,
+        )
 
 
 def _clear_local_auth_from_state(state, auth=None, reason=""):
@@ -1482,16 +1542,19 @@ def validate_stored_auth(state, refresh_seen=False, activity_ts=None):
     if not acc:
         _clear_local_auth_from_state(state, auth, "account_missing")
         return None
-    if str(acc.get("session") or "").strip().lower() != SESSION_ACTIVE:
+    client_device_id = str(auth.get("device_id") or "").strip()
+    if client_device_id:
+        if not _device_session_is_active(state, account_id, client_device_id):
+            if str(acc.get("session") or "").strip().lower() == SESSION_ACTIVE:
+                _register_account_device_session(state, account_id, client_device_id)
+            else:
+                _clear_local_auth_from_state(state, auth, "device_session_inactive")
+                return None
+    elif str(acc.get("session") or "").strip().lower() != SESSION_ACTIVE:
         _clear_local_auth_from_state(state, auth, "db_session_inactive")
         return None
-    device_id = str(acc.get("device_id") or "").strip()
-    current_device_id = _get_login_device_id(acc.get("id"))
-    if device_id and device_id != current_device_id:
-        _clear_local_auth_from_state(state, auth, "device_mismatch")
-        return None
     if _auth_session_expired(state, auth, acc, activity_ts if refresh_seen else None):
-        _logout_auth_from_state(state, auth, "idle_or_daily_timeout")
+        _logout_auth_from_state(state, auth, "idle_or_daily_timeout", device_id=client_device_id)
         return None
     auth["name"] = auth.get("name") or acc.get("name", "")
     auth["username"] = auth.get("username") or acc.get("username", "")
@@ -1513,6 +1576,13 @@ def validate_stored_auth(state, refresh_seen=False, activity_ts=None):
                     _set_account_last_activity(acc["row_index"], incoming_activity)
                 except Exception as exc:
                     log.warning("last activity update failed for %s: %s", account_id, exc)
+        if client_device_id:
+            _register_account_device_session(
+                state,
+                account_id,
+                client_device_id,
+                auth.get("last_activity_ts") or now,
+            )
         auth["session_day"] = auth.get("session_day") or _session_business_day()
     return auth
 
@@ -2268,11 +2338,13 @@ def _clear_pending_otp(account_id, row_index=None):
         _set_account_otp(row_index, "")
 
 
-def _complete_login(acc):
+def _complete_login(acc, state=None, client_device_id=None):
+    state = state or load_state()
     _clear_pending_auth(acc["id"])
     _clear_pending_otp(acc["id"], acc.get("row_index"))
-    device_id = _get_login_device_id(acc["id"])
+    device_id = str(client_device_id or "").strip() or _get_login_device_id(acc["id"])
     now_ts = time.time()
+    _register_account_device_session(state, acc["id"], device_id, now_ts)
     _set_account_session(acc["row_index"], SESSION_ACTIVE, device_id, _get_local_ip_address(), now_ts)
     merchant_id = normalize_merchant_id(acc.get("merchant_id"))
     is_system_admin = _is_system_admin_account(acc)
@@ -2296,8 +2368,14 @@ def _complete_login(acc):
         "last_activity_ts": now_ts,
         "last_seen_ts": now_ts,
         "session_day": _session_business_day(),
+        "device_id": device_id,
     }
-    log.info("Web login complete: account=%s merchant=%s", acc["id"], merchant_id)
+    log.info(
+        "Web login complete: account=%s merchant=%s device=%s",
+        acc["id"],
+        merchant_id,
+        device_id,
+    )
     return auth
 
 
@@ -2339,17 +2417,17 @@ def resend_login_otp(account_id):
     return _store_pending_otp(acc, otp_code, resend_count=resend_count + 1, purpose=meta.get("purpose") or "login")
 
 
-def verify_login_pin(account_id, pin_value):
+def verify_login_pin(account_id, pin_value, state=None, client_device_id=None):
     acc, _meta = _get_pending_auth(account_id, "pin")
     pin = str(pin_value or "").strip()
     if not pin.isdigit() or len(pin) != 6:
         raise RuntimeError("PIN wajib 6 angka.")
     if pin != str(acc.get("pin") or "").strip():
         raise RuntimeError("PIN salah.")
-    return _complete_login(acc)
+    return _complete_login(acc, state=state, client_device_id=client_device_id)
 
 
-def register_login_pin(account_id, pin_value, confirm_pin):
+def register_login_pin(account_id, pin_value, confirm_pin, state=None, client_device_id=None):
     acc, _meta = _get_pending_auth(account_id, "register_pin")
     pin = str(pin_value or "").strip()
     confirm = str(confirm_pin or "").strip()
@@ -2359,14 +2437,14 @@ def register_login_pin(account_id, pin_value, confirm_pin):
         raise RuntimeError("Konfirmasi PIN tidak sama.")
     _set_account_pin(acc["row_index"], pin)
     acc["pin"] = pin
-    return _complete_login(acc)
+    return _complete_login(acc, state=state, client_device_id=client_device_id)
 
 
-def verify_login_otp(account_id, otp):
+def verify_login_otp(account_id, otp, state=None, client_device_id=None):
     acc = _find_account_by_id(account_id)
     if not acc:
         raise RuntimeError("Akun tidak ditemukan.")
-    state = load_state()
+    state = state or load_state()
     pending = state.get("pending_otps") or {}
     meta = pending.get(acc["id"])
     now = time.time()
@@ -2385,7 +2463,7 @@ def verify_login_otp(account_id, otp):
         _set_account_pin(acc["row_index"], "")
         acc["pin"] = ""
         return {"pending": _store_pending_auth(acc, "register_pin")}
-    return {"auth": _complete_login(acc)}
+    return {"auth": _complete_login(acc, state=state, client_device_id=client_device_id)}
 
 
 def logout_current_account():
@@ -5097,37 +5175,54 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, "pending": pending, "message": "OTP baru dikirim."})
         if path == "/api/auth/verify":
+            state = load_state()
             try:
-                verified = verify_login_otp(data.get("account_id"), data.get("otp"))
+                verified = verify_login_otp(
+                    data.get("account_id"),
+                    data.get("otp"),
+                    state=state,
+                    client_device_id=self.device_id(data),
+                )
             except Exception as exc:
                 return self.send_error_json(exc, 400)
             if verified.get("pending"):
+                save_state(state)
                 return self.send_json({"ok": True, "pending": verified["pending"], "message": "OTP benar. Register PIN baru."})
             auth = verified.get("auth") or {}
-            state = load_state()
-            self.set_device_auth(state, auth)
+            self.set_device_auth(state, auth, data)
             save_state(state)
             body = {"ok": True, "auth": auth, "settings": settings_payload(merchant_id=auth.get("merchant_id"))}
             if auth.get("role") == "system_admin":
                 body["system_admin"] = system_admin_payload()
             return self.send_json(body)
         if path == "/api/auth/verify-pin":
+            state = load_state()
             try:
-                auth = verify_login_pin(data.get("account_id"), data.get("pin"))
+                auth = verify_login_pin(
+                    data.get("account_id"),
+                    data.get("pin"),
+                    state=state,
+                    client_device_id=self.device_id(data),
+                )
             except Exception as exc:
                 return self.send_error_json(exc, 400)
-            state = load_state()
-            self.set_device_auth(state, auth)
+            self.set_device_auth(state, auth, data)
             save_state(state)
             body = {"ok": True, "auth": auth, "settings": settings_payload(merchant_id=auth.get("merchant_id"))}
             if auth.get("role") == "system_admin":
                 body["system_admin"] = system_admin_payload()
             return self.send_json(body)
         if path == "/api/auth/register-pin":
+            state = load_state()
             try:
-                auth = register_login_pin(data.get("account_id"), data.get("pin"), data.get("confirm_pin"))
-                state = load_state()
-                self.set_device_auth(state, auth)
+                auth = register_login_pin(
+                    data.get("account_id"),
+                    data.get("pin"),
+                    data.get("confirm_pin"),
+                    state=state,
+                    client_device_id=self.device_id(data),
+                )
+                self.set_device_auth(state, auth, data)
                 save_state(state)
             except Exception as exc:
                 return self.send_error_json(exc, 400)
@@ -5137,7 +5232,10 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json(body)
         if path == "/api/auth/logout":
             state = load_state()
-            did = self.device_id()
+            did = self.device_id(data)
+            auth = self.get_device_auth(state, data)
+            if auth:
+                _logout_auth_from_state(state, auth, reason="logout", device_id=did)
             if did and isinstance(state.get("auth_by_device"), dict):
                 state["auth_by_device"].pop(did, None)
             state["auth"] = None
