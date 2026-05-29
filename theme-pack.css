@@ -1290,7 +1290,78 @@ body[data-theme="pearl_mist"] .display-total strong {
 }
 
 body[data-theme="pearl_mist"] .display-total span {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .display-total {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(124, 92, 255, 0.32);
+}
+
+body[data-theme="pearl_mist"] .display-cash-live {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(124, 92, 255, 0.32);
+}
+
+body[data-theme="pearl_mist"] .display-cash-row {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .display-cash-row strong {
+  color: var(--purple);
+}
+
+body[data-theme="pearl_mist"] .display-cash-row.change strong {
+  color: #059669;
+}
+
+body[data-theme="crystal_bloom"] .display-cash-live,
+body[data-theme="aurora_glass"] .display-cash-live,
+body[data-theme="midnight_velvet"] .display-cash-live {
+  background: rgba(8, 12, 28, 0.72);
+  border-color: var(--tp-glass-border);
+}
+
+body[data-theme="crystal_bloom"] .display-cash-row,
+body[data-theme="aurora_glass"] .display-cash-row,
+body[data-theme="midnight_velvet"] .display-cash-row {
   color: var(--text2);
+}
+
+body[data-theme="crystal_bloom"] .display-cash-row strong,
+body[data-theme="aurora_glass"] .display-cash-row strong,
+body[data-theme="midnight_velvet"] .display-cash-row strong {
+  background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2), var(--tp-iris-4));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="crystal_bloom"] .display-cash-row.change strong,
+body[data-theme="aurora_glass"] .display-cash-row.change strong,
+body[data-theme="midnight_velvet"] .display-cash-row.change strong {
+  background: linear-gradient(135deg, #34d399, #10b981);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="crystal_bloom"] .display-total,
+body[data-theme="aurora_glass"] .display-total,
+body[data-theme="midnight_velvet"] .display-total {
+  background: rgba(8, 12, 28, 0.62);
+  border-color: var(--tp-glass-border);
+}
+
+body[data-theme="crystal_bloom"] .display-total span,
+body[data-theme="aurora_glass"] .display-total span,
+body[data-theme="midnight_velvet"] .display-total span {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .display-brand img {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(124, 92, 255, 0.2);
 }
 
 /* Bottom address bar */

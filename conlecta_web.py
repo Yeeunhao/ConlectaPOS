@@ -988,7 +988,7 @@ def save_system_merchant(data, auth=None):
     _write_settings_for_merchant(settings, mid)
     row = dict(merchant_payload(mid))
     row["logo_url"] = (
-        public_asset_url(row.get("logo_path"))
+        merchant_brand_logo_url(load_settings(mid), mid)
         or public_asset_url(BRAND_DEFAULT_LOGO, fallback_logo=True)
     )
     return row
@@ -1092,11 +1092,7 @@ def system_admin_payload(auth=None):
     merchants = []
     for merchant in load_merchants().values():
         row = dict(merchant)
-        row["logo_url"] = (
-            public_asset_url(row.get("logo_path"))
-            or row.get("logo_data_url")
-            or public_asset_url(BRAND_DEFAULT_LOGO, fallback_logo=True)
-        )
+        row["logo_url"] = merchant_brand_logo_url(load_settings(mid), mid)
         merchants.append(row)
     accounts = load_all_accounts()
     return {
@@ -4020,6 +4016,37 @@ def _normalize_asset_path(path):
     return path if os.path.isfile(path) else ""
 
 
+def merchant_brand_logo_file(settings=None, merchant_id=None):
+    """Resolve uploaded merchant logo path from settings / merchant record."""
+    mid = normalize_merchant_id(merchant_id or (settings or {}).get("merchant_id") or current_merchant_id())
+    settings = dict(settings or load_settings(mid))
+    merchant = merchant_payload(mid)
+    default_base = os.path.basename(BRAND_DEFAULT_LOGO or "").lower()
+    for raw in (settings.get("brand_logo_path"), merchant.get("logo_path")):
+        path = _normalize_asset_path(raw)
+        if not path:
+            continue
+        if default_base and os.path.basename(path).lower() == default_base:
+            continue
+        return path
+    return _normalize_asset_path(BRAND_DEFAULT_LOGO)
+
+
+def merchant_brand_logo_url(settings=None, merchant_id=None):
+    """Public URL for merchant logo uploaded via settings (API-served, not guessed paths)."""
+    mid = normalize_merchant_id(merchant_id or (settings or {}).get("merchant_id") or current_merchant_id())
+    settings = dict(settings or load_settings(mid))
+    path = merchant_brand_logo_file(settings, mid)
+    default_path = _normalize_asset_path(BRAND_DEFAULT_LOGO)
+    if path and (not default_path or os.path.normcase(path) != os.path.normcase(default_path)):
+        try:
+            version = int(os.path.getmtime(path))
+        except Exception:
+            version = int(time.time())
+        return f"/api/brand-image?merchant_id={quote(mid)}&v={version}"
+    return public_asset_url(BRAND_DEFAULT_LOGO, fallback_logo=True) or "/assets/ConlectaPosLogo.png"
+
+
 def _resolve_brand_logo_path(settings=None, merchant_id=None):
     mid = normalize_merchant_id(merchant_id or (settings or {}).get("merchant_id") or current_merchant_id())
     settings = dict(settings or load_settings(mid))
@@ -4899,11 +4926,7 @@ def settings_payload(settings=None, merchant_id=None, device_settings=None):
         settings["brand_logo_path"] = merchant["logo_path"]
     settings["merchant_id"] = mid
     settings["merchant_name"] = merchant.get("name") or settings.get("shop_name") or DEFAULT_MERCHANT_NAME
-    settings["brand_logo_url"] = (
-        public_asset_url(settings.get("brand_logo_path"))
-        or merchant.get("logo_data_url")
-        or public_asset_url(BRAND_DEFAULT_LOGO, fallback_logo=True)
-    )
+    settings["brand_logo_url"] = merchant_brand_logo_url(settings, mid)
     settings["payment_image_urls"] = [public_asset_url(path) for path in configured_payment_image_paths(settings)]
     settings["payment_image_urls"] = [url for url in settings["payment_image_urls"] if url]
     settings["video_playlist_urls"] = video_playlist_urls(settings)
@@ -4919,11 +4942,7 @@ def display_settings_payload(merchant_id=None, device_settings=None):
         settings["brand_logo_path"] = merchant["logo_path"]
     settings["merchant_id"] = mid
     settings["merchant_name"] = settings.get("shop_name") or merchant.get("name") or DEFAULT_MERCHANT_NAME
-    settings["brand_logo_url"] = (
-        public_asset_url(settings.get("brand_logo_path"))
-        or merchant.get("logo_data_url")
-        or public_asset_url(BRAND_DEFAULT_LOGO, fallback_logo=True)
-    )
+    settings["brand_logo_url"] = merchant_brand_logo_url(settings, mid)
     settings["payment_image_urls"] = [public_asset_url(path) for path in configured_payment_image_paths(settings)]
     settings["payment_image_urls"] = [url for url in settings["payment_image_urls"] if url]
     settings["video_playlist_urls"] = video_playlist_urls(settings)
@@ -5107,6 +5126,16 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def handle_api_get(self, path, query):
+        if path == "/api/brand-image":
+            mid = normalize_merchant_id((query.get("merchant_id") or [""])[0])
+            if not mid:
+                return self.send_error(400, "merchant_id required")
+            logo_path = merchant_brand_logo_file(load_settings(mid), mid)
+            if not logo_path:
+                logo_path = _normalize_asset_path(BRAND_DEFAULT_LOGO)
+            if not logo_path:
+                return self.send_error(404, "Logo not found")
+            return self.serve_file(logo_path)
         if path == "/api/display-state":
             state = load_state()
             did = self.device_id()

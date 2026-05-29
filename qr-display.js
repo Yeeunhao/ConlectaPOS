@@ -22,6 +22,32 @@ const CASHIER_NOTICE_GRACE_MS = 3000;
 const ORPHAN_SUCCESS_CLEAR_MS = 12000;
 const CASH_CHANGE_OVERLAY_MS = 7000;
 const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png";
+const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
+
+function displayBrandLogoUrl(settings = qrState.settings) {
+  return String(settings?.brand_logo_url || "").trim() || DEFAULT_BRAND_LOGO;
+}
+
+function applyDisplayLogo(img, settings = qrState.settings) {
+  if (!img) return;
+  const url = displayBrandLogoUrl(settings);
+  const mid = String(settings?.merchant_id || "");
+  if (img.dataset.brandMerchant !== mid) {
+    img.dataset.brandMerchant = mid;
+    delete img.dataset.brandSrc;
+  }
+  img.onerror = () => {
+    if (img.dataset.brandSrc !== DEFAULT_BRAND_LOGO) {
+      img.dataset.brandSrc = DEFAULT_BRAND_LOGO;
+      img.src = DEFAULT_BRAND_LOGO;
+    } else {
+      img.onerror = null;
+    }
+  };
+  if (img.dataset.brandSrc === url && img.complete && img.naturalWidth > 0) return;
+  img.dataset.brandSrc = url;
+  img.src = url;
+}
 let displayEventTimer = null;
 let orphanAckTimer = null;
 let cashChangeTimer = null;
@@ -387,14 +413,8 @@ function applyBrand() {
   const settings = qrState.settings || {};
   const shop = settings.shop_name || "Conlecta";
   const address = [settings.shop_address, settings.shop_postcode].filter(Boolean).join(" | ") || "Point of Sale";
-  const logo = settings.brand_logo_url || "/assets/ConlectaPosLogo.png";
   document.body.dataset.theme = settings.active_theme || "deep_space";
-  $$(".js-display-logo").forEach((img) => {
-    if (img.dataset.brandSrc !== logo) {
-      img.dataset.brandSrc = logo;
-      img.src = logo;
-    }
-  });
+  $$(".js-display-logo").forEach((img) => applyDisplayLogo(img, settings));
   $("#display-shop").textContent = shop;
   $("#display-bottom-shop").textContent = shop;
   $("#display-bottom-address").textContent = address;
@@ -485,7 +505,7 @@ function updateStageQrImage(active) {
   const img = $("#display-stage-qr-img");
   const frame = $(".stage-qr-frame-bg");
   if (!img) return;
-  const src = qrImageSrc(active, 512);
+  const src = qrImageSrc(active, 640);
   if (src && img.dataset.qrSrc !== src) {
     img.dataset.qrSrc = src;
     img.src = src;

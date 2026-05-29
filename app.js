@@ -652,33 +652,37 @@ function bootstrapDeviceTheme() {
   applyDeviceTheme(DEFAULT_THEME);
 }
 
+const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png";
+const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
+
 function brandLogoUrl(settings = state.settings) {
-  const url = settings?.brand_logo_url || "/assets/ConlectaPosLogo.png";
-  if (!url || url.startsWith("data:")) return url;
-  if (url.includes("?")) return url;
-  const stamp = settings?.brand_logo_updated_ts || settings?.brand_logo_version || "";
-  return stamp ? `${url}?v=${encodeURIComponent(stamp)}` : url;
+  return String(settings?.brand_logo_url || "").trim() || DEFAULT_BRAND_LOGO;
+}
+
+function applyBrandLogo(img, settings = state.settings) {
+  if (!img) return;
+  const url = brandLogoUrl(settings);
+  img.onerror = () => {
+    if (img.dataset.brandSrc !== DEFAULT_BRAND_LOGO) {
+      img.dataset.brandSrc = DEFAULT_BRAND_LOGO;
+      img.src = DEFAULT_BRAND_LOGO;
+    } else {
+      img.onerror = null;
+    }
+  };
+  if (img.dataset.brandSrc === url && img.complete && img.naturalWidth > 0) return;
+  img.dataset.brandSrc = url;
+  img.src = url;
 }
 
 function applyBrand() {
   const s = state.settings || {};
   const name = s.shop_name || "Conlecta";
-  const logo = brandLogoUrl(s);
   $$(".js-brand-name").forEach((el) => { el.textContent = name; });
-  $$(".js-brand-logo").forEach((el) => {
-    if (el.dataset.brandSrc !== logo) {
-      el.dataset.brandSrc = logo;
-      el.src = logo;
-    }
-  });
+  $$(".js-brand-logo").forEach((el) => applyBrandLogo(el, s));
   $$(".conlecta-identity-logo").forEach((el) => { el.src = CONLECTA_IDENTITY_LOGO; });
   const preview = $("#brand-preview");
-  if (preview) {
-    if (preview.dataset.brandSrc !== logo) {
-      preview.dataset.brandSrc = logo;
-      preview.src = logo;
-    }
-  }
+  if (preview) applyBrandLogo(preview, s);
 }
 
 function routePath() {
@@ -2320,14 +2324,20 @@ function showDismissModal(event) {
 }
 
 function showQrModal(active = state.activeQr) {
-  const src = qrImageSrc(active, 320);
+  const src = qrImageSrc(active, 512);
   if (!src) return;
   $("#payment-modal").hidden = true;
   $("#detail-modal").hidden = true;
   $("#dismiss-modal").hidden = true;
   $("#logout-modal").hidden = true;
   $("#qr-modal").hidden = false;
-  $("#qr-modal-img").src = src;
+  const frame = $("#qr-modal-frame-bg");
+  if (frame) frame.src = QRIS_FRAME_SRC;
+  const img = $("#qr-modal-img");
+  if (img) {
+    img.dataset.qrSrc = src;
+    img.src = src;
+  }
   $("#qr-modal-txn").textContent = active.txn_id || "-";
   $("#qr-modal-id").textContent = active.id || "-";
   $("#qr-modal-total").textContent = formatRp(active.amount);
