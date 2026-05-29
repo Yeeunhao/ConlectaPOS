@@ -170,8 +170,37 @@
     return document.body.dataset.theme || DEFAULT_THEME;
   }
 
-  function isCrystalBloom() {
-    return currentThemeId() === "crystal_bloom";
+  const THEME_SCENE_PROFILES = {
+    crystal_bloom: { density: 1.5, motion: 0.72, auroraSpeed: 0.00035, shooting: 0.0013, pearls: 1.45, sparkles: 1.35, crystals: 1.3 },
+    pearl_mist: { density: 1.2, motion: 0.48, auroraSpeed: 0.00022, shooting: 0.00035, pearls: 2, sparkles: 1.7, crystals: 0.35 },
+    aurora_glass: { density: 1.4, motion: 0.92, auroraSpeed: 0.0011, shooting: 0.00055, pearls: 0.45, sparkles: 1.65, crystals: 0.55 },
+    midnight_velvet: { density: 1.35, motion: 0.62, auroraSpeed: 0.00048, shooting: 0.001, pearls: 1.15, sparkles: 1.45, crystals: 0.85 },
+    deep_space: { density: 1.15, motion: 0.38, auroraSpeed: 0.00018, shooting: 0.0022, pearls: 0.25, sparkles: 2.4, crystals: 0.2 },
+    warm_terminal: { density: 1.05, motion: 0.58, auroraSpeed: 0.00042, shooting: 0.00028, pearls: 0.35, sparkles: 2, crystals: 0.15 },
+    midnight_teal: { density: 1.3, motion: 0.8, auroraSpeed: 0.00058, shooting: 0.00075, pearls: 0.7, sparkles: 1.75, crystals: 0.4 },
+  };
+
+  function themeSceneProfile() {
+    const base = THEME_SCENE_PROFILES[currentThemeId()] || THEME_SCENE_PROFILES.crystal_bloom;
+    const authBoost = isAuthVisible() ? 1.18 : 1;
+    const displayBoost = document.body.classList.contains("qr-display-body") ? 1.12 : 1;
+    return {
+      density: base.density * authBoost * displayBoost,
+      motion: base.motion,
+      auroraSpeed: base.auroraSpeed,
+      shooting: base.shooting,
+      pearls: base.pearls * authBoost,
+      sparkles: base.sparkles * displayBoost,
+      crystals: base.crystals * displayBoost,
+    };
+  }
+
+  function sceneDensityBoost() {
+    return themeSceneProfile().density;
+  }
+
+  function motionScale() {
+    return themeSceneProfile().motion;
   }
 
   function isAuthVisible() {
@@ -179,24 +208,14 @@
     return Boolean(auth && !auth.classList.contains("hidden") && !document.body.classList.contains("qr-display-body"));
   }
 
-  function sceneDensityBoost() {
-    let boost = 1;
-    if (isCrystalBloom()) boost *= 1.35;
-    if (isAuthVisible()) boost *= 1.2;
-    return boost;
-  }
-
-  function motionScale() {
-    return isCrystalBloom() ? 0.72 : 1;
-  }
-
   function seedScene() {
-    const boost = sceneDensityBoost();
+    const profile = themeSceneProfile();
+    const boost = profile.density;
     const baseCount = Math.min(window.innerWidth, 1600) / 1600;
     const reduction = (performanceMode ? 0.45 : 0.55) * particleReductionFactor;
-    const cCount = Math.round((6 + baseCount * 5) * reduction * boost);
-    const pCount = Math.round((2 + baseCount * 2) * reduction * boost);
-    const sCount = Math.round((16 + baseCount * 32) * reduction * boost);
+    const cCount = Math.round((6 + baseCount * 5) * reduction * boost * profile.crystals);
+    const pCount = Math.round((2 + baseCount * 2) * reduction * boost * profile.pearls);
+    const sCount = Math.round((16 + baseCount * 32) * reduction * boost * profile.sparkles);
 
     crystals = [];
     for (let i = 0; i < cCount; i++) crystals.push(spawnCrystal(true));
@@ -276,9 +295,9 @@
 
   function drawBackground() {
     const p = currentPalette;
+    const profile = themeSceneProfile();
     ctx.globalCompositeOperation = "source-over";
 
-    // Layered radial atmosphere
     const grad1 = ctx.createRadialGradient(width * 0.2, height * 0.2, 10, width * 0.5, height * 0.5, Math.max(width, height));
     grad1.addColorStop(0, p.aurora[0]);
     grad1.addColorStop(1, "rgba(0,0,0,0)");
@@ -297,8 +316,7 @@
     ctx.fillStyle = grad3;
     ctx.fillRect(0, 0, width, height);
 
-    // Subtle aurora sweep
-    const auroraSpeed = isCrystalBloom() ? 0.00035 : 0.0006;
+    const auroraSpeed = profile.auroraSpeed;
     const sweepX = (Math.sin(auroraT * auroraSpeed) * 0.4 + 0.5) * width;
     const sweep = ctx.createLinearGradient(sweepX - 200, 0, sweepX + 200, height);
     sweep.addColorStop(0, "rgba(0,0,0,0)");
@@ -307,6 +325,37 @@
     ctx.globalCompositeOperation = p.light ? "multiply" : "screen";
     ctx.fillStyle = sweep;
     ctx.fillRect(0, 0, width, height);
+
+    if (currentThemeId() === "aurora_glass") {
+      const bandY = (Math.sin(auroraT * 0.00075 + 1.2) * 0.22 + 0.42) * height;
+      const band = ctx.createLinearGradient(0, bandY - 120, 0, bandY + 120);
+      band.addColorStop(0, "rgba(0,0,0,0)");
+      band.addColorStop(0.5, p.aurora[1]);
+      band.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = band;
+      ctx.fillRect(0, 0, width, height);
+    } else if (currentThemeId() === "midnight_velvet") {
+      const bloom = ctx.createRadialGradient(width * 0.5, height * 0.42, 20, width * 0.5, height * 0.42, Math.max(width, height) * 0.55);
+      bloom.addColorStop(0, p.aurora[0]);
+      bloom.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = bloom;
+      ctx.fillRect(0, 0, width, height);
+    } else if (currentThemeId() === "warm_terminal") {
+      const scanY = (auroraT * 0.035) % (height + 240) - 120;
+      const scan = ctx.createLinearGradient(0, scanY, 0, scanY + 90);
+      scan.addColorStop(0, "rgba(0,0,0,0)");
+      scan.addColorStop(0.5, p.aurora[1]);
+      scan.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = scan;
+      ctx.fillRect(0, 0, width, height);
+    } else if (currentThemeId() === "deep_space") {
+      const nebula = ctx.createRadialGradient(width * 0.68, height * 0.28, 10, width * 0.68, height * 0.28, Math.max(width, height) * 0.45);
+      nebula.addColorStop(0, p.aurora[2]);
+      nebula.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = nebula;
+      ctx.fillRect(0, 0, width, height);
+    }
+
     ctx.globalCompositeOperation = "source-over";
   }
 
@@ -524,7 +573,7 @@
       drawCrystal(c);
     });
 
-    if (Math.random() < (isCrystalBloom() ? 0.0012 : 0.0008)) {
+    if (Math.random() < themeSceneProfile().shooting) {
       shootingStars.push(spawnShootingStar());
     }
     shootingStars.forEach((s) => {
@@ -651,6 +700,7 @@
         const did = localStorage.getItem("conlecta_device_id") || "";
         if (did) setStorageKey(`conlecta:display:theme:${did}`);
       } catch (e) { /* ignore */ }
+      document.body.classList.add("tp-display-canvas");
     }
     reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) {

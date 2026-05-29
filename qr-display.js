@@ -20,7 +20,8 @@ const ACTIVE_QR_TTL_MS = 30 * 60 * 1000;
 const CASHIER_NOTICE_STALE_MS = 8000;
 const CASHIER_NOTICE_GRACE_MS = 3000;
 const ORPHAN_SUCCESS_CLEAR_MS = 12000;
-const CASH_CHANGE_OVERLAY_MS = 7000;
+const CASH_CHANGE_OVERLAY_MS = 6000;
+const DISPLAY_EVENT_TTL_MS = 6000;
 const QR_RENDER_SIZE = 512;
 const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
 
@@ -372,7 +373,6 @@ function readLocalVersion() {
 
 function displayEventExpired(event) {
   if (!event) return true;
-  if (event.requires_ack) return false;
   return Date.now() > Number(event.expires_ts || 0) * 1000;
 }
 
@@ -391,8 +391,7 @@ function scheduleDisplayEventExpiry(event) {
   clearTimeout(displayEventTimer);
   displayEventTimer = null;
   if (!event) return;
-  if (event.requires_ack) return;
-  const delay = Math.max(0, Number(event.expires_ts || 0) * 1000 - Date.now());
+  const delay = Math.max(0, Number(event.expires_ts || 0) * 1000 - Date.now(), DISPLAY_EVENT_TTL_MS - displayEventAgeMs(event));
   displayEventTimer = setTimeout(() => {
     if (displayEventExpired(qrState.displayEvent)) {
       qrState.displayEvent = null;
@@ -400,6 +399,56 @@ function scheduleDisplayEventExpiry(event) {
       renderDisplay();
     }
   }, delay + 80);
+}
+
+function displayEventCopy(event) {
+  const type = String(event?.type || "").trim().toLowerCase();
+  const isDismissed = type === "dismissed";
+  const isCashSuccess = type === "success" && isCashPayment(event);
+  const isQrisSuccess = type === "success" && !isCashPayment(event);
+  if (isDismissed) {
+    return {
+      kicker: "QRIS Dibatalkan",
+      title: "Permintaan QR Ditutup",
+      message: event.message || "Kasir menutup QRIS. Silakan tunggu QR baru.",
+      tone: "dismiss",
+    };
+  }
+  if (isCashSuccess) {
+    return {
+      kicker: "Pembayaran Tunai",
+      title: "Pembayaran Berhasil",
+      message: event.message || `Total ${formatRp(event.amount)} · Bayar ${formatRp(event.cash_received || event.amount)}`,
+      tone: "cash-success",
+    };
+  }
+  if (isQrisSuccess) {
+    return {
+      kicker: "QRIS Berhasil",
+      title: "Pembayaran Sukses",
+      message: event.message || `Pembayaran ${formatRp(event.amount)} diterima.`,
+      tone: "qris-success",
+    };
+  }
+  return {
+    kicker: event.title || "Payment",
+    title: event.title || "Payment Update",
+    message: event.message || "",
+    tone: "info",
+  };
+}
+
+function applyDisplayNotificationState(event) {
+  const copy = event ? displayEventCopy(event) : null;
+  document.body.classList.toggle("display-notify-active", Boolean(event));
+  document.body.classList.toggle("display-notify-success", copy?.tone === "qris-success" || copy?.tone === "cash-success");
+  document.body.classList.toggle("display-notify-dismiss", copy?.tone === "dismiss");
+  document.body.classList.toggle("display-notify-cash", copy?.tone === "cash-success");
+  if (copy?.tone) {
+    document.body.dataset.notifyTone = copy.tone;
+  } else {
+    delete document.body.dataset.notifyTone;
+  }
 }
 
 function updateClock() {
@@ -745,38 +794,49 @@ function renderDisplay() {
   const cashLive = previewCashInfo(hasEvent || hasActiveQr ? {} : preview);
 
   if (hasEvent) {
+    const copy = displayEventCopy(event);
+    const isDismissed = copy.tone === "dismiss";
+    const isCashSuccess = copy.tone === "cash-success";
     stageQr.hidden = true;
     stageEvent.hidden = false;
     video.hidden = true;
     paymentArea.hidden = true;
     eventPanel.hidden = false;
-    const isDismissed = event.type === "dismissed";
-    const isCashSuccess = !isDismissed && isCashPayment(event);
-    const kicker = isDismissed ? "QRIS Dismissed" : "Payment Success";
-    const validation = cashierValidationMessage(event);
-    if (stageEventCard) stageEventCard.classList.toggle("is-cash-change", isCashSuccess);
+    if (stageEventCard) {
+      stageEventCard.classList.toggle("is-cash-change", isCashSuccess);
+      stageEventCard.classList.toggle("is-qris-success", copy.tone === "qris-success");
+      stageEventCard.classList.toggle("is-dismissed", isDismissed);
+      stageEventCard.dataset.notifyTone = copy.tone;
+    }
+    if (eventPanel) eventPanel.dataset.notifyTone = copy.tone;
+    applyDisplayNotificationState(event);
     if (isCashSuccess) {
-      $("#display-stage-event-kicker").textContent = "Pembayaran Tunai";
+      $("#display-stage-event-kicker").textContent = copy.kicker;
       $("#display-stage-event-title").textContent = "Kembalian";
-      $("#display-stage-event-message").textContent = validation || `Total ${formatRp(event.amount)} · Bayar ${formatRp(event.cash_received || event.amount)}`;
+      $("#display-stage-event-message").textContent = copy.message;
       $("#display-stage-event-total").textContent = formatRp(event.change || 0);
-      $("#display-event-kicker").textContent = "Pembayaran Tunai";
+      $("#display-event-kicker").textContent = copy.kicker;
       $("#display-event-title").textContent = "Kembalian";
-      $("#display-event-message").textContent = validation || `Total ${formatRp(event.amount)}`;
+      $("#display-event-message").textContent = copy.message;
       $("#display-event-total").textContent = formatRp(event.change || 0);
     } else {
-      const eventMessage = isDismissed ? "Payment request closed." : (event.message || "");
-      $("#display-stage-event-kicker").textContent = kicker;
-      $("#display-stage-event-title").textContent = event.title || kicker;
-      $("#display-stage-event-message").textContent = validation || eventMessage;
+      $("#display-stage-event-kicker").textContent = copy.kicker;
+      $("#display-stage-event-title").textContent = copy.title;
+      $("#display-stage-event-message").textContent = copy.message;
       $("#display-stage-event-total").textContent = formatRp(event.amount);
-      $("#display-event-kicker").textContent = kicker;
-      $("#display-event-title").textContent = event.title || kicker;
-      $("#display-event-message").textContent = validation || eventMessage;
+      $("#display-event-kicker").textContent = copy.kicker;
+      $("#display-event-title").textContent = copy.title;
+      $("#display-event-message").textContent = copy.message;
       $("#display-event-total").textContent = formatRp(event.amount);
     }
     renderCashLive({});
   } else if (hasActiveQr) {
+    applyDisplayNotificationState(null);
+    if (stageEventCard) {
+      stageEventCard.classList.remove("is-cash-change", "is-qris-success", "is-dismissed");
+      delete stageEventCard.dataset.notifyTone;
+    }
+    if (eventPanel) delete eventPanel.dataset.notifyTone;
     updateStageQrImage(active);
     stageQr.hidden = false;
     stageEvent.hidden = true;
@@ -785,6 +845,12 @@ function renderDisplay() {
     eventPanel.hidden = true;
     renderCashLive({});
   } else {
+    applyDisplayNotificationState(null);
+    if (stageEventCard) {
+      stageEventCard.classList.remove("is-cash-change", "is-qris-success", "is-dismissed");
+      delete stageEventCard.dataset.notifyTone;
+    }
+    if (eventPanel) delete eventPanel.dataset.notifyTone;
     const qrImg = $("#display-stage-qr-img");
     if (qrImg) {
       qrImg.removeAttribute("src");

@@ -156,9 +156,9 @@ PAID_QRIS_STATUSES = {"success", "paid", "completed", "settled", "succeeded"}
 OTP_TTL_SECONDS = 60
 OTP_RESEND_COOLDOWN_SECONDS = 60
 OTP_MAX_RESENDS = 1
-DISPLAY_EVENT_TTL_SECONDS = 5
-DISPLAY_CASH_CHANGE_SECONDS = 7
-DISPLAY_SUCCESS_MAX_HOLD_SECONDS = 24 * 60 * 60
+DISPLAY_EVENT_TTL_SECONDS = 6
+DISPLAY_CASH_CHANGE_SECONDS = 6
+DISPLAY_SUCCESS_MAX_HOLD_SECONDS = 6
 CASHIER_NOTICE_STALE_SECONDS = 8
 CLOSED_QR_TTL_SECONDS = 24 * 60 * 60
 ACTIVE_QR_TTL_SECONDS = 30 * 60
@@ -1289,8 +1289,6 @@ def system_admin_payload(auth=None):
 def _display_event_expired(event):
     if not event:
         return True
-    if event.get("requires_ack"):
-        return False
     try:
         return time.time() > float(event.get("expires_ts") or 0)
     except Exception:
@@ -1322,13 +1320,8 @@ def _display_event_payload(kind, source=None):
     else:
         title = "Display Update"
         message = ""
-    requires_ack = kind == "success" and payment_method != PAYMENT_METHOD_CASH
-    if kind == "success" and payment_method == PAYMENT_METHOD_CASH:
-        hold_seconds = DISPLAY_CASH_CHANGE_SECONDS
-    elif requires_ack:
-        hold_seconds = DISPLAY_SUCCESS_MAX_HOLD_SECONDS
-    else:
-        hold_seconds = DISPLAY_EVENT_TTL_SECONDS
+    requires_ack = False
+    hold_seconds = DISPLAY_CASH_CHANGE_SECONDS if kind == "success" and payment_method == PAYMENT_METHOD_CASH else DISPLAY_EVENT_TTL_SECONDS
     return {
         "type": kind,
         "title": title,

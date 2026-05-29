@@ -305,7 +305,6 @@ function formatPct(value) {
 
 function displayEventExpired(event) {
   if (!event) return true;
-  if (event.requires_ack) return false;
   return Date.now() > Number(event.expires_ts || 0) * 1000;
 }
 
@@ -316,7 +315,6 @@ function setDisplayEvent(event) {
   if (terminalDisplayEvent(state.displayEvent)) rememberClosedQr(state.displayEvent);
   state.activeQr = sanitizeActiveQr(state.activeQr);
   if (state.displayEvent) {
-    if (state.displayEvent.requires_ack) return;
     const delay = Math.max(0, Number(state.displayEvent.expires_ts || 0) * 1000 - Date.now());
     displayEventTimer = setTimeout(() => {
       if (!state.displayEvent || displayEventExpired(state.displayEvent)) {
@@ -1972,6 +1970,12 @@ function resetCustomerFields() {
   queueDisplayPublish();
 }
 
+function clearCashFields() {
+  const cashInput = $("#cash-received");
+  if (cashInput) cashInput.value = "";
+  queueDisplayPublish();
+}
+
 function clearCart({ force = false } = {}) {
   if (state.activeQr && !force) {
     showToast("Dismiss QR dulu sebelum clear cart", "error");
@@ -2260,7 +2264,6 @@ async function dismissQR() {
     state.activeQr = null;
     stopQrPolling();
     closeModal(true);
-    clearCart({ force: true });
     setDisplayEvent(result.display_event || null);
     localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
     publishDisplayState();
@@ -2450,8 +2453,7 @@ function closeModal(force = false) {
   if (paymentWasOpen) {
     markPaymentModalAcknowledged(paymentTxn);
     stopCashierNoticeHeartbeat(paymentTxn);
-    setDisplayEvent(null);
-    acknowledgeDisplayEvent(paymentTxn);
+    clearCashFields();
     if (state.pendingPaymentClear) {
       state.pendingPaymentClear = false;
       clearCart({ force: true });

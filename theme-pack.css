@@ -1223,11 +1223,161 @@ body[data-theme="pearl_mist"] .inline-check input {
 
 /* ============================================================
    QR DISPLAY  -  customer-facing screen, must follow theme.
+   Canvas-only background (no duplicate DOM crystal layer).
    ============================================================ */
+.qr-display-body .display-crystal-scene {
+  display: none !important;
+}
+
+.qr-display-body.tp-display-canvas .tp-canvas {
+  opacity: 0.96;
+  mix-blend-mode: screen;
+}
+
+.qr-display-body .display-media {
+  background: transparent;
+}
+
+@keyframes displayThemePulse {
+  0%, 100% { opacity: 0.88; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.015); }
+}
+
+@keyframes displayNotifyPop {
+  0% { transform: translateY(18px) scale(0.96); opacity: 0; }
+  18% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.display-notify-active .stage-event-card,
+.display-notify-active .display-event-panel {
+  animation: displayNotifyPop 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.stage-event-card.is-qris-success,
+.display-event-panel[data-notify-tone="qris-success"] {
+  box-shadow: 0 0 80px var(--tp-iris-2), 0 0 0 1px var(--tp-glass-border) inset;
+}
+
+.stage-event-card.is-dismissed,
+.display-event-panel[data-notify-tone="dismiss"] {
+  box-shadow: 0 0 70px rgba(255, 120, 120, 0.22), 0 0 0 1px rgba(255, 180, 180, 0.28) inset;
+}
+
+body[data-theme="crystal_bloom"].qr-display-body .display-stage {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(177, 150, 255, 0.24), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(155, 231, 255, 0.18), transparent 30%);
+}
+
+body[data-theme="pearl_mist"].qr-display-body .display-stage {
+  background:
+    radial-gradient(circle at 20% 24%, rgba(255, 220, 240, 0.34), transparent 36%),
+    radial-gradient(circle at 78% 20%, rgba(200, 220, 255, 0.28), transparent 32%);
+}
+
+body[data-theme="aurora_glass"].qr-display-body .display-stage {
+  background:
+    radial-gradient(circle at 16% 28%, rgba(52, 211, 153, 0.22), transparent 34%),
+    radial-gradient(circle at 84% 16%, rgba(110, 231, 210, 0.2), transparent 30%);
+}
+
+body[data-theme="midnight_velvet"].qr-display-body .display-stage {
+  background:
+    radial-gradient(circle at 22% 24%, rgba(255, 138, 208, 0.24), transparent 34%),
+    radial-gradient(circle at 80% 18%, rgba(214, 167, 255, 0.2), transparent 32%);
+}
+
+body[data-theme="deep_space"].qr-display-body .display-stage {
+  background:
+    radial-gradient(circle at 24% 20%, rgba(155, 124, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 76% 24%, rgba(103, 232, 249, 0.14), transparent 32%);
+}
+
+body[data-theme="warm_terminal"].qr-display-body .display-stage {
+  background:
+    radial-gradient(circle at 20% 26%, rgba(255, 138, 61, 0.2), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(251, 191, 36, 0.16), transparent 32%);
+}
+
+body[data-theme="midnight_teal"].qr-display-body .display-stage {
+  background:
+    radial-gradient(circle at 18% 24%, rgba(45, 212, 191, 0.2), transparent 34%),
+    radial-gradient(circle at 80% 20%, rgba(153, 246, 228, 0.16), transparent 32%);
+}
+
+body[data-theme="crystal_bloom"] .tp-canvas { opacity: 0.88; }
+body[data-theme="pearl_mist"] .tp-canvas { mix-blend-mode: multiply; opacity: 0.84; }
+body[data-theme="aurora_glass"] .tp-canvas { opacity: 0.9; }
+body[data-theme="midnight_velvet"] .tp-canvas { opacity: 0.9; }
+body[data-theme="deep_space"] .tp-canvas { opacity: 0.86; }
+body[data-theme="warm_terminal"] .tp-canvas { opacity: 0.88; mix-blend-mode: screen; }
+body[data-theme="midnight_teal"] .tp-canvas { opacity: 0.9; }
+
+.stage-event-card.is-dismissed,
+.display-event-panel[data-notify-tone="dismiss"] {
+  box-shadow: 0 0 70px rgba(255, 120, 120, 0.22), 0 0 0 1px rgba(255, 180, 180, 0.28) inset;
+}
+
+body[data-theme="crystal_bloom"] .stage-event-card.is-qris-success { border-color: rgba(191, 245, 255, 0.55); }
+body[data-theme="pearl_mist"] .stage-event-card.is-qris-success { border-color: rgba(124, 92, 255, 0.45); color: var(--text); }
+body[data-theme="aurora_glass"] .stage-event-card.is-qris-success { border-color: rgba(110, 231, 210, 0.55); }
+body[data-theme="midnight_velvet"] .stage-event-card.is-qris-success { border-color: rgba(255, 156, 220, 0.55); }
+body[data-theme="deep_space"] .stage-event-card.is-qris-success { border-color: rgba(155, 124, 255, 0.5); }
+body[data-theme="warm_terminal"] .stage-event-card.is-qris-success { border-color: rgba(251, 191, 36, 0.55); }
+body[data-theme="midnight_teal"] .stage-event-card.is-qris-success { border-color: rgba(45, 212, 191, 0.55); }
+
+body[data-theme="crystal_bloom"] .stage-event-card.is-dismissed { border-color: rgba(255, 151, 184, 0.45); }
+body[data-theme="aurora_glass"] .stage-event-card.is-dismissed { border-color: rgba(248, 113, 113, 0.42); }
+body[data-theme="midnight_velvet"] .stage-event-card.is-dismissed { border-color: rgba(255, 113, 150, 0.48); }
+
+@keyframes auroraGlassDrift {
+  0%, 100% { filter: hue-rotate(0deg) saturate(1); }
+  50% { filter: hue-rotate(8deg) saturate(1.12); }
+}
+
+@keyframes velvetBloomDrift {
+  0%, 100% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(-6deg) saturate(1.1); }
+}
+
+body[data-theme="aurora_glass"] .app-bg,
+body[data-theme="aurora_glass"] .bg-gradient {
+  animation: auroraGlassDrift 26s ease-in-out infinite;
+}
+
+body[data-theme="midnight_velvet"] .app-bg,
+body[data-theme="midnight_velvet"] .bg-gradient {
+  animation: velvetBloomDrift 30s ease-in-out infinite;
+}
+
+body[data-theme="pearl_mist"] .app-bg,
+body[data-theme="pearl_mist"] .bg-gradient {
+  animation: crystalBloomAuthDrift 34s ease-in-out infinite;
+}
+
+body[data-theme="deep_space"] .app-bg,
+body[data-theme="deep_space"] .bg-gradient {
+  animation: auroraGlassDrift 38s ease-in-out infinite reverse;
+}
+
+body[data-theme="warm_terminal"] .app-bg,
+body[data-theme="warm_terminal"] .bg-gradient {
+  animation: crystalBloomAuthDrift 22s ease-in-out infinite;
+}
+
+body[data-theme="midnight_teal"] .app-bg,
+body[data-theme="midnight_teal"] .bg-gradient {
+  animation: auroraGlassDrift 28s ease-in-out infinite;
+}
+
 body[data-theme="crystal_bloom"].qr-display-body,
 body[data-theme="aurora_glass"].qr-display-body,
 body[data-theme="midnight_velvet"].qr-display-body,
-body[data-theme="pearl_mist"].qr-display-body {
+body[data-theme="pearl_mist"].qr-display-body,
+body[data-theme="deep_space"].qr-display-body,
+body[data-theme="warm_terminal"].qr-display-body,
+body[data-theme="midnight_teal"].qr-display-body {
   background: transparent;
 }
 
@@ -1610,13 +1760,15 @@ body[data-theme="pearl_mist"] .payment-logo-cell strong {
   color: var(--text2);
 }
 
-/* Display crystal scene (DOM-based) softened on new themes since canvas
-   already drives the animation. */
+/* Display crystal scene (DOM-based) hidden on QR display; canvas drives animation. */
 body[data-theme="crystal_bloom"] .display-crystal-scene,
 body[data-theme="aurora_glass"] .display-crystal-scene,
 body[data-theme="midnight_velvet"] .display-crystal-scene,
-body[data-theme="pearl_mist"] .display-crystal-scene {
-  opacity: 0.35;
+body[data-theme="pearl_mist"] .display-crystal-scene,
+body[data-theme="deep_space"] .display-crystal-scene,
+body[data-theme="warm_terminal"] .display-crystal-scene,
+body[data-theme="midnight_teal"] .display-crystal-scene {
+  opacity: 0;
 }
 
 /* Display hint text */
