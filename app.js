@@ -652,7 +652,28 @@ function bootstrapDeviceTheme() {
   applyDeviceTheme(DEFAULT_THEME);
 }
 
-const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png?v=2";
+function resolveCashierTheme() {
+  syncThemeStorageContext();
+  const current = deviceThemeId();
+  if (current && window.ConlectaTheme?.isValid?.(current)) return current;
+  const fromSettings = String(state.settings?.active_theme || "").trim();
+  if (fromSettings && window.ConlectaTheme?.isValid?.(fromSettings)) return fromSettings;
+  return DEFAULT_THEME;
+}
+
+function syncCashierThemeForDisplay() {
+  const theme = resolveCashierTheme();
+  state.settings = { ...(state.settings || {}), active_theme: theme };
+  applyDeviceTheme(theme, { persist: false });
+  return theme;
+}
+
+function displaySettingsSnapshot() {
+  return { ...(state.settings || {}), active_theme: resolveCashierTheme() };
+}
+
+const QRIS_FRAME_SRC = "/assets/qris-frame/SingapayConlectaQrisFrame.png?v=3";
+const QR_RENDER_SIZE = 512;
 const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
 
 function brandLogoUrl(settings = state.settings) {
@@ -2064,9 +2085,10 @@ function publishDisplayState() {
   if (displayEventExpired(state.displayEvent)) state.displayEvent = null;
   state.activeQr = sanitizeActiveQr(state.activeQr);
   const preview = displaySnapshot();
+  const settings = displaySettingsSnapshot();
   const payload = {
     activeQr: state.activeQr,
-    settings: state.settings,
+    settings,
     preview,
     displayEvent: state.displayEvent,
     cashierNotice: cashierNoticeRecord ? cashierNoticePayload(cashierNoticeRecord, true) : null,
@@ -2085,7 +2107,7 @@ function publishDisplayState() {
   else localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
 
   safeSetLocalStorage("conlecta_version", JSON.stringify(state.version || {}));
-  safeSetLocalStorage(accountScopedStorageKey("conlecta_settings"), JSON.stringify(state.settings || {}));
+  safeSetLocalStorage(accountScopedStorageKey("conlecta_settings"), JSON.stringify(settings));
   safeSetLocalStorage(deviceStorageKey("conlecta_display_preview"), JSON.stringify(preview));
 
   qrChannel?.postMessage({ type: "display-state", ...payload });
@@ -2096,6 +2118,8 @@ async function generateQR() {
     showToast("Keranjang kosong", "error");
     return;
   }
+
+  syncCashierThemeForDisplay();
 
   const payload = checkoutPayload("QRIS");
 
@@ -2256,6 +2280,7 @@ function scheduleDailySessionReset() {
 }
 
 function openQrDisplay() {
+  syncCashierThemeForDisplay();
   publishDisplayState();
   const win = window.open("/qr-display.html", `conlecta_qr_display_${getDeviceId()}`);
   if (win) {
@@ -2323,21 +2348,43 @@ function showDismissModal(event) {
   $("#modal-backdrop").hidden = false;
 }
 
+function qrImageSrcKey(active) {
+  if (!active) return "";
+  const id = String(active.id || active.txn_id || "").trim();
+  const hasImage = Boolean(String(active.qr_image || "").trim());
+  return `${id}:${hasImage ? "img" : "data"}`;
+}
+
+function updateQrModalImage(active) {
+  const img = $("#qr-modal-img");
+  if (!img || !active) return;
+  const src = qrImageSrc(active, QR_RENDER_SIZE);
+  if (!src) return;
+  const srcKey = qrImageSrcKey(active);
+  if (img.dataset.qrSrcKey === srcKey && img.complete && img.naturalWidth > 0) return;
+  img.dataset.qrSrcKey = srcKey;
+  img.dataset.qrSrc = src;
+  img.src = src;
+}
+
+function preloadQrisFrame() {
+  const frame = $("#qr-modal-frame-bg");
+  if (!frame || frame.dataset.frameReady === "1") return;
+  frame.dataset.frameReady = "1";
+  frame.dataset.frameSrc = QRIS_FRAME_SRC;
+  if (frame.getAttribute("src") !== QRIS_FRAME_SRC) frame.src = QRIS_FRAME_SRC;
+}
+
 function showQrModal(active = state.activeQr) {
-  const src = qrImageSrc(active, 512);
+  const src = qrImageSrc(active, QR_RENDER_SIZE);
   if (!src) return;
   $("#payment-modal").hidden = true;
   $("#detail-modal").hidden = true;
   $("#dismiss-modal").hidden = true;
   $("#logout-modal").hidden = true;
   $("#qr-modal").hidden = false;
-  const frame = $("#qr-modal-frame-bg");
-  if (frame) frame.src = QRIS_FRAME_SRC;
-  const img = $("#qr-modal-img");
-  if (img) {
-    img.dataset.qrSrc = src;
-    img.src = src;
-  }
+  preloadQrisFrame();
+  updateQrModalImage(active);
   $("#qr-modal-txn").textContent = active.txn_id || "-";
   $("#qr-modal-id").textContent = active.id || "-";
   $("#qr-modal-total").textContent = formatRp(active.amount);
@@ -4436,6 +4483,8 @@ function bindEvents() {
       } else {
         document.body.dataset.theme = next;
       }
+      state.settings = { ...(state.settings || {}), active_theme: next };
+      publishDisplayState();
     }
     const itemName = event.target.closest('[data-txn-item-field="item_name"]');
     if (itemName) {
@@ -4518,11 +4567,20 @@ function bindEvents() {
       else if (state.activeQr) dismissQR();
     }
   });
+
+  document.addEventListener("tp:themechange", (event) => {
+    if (!state.auth) return;
+    const theme = event.detail?.theme || deviceThemeId();
+    if (!theme) return;
+    state.settings = { ...(state.settings || {}), active_theme: theme };
+    publishDisplayState();
+  });
 }
 
 async function init() {
   buildAmbientParticles();
   bindEvents();
+  preloadQrisFrame();
   updateClock();
   setInterval(updateClock, 1000);
   await withLoading("Mengecek session user...", reloadBootstrap);

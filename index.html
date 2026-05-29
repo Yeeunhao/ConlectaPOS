@@ -4,9 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Conlecta Web POS</title>
+  <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
+  <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/theme-pack.css">
+  <link rel="stylesheet" href="/styles.css?v=3">
+  <link rel="stylesheet" href="/theme-pack.css?v=3">
 </head>
 <body data-theme="crystal_bloom">
   <div class="app-bg"></div>
@@ -928,9 +930,11 @@
       <p class="eyebrow">QRIS Payment</p>
       <h2 id="qr-modal-title">Scan untuk bayar</h2>
       <p id="qr-modal-status" class="modal-subtitle">Menunggu pembayaran</p>
-      <div class="cashier-qr-frame">
-        <img id="qr-modal-frame-bg" class="cashier-qr-frame-bg" src="/assets/Qris%20Frame/SingapayConlectaQrisFrame.png?v=2" alt="">
-        <img id="qr-modal-img" class="cashier-qr-code" src="" alt="QRIS payment code">
+      <div class="cashier-qr-frame qris-frame-wrap">
+        <img id="qr-modal-frame-bg" class="cashier-qr-frame-bg qris-frame-bg" src="/assets/qris-frame/SingapayConlectaQrisFrame.png?v=3" alt="">
+        <div class="cashier-qr-slot qris-frame-slot">
+          <img id="qr-modal-img" class="cashier-qr-code qris-frame-code" src="" alt="QRIS payment code">
+        </div>
       </div>
       <dl class="payment-detail">
         <div><dt>TXN</dt><dd id="qr-modal-txn">-</dd></div>
@@ -992,7 +996,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/theme-engine.js"></script>
-  <script src="/app.js"></script>
+  <script src="/theme-engine.js?v=3"></script>
+  <script src="/app.js?v=3"></script>
 </body>
 </html>

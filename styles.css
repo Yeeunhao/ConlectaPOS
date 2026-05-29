@@ -2022,36 +2022,60 @@ textarea:focus {
   text-align: center;
 }
 
-.cashier-qr-frame {
+.qris-frame-wrap {
   position: relative;
-  width: min(420px, 92vw);
-  margin: 18px auto;
+  width: 100%;
+  aspect-ratio: 1086 / 1448;
   line-height: 0;
 }
 
-.cashier-qr-frame-bg {
-  position: relative;
+.qris-frame-bg {
+  position: absolute;
+  inset: 0;
   z-index: 1;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: fill;
   display: block;
   filter: drop-shadow(0 16px 36px rgba(8, 12, 32, 0.35));
 }
 
-.cashier-qr-code {
+.qris-frame-slot {
   position: absolute;
   z-index: 2;
-  left: 50%;
-  top: 46%;
-  transform: translate(-50%, -50%);
-  width: 52%;
-  aspect-ratio: 1;
-  height: auto;
+  left: 18%;
+  right: 18%;
+  top: 15.5%;
+  bottom: 21%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.qris-frame-code {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  border: none;
   border-radius: 8px;
   background: #fff;
   padding: 2px;
   box-sizing: border-box;
+  box-shadow: none;
+}
+
+.cashier-qr-frame {
+  width: min(420px, 92vw);
+  margin: 18px auto;
+}
+
+.cashier-qr-frame,
+.cashier-qr-code,
+.cashier-qr-frame-bg {
+  border: none;
+  box-shadow: none;
+  animation: none;
 }
 
 .payment-detail {
@@ -3018,39 +3042,15 @@ body[data-theme="midnight_teal"] {
   color: #061018;
   border: none;
   box-shadow: none;
-  animation: qrArrive 0.45s ease both;
 }
 
 .stage-qr-frame {
-  position: relative;
   width: 100%;
   max-width: 620px;
-  line-height: 0;
 }
 
 .stage-qr-frame-bg {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  height: auto;
-  display: block;
   filter: drop-shadow(0 22px 48px rgba(8, 12, 32, 0.42));
-}
-
-.stage-qr-code {
-  position: absolute;
-  z-index: 2;
-  left: 50%;
-  top: 46%;
-  transform: translate(-50%, -50%);
-  width: 52%;
-  aspect-ratio: 1;
-  height: auto;
-  object-fit: contain;
-  border-radius: 8px;
-  background: #fff;
-  padding: 2px;
-  box-sizing: border-box;
 }
 
 .display-cash-live {

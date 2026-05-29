@@ -21,7 +21,8 @@ const CASHIER_NOTICE_STALE_MS = 8000;
 const CASHIER_NOTICE_GRACE_MS = 3000;
 const ORPHAN_SUCCESS_CLEAR_MS = 12000;
 const CASH_CHANGE_OVERLAY_MS = 7000;
-const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png?v=2";
+const QRIS_FRAME_SRC = "/assets/qris-frame/SingapayConlectaQrisFrame.png?v=3";
+const QR_RENDER_SIZE = 512;
 const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
 
 function displayBrandLogoUrl(settings = qrState.settings) {
@@ -409,11 +410,29 @@ function renderVersion() {
   $("#display-version-label").textContent = version.label || "Conlecta Version";
 }
 
+const DISPLAY_DEFAULT_THEME = "crystal_bloom";
+
+function applyDisplayTheme(themeId) {
+  const theme = themeId && window.ConlectaTheme?.isValid?.(themeId)
+    ? themeId
+    : DISPLAY_DEFAULT_THEME;
+  if (window.ConlectaTheme?.apply) {
+    window.ConlectaTheme.apply(theme, { persist: false });
+  } else {
+    document.body.dataset.theme = theme;
+  }
+  return theme;
+}
+
+function bootstrapDisplayTheme(settings = readLocalSettings()) {
+  applyDisplayTheme(settings?.active_theme);
+}
+
 function applyBrand() {
   const settings = qrState.settings || {};
   const shop = settings.shop_name || "Conlecta";
   const address = [settings.shop_address, settings.shop_postcode].filter(Boolean).join(" | ") || "Point of Sale";
-  document.body.dataset.theme = settings.active_theme || "deep_space";
+  applyDisplayTheme(settings.active_theme);
   $$(".js-display-logo").forEach((img) => applyDisplayLogo(img, settings));
   $("#display-shop").textContent = shop;
   $("#display-bottom-shop").textContent = shop;
@@ -501,19 +520,32 @@ function previewCashInfo(preview) {
   return { active, cash, amount, change };
 }
 
+function qrImageSrcKey(active) {
+  if (!active) return "";
+  const id = String(active.id || active.txn_id || "").trim();
+  const hasImage = Boolean(String(active.qr_image || "").trim());
+  return `${id}:${hasImage ? "img" : "data"}`;
+}
+
+function preloadQrisFrame() {
+  const frame = $(".stage-qr-frame-bg");
+  if (!frame || frame.dataset.frameReady === "1") return;
+  frame.dataset.frameReady = "1";
+  frame.dataset.frameSrc = QRIS_FRAME_SRC;
+  if (frame.getAttribute("src") !== QRIS_FRAME_SRC) frame.src = QRIS_FRAME_SRC;
+}
+
 function updateStageQrImage(active) {
   const img = $("#display-stage-qr-img");
-  const frame = $(".stage-qr-frame-bg");
-  if (!img) return;
-  const src = qrImageSrc(active, 640);
-  if (src && img.dataset.qrSrc !== src) {
-    img.dataset.qrSrc = src;
-    img.src = src;
-  }
-  if (frame && frame.dataset.frameSrc !== QRIS_FRAME_SRC) {
-    frame.dataset.frameSrc = QRIS_FRAME_SRC;
-    frame.src = QRIS_FRAME_SRC;
-  }
+  if (!img || !active) return;
+  preloadQrisFrame();
+  const src = qrImageSrc(active, QR_RENDER_SIZE);
+  if (!src) return;
+  const srcKey = qrImageSrcKey(active);
+  if (img.dataset.qrSrcKey === srcKey && img.complete && img.naturalWidth > 0) return;
+  img.dataset.qrSrcKey = srcKey;
+  img.dataset.qrSrc = src;
+  img.src = src;
 }
 
 function scheduleCashChangeClear(event) {
@@ -630,6 +662,7 @@ function renderDisplay() {
     if (qrImg) {
       qrImg.removeAttribute("src");
       delete qrImg.dataset.qrSrc;
+      delete qrImg.dataset.qrSrcKey;
     }
     stageQr.hidden = true;
     stageEvent.hidden = true;
@@ -804,6 +837,8 @@ function shutdownDisplay() {
 }
 
 renderPaymentLogos();
+preloadQrisFrame();
+bootstrapDisplayTheme();
 updateClock();
 clockTimer = setInterval(updateClock, 1000);
 startSplash();

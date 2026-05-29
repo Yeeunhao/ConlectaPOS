@@ -4,11 +4,42 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Conlecta QR Display</title>
+  <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
+  <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
-  <link rel="stylesheet" href="/theme-pack.css">
+  <link rel="stylesheet" href="/styles.css?v=3">
+  <link rel="stylesheet" href="/theme-pack.css?v=3">
 </head>
 <body class="qr-display-body" data-theme="crystal_bloom">
+  <script>
+    (function () {
+      var VALID = {
+        crystal_bloom: 1,
+        pearl_mist: 1,
+        aurora_glass: 1,
+        midnight_velvet: 1,
+        deep_space: 1,
+        warm_terminal: 1,
+        midnight_teal: 1
+      };
+      try {
+        var did = localStorage.getItem("conlecta_device_id") || "";
+        var aid = did ? (localStorage.getItem("conlecta_display_account:" + did) || "") : "";
+        var keys = [];
+        if (did && aid) keys.push("conlecta_settings:" + did + ":" + aid);
+        if (did) keys.push("conlecta_settings:" + did);
+        for (var i = 0; i < keys.length; i += 1) {
+          var raw = localStorage.getItem(keys[i]);
+          if (!raw) continue;
+          var theme = String(JSON.parse(raw).active_theme || "").trim();
+          if (VALID[theme]) {
+            document.body.dataset.theme = theme;
+            break;
+          }
+        }
+      } catch (_) {}
+    })();
+  </script>
   <div class="display-crystal-scene" aria-hidden="true">
     <i class="crystal c1"></i>
     <i class="crystal c2"></i>
@@ -45,9 +76,11 @@
 
       <div class="display-stage-qr" id="display-stage-qr" hidden>
         <div class="stage-qr-card">
-          <div class="stage-qr-frame">
-            <img class="stage-qr-frame-bg" src="/assets/Qris%20Frame/SingapayConlectaQrisFrame.png?v=2" alt="">
-            <img id="display-stage-qr-img" class="stage-qr-code" alt="QRIS payment code">
+          <div class="stage-qr-frame qris-frame-wrap">
+            <img class="stage-qr-frame-bg qris-frame-bg" src="/assets/qris-frame/SingapayConlectaQrisFrame.png?v=3" alt="">
+            <div class="stage-qr-slot qris-frame-slot">
+              <img id="display-stage-qr-img" class="stage-qr-code qris-frame-code" alt="QRIS payment code">
+            </div>
           </div>
         </div>
       </div>
@@ -133,7 +166,7 @@
     </aside>
   </main>
 
-  <script src="/theme-engine.js"></script>
-  <script src="/qr-display.js"></script>
+  <script src="/theme-engine.js?v=3"></script>
+  <script src="/qr-display.js?v=3"></script>
 </body>
 </html>
