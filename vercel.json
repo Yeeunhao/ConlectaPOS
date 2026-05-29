@@ -5,6 +5,18 @@
       "dest": "http://34.128.90.163:8765/api/$1"
     },
     {
+      "src": "/assets/Brand/(.*)",
+      "dest": "http://34.128.90.163:8765/assets/Brand/$1"
+    },
+    {
+      "src": "/assets/Payment/(.*)",
+      "dest": "http://34.128.90.163:8765/assets/Payment/$1"
+    },
+    {
+      "src": "/assets/videos/([^/]+)/(.*)",
+      "dest": "http://34.128.90.163:8765/assets/videos/$1/$2"
+    },
+    {
       "handle": "filesystem"
     },
     {

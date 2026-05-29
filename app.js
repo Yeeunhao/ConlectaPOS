@@ -652,15 +652,33 @@ function bootstrapDeviceTheme() {
   applyDeviceTheme(DEFAULT_THEME);
 }
 
+function brandLogoUrl(settings = state.settings) {
+  const url = settings?.brand_logo_url || "/assets/ConlectaPosLogo.png";
+  if (!url || url.startsWith("data:")) return url;
+  if (url.includes("?")) return url;
+  const stamp = settings?.brand_logo_updated_ts || settings?.brand_logo_version || "";
+  return stamp ? `${url}?v=${encodeURIComponent(stamp)}` : url;
+}
+
 function applyBrand() {
   const s = state.settings || {};
   const name = s.shop_name || "Conlecta";
-  const logo = s.brand_logo_url || "/assets/ConlectaPosLogo.png";
+  const logo = brandLogoUrl(s);
   $$(".js-brand-name").forEach((el) => { el.textContent = name; });
-  $$(".js-brand-logo").forEach((el) => { el.src = logo; });
+  $$(".js-brand-logo").forEach((el) => {
+    if (el.dataset.brandSrc !== logo) {
+      el.dataset.brandSrc = logo;
+      el.src = logo;
+    }
+  });
   $$(".conlecta-identity-logo").forEach((el) => { el.src = CONLECTA_IDENTITY_LOGO; });
   const preview = $("#brand-preview");
-  if (preview) preview.src = logo;
+  if (preview) {
+    if (preview.dataset.brandSrc !== logo) {
+      preview.dataset.brandSrc = logo;
+      preview.src = logo;
+    }
+  }
 }
 
 function routePath() {
@@ -1659,19 +1677,40 @@ function toggleFreeItem(name, checked) {
   updateTotals();
 }
 
-function setLineDiscount(name, field, value) {
+function cartItemElement(name) {
+  const safe = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(name) : name.replace(/"/g, '\\"');
+  return document.querySelector(`.cart-item[data-name="${safe}"]`);
+}
+
+function patchCartItemLine(name) {
+  const item = cartEntries().find((entry) => entry.name === name);
+  const row = cartItemElement(name);
+  if (!item || !row) return;
+  const line = row.querySelector(".cart-item-line");
+  if (line) line.innerHTML = cartPricingHtml(item);
+  const title = row.querySelector(".cart-item-name");
+  if (title) {
+    title.innerHTML = `${escapeHtml(item.name)}${item.free ? ' <span class="cart-free-badge">FREE</span>' : ""}`;
+  }
+}
+
+function patchCartDiscountFields(name) {
+  const raw = cartRaw(name);
+  const row = cartItemElement(name);
+  if (!row) return;
+  const pctInput = row.querySelector('[data-discount-field="disc_pct"]');
+  const fixedInput = row.querySelector('[data-discount-field="disc_fixed"]');
+  const freeCheckbox = row.querySelector('[data-action="toggle-free"]');
+  if (pctInput) pctInput.disabled = Boolean(raw.disc_fixed);
+  if (fixedInput) fixedInput.disabled = Boolean(raw.disc_pct);
+  if (freeCheckbox) freeCheckbox.checked = Boolean(raw.free);
+}
+
+function setLineDiscount(name, field, value, { repaint = false } = {}) {
   if (state.activeQr) {
     showToast("Dismiss QR dulu sebelum ubah diskon", "error");
     return;
   }
-  const activeInput = document.activeElement;
-  const restoreFocus = activeInput?.matches?.("[data-discount-field]")
-    ? {
-      name: activeInput.dataset.name,
-      field: activeInput.dataset.discountField,
-      pos: activeInput.selectionStart,
-    }
-    : null;
   const product = state.products.find((item) => item.name === name);
   const raw = cartRaw(name);
   const qty = raw.qty || 1;
@@ -1691,16 +1730,12 @@ function setLineDiscount(name, field, value) {
     else next.free = false;
   }
   setCartRaw(name, next);
-  renderCatalog();
-  renderCart();
-  if (restoreFocus) {
-    requestAnimationFrame(() => {
-      const input = $$("[data-discount-field]").find((el) => el.dataset.name === restoreFocus.name && el.dataset.discountField === restoreFocus.field);
-      if (!input || input.disabled) return;
-      input.focus();
-      const pos = Math.min(Number(restoreFocus.pos || 0), input.value.length);
-      input.setSelectionRange?.(pos, pos);
-    });
+  if (repaint) {
+    renderCatalog();
+    renderCart();
+  } else {
+    patchCartItemLine(name);
+    patchCartDiscountFields(name);
   }
   updateTotals();
 }
@@ -1764,7 +1799,7 @@ function renderCart() {
     return;
   }
   list.innerHTML = entries.map((item) => `
-    <article class="cart-item">
+    <article class="cart-item" data-name="${escapeAttr(item.name)}">
       <div class="cart-item-head">
         <div class="cart-item-main">
           <strong class="cart-item-name">${escapeHtml(item.name)}${item.free ? ' <span class="cart-free-badge">FREE</span>' : ""}</strong>
@@ -4340,7 +4375,8 @@ function bindEvents() {
       const field = discountInput.dataset.discountField;
       const value = parseMoney(discountInput.value);
       if (field === "disc_fixed") discountInput.value = value ? formatPlainNumber(value) : "";
-      setLineDiscount(discountInput.dataset.name, field, value);
+      setLineDiscount(discountInput.dataset.name, field, value, { repaint: false });
+      return;
     }
     if (event.target.closest("#system-txn-search")) {
       renderSystemTransactionList();
@@ -4353,8 +4389,18 @@ function bindEvents() {
       updateSystemTxnComputed();
     }
   });
+  document.addEventListener("focusout", (event) => {
+    const field = event.target.closest?.("[data-discount-field]");
+    if (!field) return;
+    const row = field.closest(".cart-item");
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (row && active && row.contains(active) && active.matches?.("[data-discount-field]")) return;
+      renderCatalog();
+      renderCart();
+    });
+  }, true);
   document.addEventListener("change", (event) => {
-    if (event.target.closest("[data-discount-field]")) renderCart();
     if (event.target.closest("#system-txn-merchant")) {
       state.systemTxnMerchantId = event.target.value;
       state.systemTransactions = [];

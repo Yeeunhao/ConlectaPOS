@@ -966,6 +966,7 @@ def _save_merchant_logo_data(merchant_id, data_url, filename="merchant_logo.png"
     dst_dir = os.path.join(ASSETS_DIR, "Brand")
     os.makedirs(dst_dir, exist_ok=True)
     dst = os.path.join(dst_dir, f"{mid}_brand_logo{ext}")
+    _cleanup_old_brand_logos(mid, dst)
     with open(dst, "wb") as f:
         f.write(base64.b64decode(raw))
     return dst
@@ -984,7 +985,12 @@ def save_system_merchant(data, auth=None):
     if logo_path:
         settings["brand_logo_path"] = logo_path
     _write_settings_for_merchant(settings, mid)
-    return merchant_payload(mid)
+    row = dict(merchant_payload(mid))
+    row["logo_url"] = (
+        public_asset_url(row.get("logo_path"))
+        or public_asset_url(BRAND_DEFAULT_LOGO, fallback_logo=True)
+    )
+    return row
 
 
 def load_version_info():
@@ -4642,6 +4648,23 @@ def clear_current_log_window(auth=None, device_id="", state=None):
     log.info("Session log window cleared for account=%s device=%s", auth.get("id") or "-", device_id or "-")
 
 
+def _cleanup_old_brand_logos(merchant_id, keep_path):
+    mid = normalize_merchant_id(merchant_id)
+    brand_dir = os.path.join(ASSETS_DIR, "Brand")
+    keep_abs = os.path.normcase(os.path.abspath(str(keep_path or "")))
+    for ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".ico"):
+        guess = os.path.join(brand_dir, f"{mid}_brand_logo{ext}")
+        if not os.path.isfile(guess):
+            continue
+        if keep_abs and os.path.normcase(os.path.abspath(guess)) == keep_abs:
+            continue
+        try:
+            os.remove(guess)
+            log.info("Removed old brand logo: %s", guess)
+        except Exception as exc:
+            log.warning("Failed to remove old brand logo %s: %s", guess, exc)
+
+
 def public_asset_url(path, fallback_logo=False):
     if str(path or "").strip().startswith("data:"):
         return str(path or "").strip()
@@ -4656,7 +4679,11 @@ def public_asset_url(path, fallback_logo=False):
             common = ""
         if common == assets_cmp:
             rel = os.path.relpath(full, BASE_DIR).replace(os.sep, "/")
-            return "/" + rel
+            url = "/" + rel
+            try:
+                return f"{url}?v={int(os.path.getmtime(full))}"
+            except Exception:
+                return url
     if fallback_logo and os.path.isfile(BRAND_DEFAULT_LOGO):
         return "/assets/ConlectaPosLogo.png"
     if fallback_logo and os.path.isfile(BRAND_EMAIL_LOGO):
@@ -4912,6 +4939,7 @@ def save_brand_logo(data, merchant_id=None):
     dst_dir = os.path.join(ASSETS_DIR, "Brand")
     os.makedirs(dst_dir, exist_ok=True)
     dst = os.path.join(dst_dir, f"{mid}_brand_logo{ext}")
+    _cleanup_old_brand_logos(mid, dst)
     with open(dst, "wb") as f:
         f.write(blob)
     settings = load_settings(mid)

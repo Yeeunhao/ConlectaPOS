@@ -386,7 +386,12 @@ function applyBrand() {
   const address = [settings.shop_address, settings.shop_postcode].filter(Boolean).join(" | ") || "Point of Sale";
   const logo = settings.brand_logo_url || "/assets/ConlectaPosLogo.png";
   document.body.dataset.theme = settings.active_theme || "deep_space";
-  $$(".js-display-logo").forEach((img) => { img.src = logo; });
+  $$(".js-display-logo").forEach((img) => {
+    if (img.dataset.brandSrc !== logo) {
+      img.dataset.brandSrc = logo;
+      img.src = logo;
+    }
+  });
   $("#display-shop").textContent = shop;
   $("#display-bottom-shop").textContent = shop;
   $("#display-bottom-address").textContent = address;
