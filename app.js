@@ -596,6 +596,20 @@ function updateClock() {
 }
 
 const DEFAULT_THEME = "crystal_bloom";
+const AUTH_THEME = "crystal_bloom";
+
+function applyAuthTheme() {
+  if (window.ConlectaTheme?.apply) {
+    window.ConlectaTheme.apply(AUTH_THEME, { persist: false });
+  } else {
+    document.body.dataset.theme = AUTH_THEME;
+  }
+  return AUTH_THEME;
+}
+
+function isAuthLocked() {
+  return !state.auth;
+}
 
 function accountThemeStorageKey() {
   const accountId = String(state.auth?.id || "").trim();
@@ -632,6 +646,10 @@ function applyDeviceTheme(themeId, { persist = true } = {}) {
 
 function bootstrapDeviceTheme() {
   if (!window.ConlectaTheme) return;
+  if (isAuthLocked()) {
+    applyAuthTheme();
+    return;
+  }
   syncThemeStorageContext();
   const storageKey = accountThemeStorageKey();
   let stored = null;
@@ -747,6 +765,7 @@ function applyRouteAfterBootstrap() {
 
 function renderAuth() {
   const locked = !state.auth;
+  document.body.classList.toggle("auth-visible", locked);
   const systemMode = isSystemAdmin();
   $("#auth-screen").classList.toggle("hidden", !locked);
   $("#app").classList.toggle("is-locked", locked);
@@ -757,6 +776,7 @@ function renderAuth() {
     : "Kasir: -";
   $("#cashier-name").textContent = `Kasir: ${state.auth?.name || "Cashier"}`;
   if (locked) {
+    applyAuthTheme();
     stopSessionTimer();
     stopHeartbeat();
   } else {
@@ -772,6 +792,7 @@ function renderAuth() {
 }
 
 function showLoginStep(step, { updateRoute = true } = {}) {
+  applyAuthTheme();
   $("#login-form").classList.toggle("active", step === "login");
   $("#otp-form").classList.toggle("active", step === "otp");
   $("#pin-form")?.classList.toggle("active", step === "pin");
@@ -2020,7 +2041,7 @@ async function payCash() {
 function compactActiveQr(active) {
   if (!active) return null;
   const next = { ...active };
-  if (next.qr_data && next.qr_image) delete next.qr_image;
+  if (next.qr_image) delete next.qr_data;
   return next;
 }
 

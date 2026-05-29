@@ -3073,7 +3073,7 @@ def make_qr_data_uri(data):
             return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
         except Exception:
             log.warning("qrcode image generation failed; using remote QR fallback", exc_info=True)
-    return f"https://api.qrserver.com/v1/create-qr-code/?size=320x320&data={quote(text)}"
+    return f"https://api.qrserver.com/v1/create-qr-code/?size=512x512&data={quote(text)}"
 
 
 def _json_response_or_raw(response):

@@ -166,12 +166,37 @@
     seedScene();
   }
 
+  function currentThemeId() {
+    return document.body.dataset.theme || DEFAULT_THEME;
+  }
+
+  function isCrystalBloom() {
+    return currentThemeId() === "crystal_bloom";
+  }
+
+  function isAuthVisible() {
+    const auth = document.getElementById("auth-screen");
+    return Boolean(auth && !auth.classList.contains("hidden") && !document.body.classList.contains("qr-display-body"));
+  }
+
+  function sceneDensityBoost() {
+    let boost = 1;
+    if (isCrystalBloom()) boost *= 1.35;
+    if (isAuthVisible()) boost *= 1.2;
+    return boost;
+  }
+
+  function motionScale() {
+    return isCrystalBloom() ? 0.72 : 1;
+  }
+
   function seedScene() {
+    const boost = sceneDensityBoost();
     const baseCount = Math.min(window.innerWidth, 1600) / 1600;
     const reduction = (performanceMode ? 0.45 : 0.55) * particleReductionFactor;
-    const cCount = Math.round((6 + baseCount * 5) * reduction);
-    const pCount = Math.round((2 + baseCount * 2) * reduction);
-    const sCount = Math.round((16 + baseCount * 32) * reduction);
+    const cCount = Math.round((6 + baseCount * 5) * reduction * boost);
+    const pCount = Math.round((2 + baseCount * 2) * reduction * boost);
+    const sCount = Math.round((16 + baseCount * 32) * reduction * boost);
 
     crystals = [];
     for (let i = 0; i < cCount; i++) crystals.push(spawnCrystal(true));
@@ -273,7 +298,8 @@
     ctx.fillRect(0, 0, width, height);
 
     // Subtle aurora sweep
-    const sweepX = (Math.sin(auroraT * 0.0006) * 0.4 + 0.5) * width;
+    const auroraSpeed = isCrystalBloom() ? 0.00035 : 0.0006;
+    const sweepX = (Math.sin(auroraT * auroraSpeed) * 0.4 + 0.5) * width;
     const sweep = ctx.createLinearGradient(sweepX - 200, 0, sweepX + 200, height);
     sweep.addColorStop(0, "rgba(0,0,0,0)");
     sweep.addColorStop(0.5, p.aurora[0]);
@@ -471,14 +497,15 @@
     ctx.clearRect(0, 0, width, height);
     drawBackground();
 
+    const dtScale = motionScale();
     pearls.forEach((strand) => {
-      strand.phase += strand.speed * dt;
+      strand.phase += strand.speed * dt * dtScale;
       drawPearl(strand);
     });
 
     sparkles.forEach((s) => {
-      s.y -= s.rise * dt * 0.06;
-      s.x += s.drift * dt * 0.06;
+      s.y -= s.rise * dt * 0.06 * dtScale;
+      s.x += s.drift * dt * 0.06 * dtScale;
       s.t += s.tSpeed * dt;
       if (s.y < -10 || s.x < -10 || s.x > width + 10) {
         Object.assign(s, spawnSparkle(false));
@@ -487,17 +514,17 @@
     });
 
     crystals.forEach((c) => {
-      c.y -= c.rise * dt * 0.06;
-      c.x += c.drift * dt * 0.06;
-      c.rot += c.rotSpeed * dt;
-      c.twinkleT += c.twinkleSpeed * dt;
+      c.y -= c.rise * dt * 0.06 * dtScale;
+      c.x += c.drift * dt * 0.06 * dtScale;
+      c.rot += c.rotSpeed * dt * dtScale;
+      c.twinkleT += c.twinkleSpeed * dt * dtScale;
       if (c.y < -60) {
         Object.assign(c, spawnCrystal(false));
       }
       drawCrystal(c);
     });
 
-    if (Math.random() < 0.0008) {
+    if (Math.random() < (isCrystalBloom() ? 0.0012 : 0.0008)) {
       shootingStars.push(spawnShootingStar());
     }
     shootingStars.forEach((s) => {
@@ -629,10 +656,13 @@
     if (reducedMotion) {
       const stored = readStoredTheme();
       const existing = document.body.dataset.theme;
+      const authVisible = isAuthVisible();
       const preferExisting = document.body.classList.contains("qr-display-body");
-      const initial = preferExisting
-        ? (isValidTheme(existing) ? existing : (isValidTheme(stored) ? stored : DEFAULT_THEME))
-        : (isValidTheme(stored) ? stored : (isValidTheme(existing) ? existing : DEFAULT_THEME));
+      const initial = authVisible
+        ? DEFAULT_THEME
+        : preferExisting
+          ? (isValidTheme(existing) ? existing : (isValidTheme(stored) ? stored : DEFAULT_THEME))
+          : (isValidTheme(stored) ? stored : (isValidTheme(existing) ? existing : DEFAULT_THEME));
       document.body.dataset.theme = initial;
       lastAppliedTheme = initial;
       currentPalette = getPalette(initial);
@@ -659,10 +689,13 @@
 
     const stored = readStoredTheme();
     const existing = document.body.dataset.theme;
+    const authVisible = isAuthVisible();
     const preferExisting = document.body.classList.contains("qr-display-body");
-    const initial = preferExisting
-      ? (isValidTheme(existing) ? existing : (isValidTheme(stored) ? stored : DEFAULT_THEME))
-      : (isValidTheme(stored) ? stored : (isValidTheme(existing) ? existing : DEFAULT_THEME));
+    const initial = authVisible
+      ? DEFAULT_THEME
+      : preferExisting
+        ? (isValidTheme(existing) ? existing : (isValidTheme(stored) ? stored : DEFAULT_THEME))
+        : (isValidTheme(stored) ? stored : (isValidTheme(existing) ? existing : DEFAULT_THEME));
     applyTheme(initial, { persist: false });
 
     start();

@@ -94,6 +94,16 @@
     const wrap = root.classList?.contains("qris-frame-wrap") ? root : root.querySelector(".qris-frame-wrap");
     if (!wrap) return next;
 
+    const sig = JSON.stringify({
+      frame_src: next.frame_src,
+      crop: next.crop,
+      qr: next.qr,
+      sw: next.source_width,
+      sh: next.source_height,
+    });
+    if (wrap.dataset.qrisLayoutSig === sig) return next;
+    wrap.dataset.qrisLayoutSig = sig;
+
     wrap.style.aspectRatio = viewportAspectRatio(next);
 
     const viewport = wrap.querySelector(".qris-frame-viewport") || wrap;

@@ -665,11 +665,11 @@ function preloadQrisFrame(settings = qrState.settings) {
 function updateStageQrImage(active) {
   const img = $("#display-stage-qr-img");
   if (!img || !active) return;
-  preloadQrisFrame();
   const src = qrImageSrc(active, QR_RENDER_SIZE);
   if (!src) return;
   const srcKey = qrImageSrcKey(active);
   if (img.dataset.qrSrcKey === srcKey && img.complete && img.naturalWidth > 0) return;
+  applyDisplayQrisFrame(qrState.settings);
   img.dataset.qrSrcKey = srcKey;
   img.dataset.qrSrc = src;
   img.src = src;
@@ -986,7 +986,9 @@ if (displaySession.theme) {
   bootstrapDisplayTheme();
 }
 renderPaymentLogos();
-preloadQrisFrame();
+if (Object.keys(qrState.settings || {}).length) {
+  preloadQrisFrame();
+}
 updateClock();
 clockTimer = setInterval(updateClock, 1000);
 startSplash();
