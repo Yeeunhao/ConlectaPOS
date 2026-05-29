@@ -175,6 +175,8 @@ VPS_QRIS_SHOW_URL = f"{VPS_QRIS_BASE_URL}/qris/show"
 BRAND_DEFAULT_LOGO = os.path.join(ASSETS_DIR, "ConlectaPosLogo.png")
 BRAND_EMAIL_LOGO = os.path.join(ASSETS_DIR, "Email", "ConlectaIcon.png")
 VIDEO_FOLDER = os.path.join(ASSETS_DIR, "videos")
+QRIS_FRAME_FOLDER = os.path.join(ASSETS_DIR, "qris-frame")
+QRIS_FRAME_BUILTIN = "/assets/qris-frame/SingapayConlectaQrisFrame.png"
 PAYMENT_UPLOAD_FOLDER = os.path.join(ASSETS_DIR, "Payment")
 SPLASH_VIDEO = os.path.join(VIDEO_FOLDER, "Splash.mp4")
 
@@ -573,6 +575,158 @@ def save_device_video_playlist(state, device_id, entries, merchant_id=None):
     )
     save_state(state)
     return playlist
+
+
+def _default_qris_frame_layout():
+    return {
+        "frame_src": QRIS_FRAME_BUILTIN,
+        "source_width": 1086,
+        "source_height": 1448,
+        "crop": {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0},
+        "qr": {"x": 0.18, "y": 0.28, "w": 0.64, "h": 0.32},
+    }
+
+
+def _clamp_qris_ratio(value, minimum=0.0, maximum=1.0):
+    try:
+        return max(minimum, min(maximum, float(value)))
+    except Exception:
+        return minimum
+
+
+def _normalize_qris_box(raw, fallback):
+    base = dict(fallback or {})
+    data = dict(raw or {})
+    box = {
+        "x": _clamp_qris_ratio(data.get("x", base.get("x", 0))),
+        "y": _clamp_qris_ratio(data.get("y", base.get("y", 0))),
+        "w": _clamp_qris_ratio(data.get("w", base.get("w", 1)), 0.05, 1.0),
+        "h": _clamp_qris_ratio(data.get("h", base.get("h", 1)), 0.05, 1.0),
+    }
+    if box["x"] + box["w"] > 1.0:
+        box["w"] = max(0.05, 1.0 - box["x"])
+    if box["y"] + box["h"] > 1.0:
+        box["h"] = max(0.05, 1.0 - box["y"])
+    return box
+
+
+def normalize_qris_frame_layout(raw=None):
+    default = _default_qris_frame_layout()
+    data = dict(raw or {})
+    crop = _normalize_qris_box(data.get("crop"), default["crop"])
+    qr = _normalize_qris_box(data.get("qr"), default["qr"])
+    frame_src = str(data.get("frame_src") or data.get("frame_url") or default["frame_src"]).strip()
+    if frame_src.startswith("/assets/qris-frame/"):
+        pass
+    elif frame_src and not frame_src.startswith("/"):
+        frame_src = f"/assets/qris-frame/{os.path.basename(frame_src)}"
+    if not frame_src:
+        frame_src = default["frame_src"]
+    return {
+        "frame_src": frame_src.split("?")[0],
+        "source_width": max(1, int(data.get("source_width") or default["source_width"])),
+        "source_height": max(1, int(data.get("source_height") or default["source_height"])),
+        "crop": crop,
+        "qr": qr,
+    }
+
+
+def load_qris_frame_store(state=None):
+    state = state or load_state()
+    store = state.get("qris_frame_config")
+    if not isinstance(store, dict):
+        store = {}
+    default_layout = normalize_qris_frame_layout(store.get("default") or _default_qris_frame_layout())
+    merchants = {}
+    for mid, layout in (store.get("merchants") or {}).items():
+        key = normalize_merchant_id(mid)
+        if not key:
+            continue
+        merchants[key] = normalize_qris_frame_layout(layout)
+    return {"default": default_layout, "merchants": merchants}
+
+
+def save_qris_frame_store(state, store):
+    state["qris_frame_config"] = {
+        "default": normalize_qris_frame_layout((store or {}).get("default")),
+        "merchants": {
+            normalize_merchant_id(mid): normalize_qris_frame_layout(layout)
+            for mid, layout in ((store or {}).get("merchants") or {}).items()
+            if normalize_merchant_id(mid)
+        },
+    }
+    save_state(state)
+    return state["qris_frame_config"]
+
+
+def qris_frame_public_payload(layout):
+    normalized = normalize_qris_frame_layout(layout)
+    path = safe_path(BASE_DIR, normalized["frame_src"])
+    url = public_asset_url(path) if path and os.path.isfile(path) else normalized["frame_src"]
+    return {
+        **normalized,
+        "frame_url": url or normalized["frame_src"],
+    }
+
+
+def resolve_qris_frame_config(merchant_id=None, state=None):
+    store = load_qris_frame_store(state)
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    layout = store.get("merchants", {}).get(mid) or store.get("default") or _default_qris_frame_layout()
+    return qris_frame_public_payload(layout)
+
+
+def list_qris_frame_assets():
+    items = []
+    if not os.path.isdir(QRIS_FRAME_FOLDER):
+        return items
+    for path in sorted(glob.glob(os.path.join(QRIS_FRAME_FOLDER, "*.png"))):
+        rel = "/" + os.path.relpath(path, BASE_DIR).replace("\\", "/")
+        items.append({
+            "name": os.path.basename(path),
+            "src": rel,
+            "url": public_asset_url(path) or rel,
+        })
+    return items
+
+
+def qris_frame_admin_payload(auth=None):
+    require_system_admin(auth)
+    state = load_state()
+    store = load_qris_frame_store(state)
+    return {
+        "frames": list_qris_frame_assets(),
+        "config": {
+            "default": qris_frame_public_payload(store.get("default")),
+            "merchants": {
+                mid: qris_frame_public_payload(layout)
+                for mid, layout in (store.get("merchants") or {}).items()
+            },
+        },
+        "merchants": list(load_merchants().values()),
+    }
+
+
+def save_qris_frame_admin_config(data, auth=None):
+    require_system_admin(auth)
+    state = load_state()
+    store = load_qris_frame_store(state)
+    layout = normalize_qris_frame_layout(data.get("layout") or data)
+    scope = str(data.get("scope") or "default").strip().lower()
+    merchant_ids = [
+        normalize_merchant_id(value)
+        for value in (data.get("merchant_ids") or data.get("merchants") or [])
+        if normalize_merchant_id(value)
+    ]
+    if scope == "merchants":
+        if not merchant_ids:
+            raise ValueError("Pilih minimal satu merchant untuk QR Frame khusus.")
+        for mid in merchant_ids:
+            store["merchants"][mid] = layout
+    else:
+        store["default"] = layout
+    save_qris_frame_store(state, store)
+    return qris_frame_admin_payload(auth)
 
 
 def _active_qr_store(state, merchant_id):
@@ -1121,6 +1275,7 @@ def system_admin_payload(auth=None):
     merchants = []
     for merchant in load_merchants().values():
         row = dict(merchant)
+        mid = normalize_merchant_id(row.get("id") or row.get("merchant_id"))
         row["logo_url"] = merchant_brand_logo_url(load_settings(mid), mid)
         merchants.append(row)
     accounts = load_all_accounts()
@@ -4965,6 +5120,7 @@ def settings_payload(settings=None, merchant_id=None, device_settings=None):
     settings["payment_image_urls"] = [public_asset_url(path) for path in configured_payment_image_paths(settings)]
     settings["payment_image_urls"] = [url for url in settings["payment_image_urls"] if url]
     settings["video_playlist_urls"] = video_playlist_urls(settings)
+    settings["qris_frame"] = resolve_qris_frame_config(mid, load_state())
     settings["qris_vps_env_var"] = "CONLECTA_QRIS_VPS_URL"
     return settings
 
@@ -4981,6 +5137,7 @@ def display_settings_payload(merchant_id=None, device_settings=None):
     settings["payment_image_urls"] = [public_asset_url(path) for path in configured_payment_image_paths(settings)]
     settings["payment_image_urls"] = [url for url in settings["payment_image_urls"] if url]
     settings["video_playlist_urls"] = video_playlist_urls(settings)
+    settings["qris_frame"] = resolve_qris_frame_config(mid, load_state())
     settings["qris_vps_env_var"] = "CONLECTA_QRIS_VPS_URL"
     return settings
 
@@ -5132,7 +5289,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.serve_file(os.path.join(WEB_DIR, "qr-display.html"))
             if path.startswith("/assets/"):
                 return self.serve_file(safe_path(BASE_DIR, path))
-            if path in ("/styles.css", "/app.js", "/qr-display.js", "/theme-pack.css", "/theme-engine.js"):
+            if path in ("/styles.css", "/app.js", "/qr-display.js", "/qris-frame.js", "/qris-frame-admin.js", "/theme-pack.css", "/theme-engine.js"):
                 return self.serve_file(os.path.join(WEB_DIR, path.lstrip("/")))
             return self.send_error(404, "Not found")
         except Exception as exc:
@@ -5321,6 +5478,13 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **payload})
+        if path == "/api/system-admin/qris-frame":
+            state = load_state()
+            try:
+                auth = self.request_system_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            return self.send_json({"ok": True, **qris_frame_admin_payload(auth)})
         if path == "/api/logs":
             state = load_state()
             auth = self.get_device_auth(state)
@@ -5561,6 +5725,16 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **updated})
+        if path == "/api/system-admin/qris-frame/save":
+            state = load_state()
+            try:
+                auth = self.request_system_admin(state)
+                payload = save_qris_frame_admin_config(data, auth)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            except Exception as exc:
+                return self.send_error_json(exc, 400)
+            return self.send_json({"ok": True, **payload})
         if path == "/api/vendor/save":
             vendor = save_vendor(data.get("name"))
             return self.send_json({"ok": True, "vendor": vendor, "vendors": load_vendors()})

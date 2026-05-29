@@ -7,8 +7,8 @@
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=3">
-  <link rel="stylesheet" href="/theme-pack.css?v=3">
+  <link rel="stylesheet" href="/styles.css?v=4">
+  <link rel="stylesheet" href="/theme-pack.css?v=4">
 </head>
 <body class="qr-display-body" data-theme="crystal_bloom">
   <script>
@@ -77,7 +77,9 @@
       <div class="display-stage-qr" id="display-stage-qr" hidden>
         <div class="stage-qr-card">
           <div class="stage-qr-frame qris-frame-wrap">
-            <img class="stage-qr-frame-bg qris-frame-bg" src="/assets/qris-frame/SingapayConlectaQrisFrame.png?v=3" alt="">
+            <div class="qris-frame-viewport">
+              <img class="stage-qr-frame-bg qris-frame-bg" src="" alt="">
+            </div>
             <div class="stage-qr-slot qris-frame-slot">
               <img id="display-stage-qr-img" class="stage-qr-code qris-frame-code" alt="QRIS payment code">
             </div>
@@ -166,7 +168,8 @@
     </aside>
   </main>
 
-  <script src="/theme-engine.js?v=3"></script>
-  <script src="/qr-display.js?v=3"></script>
+  <script src="/theme-engine.js?v=4"></script>
+  <script src="/qris-frame.js?v=4"></script>
+  <script src="/qr-display.js?v=4"></script>
 </body>
 </html>

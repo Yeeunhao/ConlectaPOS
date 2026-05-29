@@ -7,8 +7,8 @@
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=3">
-  <link rel="stylesheet" href="/theme-pack.css?v=3">
+  <link rel="stylesheet" href="/styles.css?v=4">
+  <link rel="stylesheet" href="/theme-pack.css?v=4">
 </head>
 <body data-theme="crystal_bloom">
   <div class="app-bg"></div>
@@ -325,6 +325,7 @@
         <div class="system-admin-tabs segmented">
           <button class="seg active" type="button" data-system-tab="merchants">Merchants</button>
           <button class="seg" type="button" data-system-tab="transactions">Transaction Edit</button>
+          <button class="seg" type="button" data-system-tab="qris-frame">QR Frame</button>
         </div>
 
         <div class="system-admin-section active" id="system-admin-merchants">
@@ -412,6 +413,34 @@
               <div class="system-transaction-editor" id="system-txn-editor">
                 <div class="empty-state">Filter merchant dulu, lalu pilih transaksi.</div>
               </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="system-admin-section" id="system-admin-qris-frame">
+          <section class="panel qris-frame-admin-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">System Admin</p>
+                <h2>QR Frame</h2>
+                <p class="muted">Pick a PNG from assets/qris-frame, crop the frame, place the QR slot, then save as default or per merchant.</p>
+              </div>
+              <button class="btn primary" type="button" data-action="save-qris-frame">Save QR Frame</button>
+            </div>
+
+            <div class="qris-frame-gallery" id="qris-frame-gallery"></div>
+
+            <div class="qris-frame-editor-steps segmented">
+              <button class="seg active" type="button" data-qris-step="crop">1. Crop Frame</button>
+              <button class="seg" type="button" data-qris-step="layout">2. Place QR</button>
+            </div>
+
+            <div class="qris-frame-editor-stage" id="qris-frame-editor-stage"></div>
+
+            <div class="qris-frame-scope-panel">
+              <label class="check-row inline-check"><input type="radio" name="qris-frame-scope" value="default" checked><span>Default for all merchants</span></label>
+              <label class="check-row inline-check"><input type="radio" name="qris-frame-scope" value="merchants"><span>Apply to selected merchants only</span></label>
+              <div class="qris-frame-merchant-picks" id="qris-frame-merchant-picks" hidden></div>
             </div>
           </section>
         </div>
@@ -931,7 +960,9 @@
       <h2 id="qr-modal-title">Scan untuk bayar</h2>
       <p id="qr-modal-status" class="modal-subtitle">Menunggu pembayaran</p>
       <div class="cashier-qr-frame qris-frame-wrap">
-        <img id="qr-modal-frame-bg" class="cashier-qr-frame-bg qris-frame-bg" src="/assets/qris-frame/SingapayConlectaQrisFrame.png?v=3" alt="">
+        <div class="qris-frame-viewport">
+          <img id="qr-modal-frame-bg" class="cashier-qr-frame-bg qris-frame-bg" src="" alt="">
+        </div>
         <div class="cashier-qr-slot qris-frame-slot">
           <img id="qr-modal-img" class="cashier-qr-code qris-frame-code" src="" alt="QRIS payment code">
         </div>
@@ -996,7 +1027,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/theme-engine.js?v=3"></script>
-  <script src="/app.js?v=3"></script>
+  <script src="/theme-engine.js?v=4"></script>
+  <script src="/qris-frame.js?v=4"></script>
+  <script src="/app.js?v=4"></script>
+  <script src="/qris-frame-admin.js?v=4"></script>
 </body>
 </html>

@@ -672,7 +672,6 @@ function displaySettingsSnapshot() {
   return { ...(state.settings || {}), active_theme: resolveCashierTheme() };
 }
 
-const QRIS_FRAME_SRC = "/assets/qris-frame/SingapayConlectaQrisFrame.png?v=3";
 const QR_RENDER_SIZE = 512;
 const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
 
@@ -2111,6 +2110,7 @@ function publishDisplayState() {
   safeSetLocalStorage(deviceStorageKey("conlecta_display_preview"), JSON.stringify(preview));
 
   qrChannel?.postMessage({ type: "display-state", ...payload });
+  applyCashierQrisFrame(settings);
 }
 
 async function generateQR() {
@@ -2367,12 +2367,21 @@ function updateQrModalImage(active) {
   img.src = src;
 }
 
-function preloadQrisFrame() {
-  const frame = $("#qr-modal-frame-bg");
-  if (!frame || frame.dataset.frameReady === "1") return;
-  frame.dataset.frameReady = "1";
-  frame.dataset.frameSrc = QRIS_FRAME_SRC;
-  if (frame.getAttribute("src") !== QRIS_FRAME_SRC) frame.src = QRIS_FRAME_SRC;
+function currentQrisFrameLayout(settings = state.settings) {
+  if (window.ConlectaQrisFrame?.layoutFromSettings) {
+    return window.ConlectaQrisFrame.layoutFromSettings(settings);
+  }
+  return window.ConlectaQrisFrame?.normalizeLayout?.() || {};
+}
+
+function applyCashierQrisFrame(settings = state.settings) {
+  const layout = currentQrisFrameLayout(settings);
+  window.ConlectaQrisFrame?.applyQrisFrame?.($("#qr-modal"), layout);
+  return layout;
+}
+
+function preloadQrisFrame(settings = state.settings) {
+  applyCashierQrisFrame(settings);
 }
 
 function showQrModal(active = state.activeQr) {
@@ -3569,7 +3578,7 @@ function merchantOptions(selectedId) {
 }
 
 function setSystemAdminTab(tab) {
-  state.systemAdminTab = tab === "transactions" ? "transactions" : "merchants";
+  state.systemAdminTab = ["transactions", "qris-frame"].includes(tab) ? tab : "merchants";
   $$(".system-admin-section").forEach((section) => {
     section.classList.toggle("active", section.id === `system-admin-${state.systemAdminTab}`);
   });
@@ -3715,6 +3724,14 @@ function renderSystemAdmin() {
   });
   if (!isSystemAdmin()) {
     list.innerHTML = `<div class="empty-state">System admin access required</div>`;
+    return;
+  }
+  if (state.systemAdminTab === "qris-frame") {
+    if (typeof window.loadQrisFrameAdmin === "function" && !state.qrisFrameAdmin?.frames?.length) {
+      window.loadQrisFrameAdmin().catch((err) => showToast(err.message, "error"));
+    } else if (typeof window.renderSystemQrisFrame === "function") {
+      window.renderSystemQrisFrame();
+    }
     return;
   }
   const merchants = systemMerchants();
@@ -4089,6 +4106,7 @@ async function reloadBootstrap() {
   state.logs = result.logs || [];
   applyBrand();
   bootstrapDeviceTheme();
+  applyCashierQrisFrame();
   renderAuth();
   if (!hasBootstrapped) applyRouteAfterBootstrap();
   hasBootstrapped = true;
@@ -4597,6 +4615,11 @@ function bindEvents() {
 async function init() {
   buildAmbientParticles();
   bindEvents();
+  window.state = state;
+  window.api = api;
+  window.showToast = showToast;
+  window.escapeHtml = escapeHtml;
+  window.escapeAttr = escapeAttr;
   preloadQrisFrame();
   updateClock();
   setInterval(updateClock, 1000);
