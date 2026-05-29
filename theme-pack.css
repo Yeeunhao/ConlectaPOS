@@ -616,9 +616,29 @@ body[data-theme="pearl_mist"] .qty-count,
 body[data-theme="pearl_mist"] .qty-control button,
 body[data-theme="pearl_mist"] .mini-btn,
 body[data-theme="pearl_mist"] .product-media {
-  background: rgba(255, 255, 255, 0.78);
-  border-color: rgba(120, 92, 200, 0.28);
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(120, 92, 200, 0.22);
   color: var(--text);
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(60, 40, 140, 0.07);
+}
+
+body[data-theme="pearl_mist"] .product-card {
+  padding: 12px;
+  gap: 8px;
+  min-height: 228px;
+}
+
+body[data-theme="pearl_mist"] .product-media {
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 92px;
+  background: rgba(246, 241, 255, 0.92);
+}
+
+body[data-theme="pearl_mist"] .cart-item {
+  border-radius: 12px;
+  padding: 12px;
 }
 
 body[data-theme="pearl_mist"] .product-card.in-cart {

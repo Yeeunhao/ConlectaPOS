@@ -608,10 +608,10 @@ def _sync_legacy_state_for_default(state, merchant_id=None):
     state["customer_counter"] = bucket.get("customer_counter", 0)
 
 
-def current_merchant_id():
+def current_merchant_id(state=None, device_id=None):
     try:
-        state = load_state()
-        auth = state.get("auth") or {}
+        state = state if state is not None else load_state()
+        auth = current_auth(state, device_id)
         if auth.get("merchant_id"):
             return normalize_merchant_id(auth.get("merchant_id"))
         if auth.get("id"):
@@ -930,8 +930,8 @@ def _save_merchant_logo_data(merchant_id, data_url, filename="merchant_logo.png"
     return dst
 
 
-def save_system_merchant(data):
-    require_system_admin()
+def save_system_merchant(data, auth=None):
+    require_system_admin(auth)
     mid = normalize_merchant_id(data.get("merchant_id"))
     name = str(data.get("merchant_name") or data.get("name") or "").strip() or DEFAULT_MERCHANT_NAME
     logo_path = str(data.get("logo_path") or "").strip()
@@ -995,8 +995,8 @@ def load_version_info():
         return info
 
 
-def save_version_info(data):
-    require_system_admin()
+def save_version_info(data, auth=None):
+    require_system_admin(auth)
     version = str(data.get("version") or DEFAULT_VERSION_INFO["version"]).strip()
     title = str(data.get("title") or "Conlecta Version").strip()
     change = str(data.get("change") or "").strip()
@@ -1039,8 +1039,8 @@ def save_version_info(data):
     return load_version_info()
 
 
-def system_admin_payload():
-    require_system_admin()
+def system_admin_payload(auth=None):
+    require_system_admin(auth)
     merchants = []
     for merchant in load_merchants().values():
         row = dict(merchant)
@@ -1305,20 +1305,26 @@ def update_cashier_payment_notice(state, merchant_id=None, data=None):
 
 
 def display_state_merchant_id(state, device_id=None):
+    did = str(device_id or "").strip()
+    if did:
+        auth = (state.get("auth_by_device") or {}).get(did) or {}
+        if auth.get("merchant_id"):
+            return normalize_merchant_id(auth.get("merchant_id"))
     auth = state.get("auth") or {}
     if auth.get("merchant_id"):
         return normalize_merchant_id(auth.get("merchant_id"))
     tenants = state.get("tenant_data") if isinstance(state.get("tenant_data"), dict) else {}
-    if device_id:
+    if did:
         for mid, bucket in tenants.items():
             if not isinstance(bucket, dict):
                 continue
             store = bucket.get("active_qrs_by_device") or {}
-            if store.get(device_id):
+            if store.get(did):
                 return normalize_merchant_id(mid)
-            event = (bucket.get("display_events_by_device") or {}).get(device_id)
+            event = (bucket.get("display_events_by_device") or {}).get(did)
             if event and not _display_event_expired(event):
                 return normalize_merchant_id(mid)
+        return DEFAULT_MERCHANT_ID
     for mid, bucket in tenants.items():
         if not isinstance(bucket, dict):
             continue
@@ -1375,19 +1381,28 @@ def _is_system_admin_account(acc):
     return str(acc.get("email") or "").strip().lower() in _system_admin_emails()
 
 
-def current_auth():
+def current_auth(state=None, device_id=None):
     try:
-        return load_state().get("auth") or {}
+        state = state if state is not None else load_state()
     except Exception:
         return {}
+    auth = dict(state.get("auth") or {})
+    if auth.get("id"):
+        return auth
+    did = str(device_id or auth.get("device_id") or "").strip()
+    if did:
+        stored = (state.get("auth_by_device") or {}).get(did)
+        if stored:
+            return dict(stored)
+    return auth
 
 
-def current_auth_is_system_admin():
-    return bool((current_auth() or {}).get("role") == "system_admin")
+def current_auth_is_system_admin(auth=None):
+    return is_system_admin_auth(auth if auth is not None else current_auth())
 
 
-def require_system_admin():
-    if not current_auth_is_system_admin():
+def require_system_admin(auth=None):
+    if not is_system_admin_auth(auth):
         raise PermissionError("System admin access required.")
 
 
@@ -3567,8 +3582,8 @@ def load_history_for_merchant(merchant_id=None):
     return list(bucket.get("history") or [])
 
 
-def admin_transactions_payload(merchant_id=None):
-    require_system_admin()
+def admin_transactions_payload(merchant_id=None, auth=None):
+    require_system_admin(auth)
     mid = normalize_merchant_id(merchant_id)
     records = load_history_for_merchant(mid)
     products = load_stock(force=True, merchant_id=mid)
@@ -3593,9 +3608,9 @@ def _aggregate_item_qty(items):
     return out, labels
 
 
-def update_system_transaction(data):
+def update_system_transaction(data, auth=None):
     global _stock_cache, _stock_cache_ts
-    require_system_admin()
+    require_system_admin(auth)
     mid = normalize_merchant_id(data.get("merchant_id"))
     txn_id = str(data.get("txn_id") or data.get("transaction_id") or "").strip()
     if not txn_id:
@@ -3829,10 +3844,11 @@ def items_with_cart_discount(record):
     return rows
 
 
-def vendor_invoice_payload(vendor_id="", vendor_name="", date_from="", date_to=""):
-    history = load_history()
-    products = load_stock(force=True)
-    vendors = load_vendors(force=True)
+def vendor_invoice_payload(vendor_id="", vendor_name="", date_from="", date_to="", merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    history = load_history_for_merchant(mid)
+    products = load_stock(force=True, merchant_id=mid)
+    vendors = load_vendors(force=True, merchant_id=mid)
     vendor_map = {str(v["id"]): v["name"] for v in vendors}
     product_by_name = {str(item.get("name") or ""): item for item in products}
     item_vendor = {name: str(item.get("vendor_id", "")) for name, item in product_by_name.items()}
@@ -3846,6 +3862,8 @@ def vendor_invoice_payload(vendor_id="", vendor_name="", date_from="", date_to="
     rows = []
     totals = {"qty": 0, "gross": 0, "discount": 0, "subtotal": 0, "capital": 0, "cost": 0, "profit": 0}
     for rec in history:
+        if normalize_merchant_id(rec.get("merchant_id") or mid) != mid:
+            continue
         rec_dt = parse_history_datetime(rec.get("updated_at_display") or rec.get("updated_at"))
         if dt_from and (not rec_dt or rec_dt < dt_from):
             continue
@@ -3898,6 +3916,7 @@ def vendor_invoice_payload(vendor_id="", vendor_name="", date_from="", date_to="
         "rows": rows,
         "totals": totals,
         "vendors": vendors,
+        "merchant_id": mid,
         "selected_vendor": selected_name or (vendor_map.get(selected_id, "(All)") if selected_id else "(All)"),
     }
 
@@ -4228,7 +4247,7 @@ def make_pdf(record, merchant=False):
     return buffer.getvalue()
 
 
-def make_history_export_pdf(records, title="Invoice History"):
+def make_history_export_pdf(records, title="Invoice History", merchant_id=None):
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4, landscape
@@ -4239,7 +4258,9 @@ def make_history_export_pdf(records, title="Invoice History"):
     except Exception as exc:
         raise RuntimeError(f"ReportLab unavailable: {exc}")
 
-    settings = load_settings(current_merchant_id())
+    mid = normalize_merchant_id(merchant_id or (records[0].get("merchant_id") if records else None) or current_merchant_id())
+    settings = load_settings(mid)
+    merchant = merchant_payload(mid)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     W = doc.width
@@ -4273,9 +4294,9 @@ def make_history_export_pdf(records, title="Invoice History"):
     accent_bar = Drawing(W, 4)
     accent_bar.add(Rect(0, 0, W, 4, fillColor=accent, strokeColor=None))
 
-    shop = _pdf_escape(settings.get("shop_name") or "Conlecta")
+    shop = _pdf_escape(settings.get("shop_name") or merchant.get("name") or "Conlecta")
     logo = _pdf_logo(settings, Image, 36)
-    header_left = [[logo if logo else "", Paragraph(f"<b>{shop}</b>", s_cell)]]
+    header_left = [[logo if logo else "", Paragraph(f"<b>{shop}</b><br/><font color='#6c727f' size='7'>{_pdf_escape(mid)}</font>", s_cell)]]
     header_brand = Table(header_left, colWidths=[42, 180])
     header_brand.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
 
@@ -4368,7 +4389,10 @@ def make_vendor_invoice_pdf(payload):
     rows_data = payload.get("rows", [])
     totals = payload.get("totals", {})
     vendor = payload.get("selected_vendor", "(All)")
-    settings = load_settings(current_merchant_id())
+    mid = normalize_merchant_id(payload.get("merchant_id") or current_merchant_id())
+    settings = load_settings(mid)
+    merchant = merchant_payload(mid)
+    shop = _pdf_escape(settings.get("shop_name") or merchant.get("name") or "Conlecta")
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=48, bottomMargin=40)
     W = doc.width
@@ -4395,9 +4419,8 @@ def make_vendor_invoice_pdf(payload):
     accent_bar = Drawing(W, 4)
     accent_bar.add(Rect(0, 0, W, 4, fillColor=accent, strokeColor=None))
 
-    shop = _pdf_escape(settings.get("shop_name") or "Conlecta")
     logo = _pdf_logo(settings, Image, 40)
-    brand_cell = Table([[logo if logo else "", Paragraph(f"<b>{shop}</b>", s_cell)]], colWidths=[46, 160])
+    brand_cell = Table([[logo if logo else "", Paragraph(f"<b>{shop}</b><br/><font color='#6c727f' size='7'>{_pdf_escape(mid)}</font>", s_cell)]], colWidths=[46, 160])
     brand_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
 
     header = Table([[
@@ -4888,6 +4911,12 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             _clear_device_session_state(state, auth.get("merchant_id"), did)
 
 
+    def request_system_admin(self, state=None):
+        auth = self.request_auth(state, required=True)
+        if not is_system_admin_auth(auth):
+            raise PermissionError("System admin access required.")
+        return auth
+
     def read_json(self):
         length = int(self.headers.get("Content-Length") or 0)
         if length <= 0:
@@ -4965,14 +4994,30 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         if path == "/api/display-state":
             state = load_state()
             did = self.device_id()
-            mid = display_state_merchant_id(state, device_id=did or None)
+            auth = self.get_device_auth(state)
+            if auth:
+                state["auth"] = auth
+                auth = validate_stored_auth(state)
+                state["auth"] = None
+            mid = normalize_merchant_id(
+                (auth or {}).get("merchant_id") or display_state_merchant_id(state, device_id=did or None)
+            )
+            account_id = str((auth or {}).get("id") or "").strip()
             bucket = _state_tenant_bucket(state, mid)
             display_event = current_display_event(state, mid, device_id=did or None)
             cashier_notice = current_cashier_payment_notice(state, mid)
-            active_qr = get_active_qr_for_session(state, mid, did or None, account_id=None, require_account=False)
+            active_qr = get_active_qr_for_session(
+                state,
+                mid,
+                did or None,
+                account_id or None,
+                require_account=bool(account_id),
+            )
             save_state(state)
             return self.send_json({
                 "ok": True,
+                "merchant_id": mid,
+                "account_id": account_id,
                 "settings": display_settings_payload(mid, get_device_settings(state, did) if did else {}),
                 "active_qr": active_qr,
                 "display_event": display_event,
@@ -5019,7 +5064,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                     "session_day": _session_business_day(),
                     "session_reset_at": _next_session_reset_at(),
                     "version": load_version_info(),
-                    "system_admin": system_admin_payload(),
+                    "system_admin": system_admin_payload(auth),
                     "logs": [],
                     "assets": scan_asset_payload(),
                 })
@@ -5087,8 +5132,10 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             mid = normalize_merchant_id((auth or {}).get("merchant_id"))
             return self.send_json({"ok": True, "history": load_history_for_merchant(mid)})
         if path == "/api/system-admin/transactions":
+            state = load_state()
             try:
-                payload = admin_transactions_payload((query.get("merchant_id") or [""])[0])
+                auth = self.request_system_admin(state)
+                payload = admin_transactions_payload((query.get("merchant_id") or [""])[0], auth=auth)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
             except Exception as exc:
@@ -5106,19 +5153,31 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             env_name, detail = qris_proxy_environment()
             return self.send_json({"ok": True, "environment": env_name, "detail": detail})
         if path == "/api/vendor-invoice":
+            state = load_state()
+            try:
+                mid, _auth = self.request_merchant_id(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
             payload = vendor_invoice_payload(
                 vendor_id=(query.get("vendor_id") or [""])[0],
                 vendor_name=(query.get("vendor_name") or [""])[0],
                 date_from=(query.get("from") or [""])[0],
                 date_to=(query.get("to") or [""])[0],
+                merchant_id=mid,
             )
             return self.send_json({"ok": True, **payload})
         if path == "/api/vendor-invoice.pdf":
+            state = load_state()
+            try:
+                mid, _auth = self.request_merchant_id(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
             payload = vendor_invoice_payload(
                 vendor_id=(query.get("vendor_id") or [""])[0],
                 vendor_name=(query.get("vendor_name") or [""])[0],
                 date_from=(query.get("from") or [""])[0],
                 date_to=(query.get("to") or [""])[0],
+                merchant_id=mid,
             )
             name = str(payload.get("selected_vendor", "all")).replace(" ", "_")
             return self.send_bytes(make_vendor_invoice_pdf(payload), "application/pdf", f"vendor-invoice-{name}.pdf")
@@ -5193,7 +5252,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             save_state(state)
             body = {"ok": True, "auth": auth, "settings": settings_payload(merchant_id=auth.get("merchant_id"))}
             if auth.get("role") == "system_admin":
-                body["system_admin"] = system_admin_payload()
+                body["system_admin"] = system_admin_payload(auth)
             return self.send_json(body)
         if path == "/api/auth/verify-pin":
             state = load_state()
@@ -5210,7 +5269,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             save_state(state)
             body = {"ok": True, "auth": auth, "settings": settings_payload(merchant_id=auth.get("merchant_id"))}
             if auth.get("role") == "system_admin":
-                body["system_admin"] = system_admin_payload()
+                body["system_admin"] = system_admin_payload(auth)
             return self.send_json(body)
         if path == "/api/auth/register-pin":
             state = load_state()
@@ -5228,7 +5287,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(exc, 400)
             body = {"ok": True, "auth": auth, "settings": settings_payload(merchant_id=auth.get("merchant_id"))}
             if auth.get("role") == "system_admin":
-                body["system_admin"] = system_admin_payload()
+                body["system_admin"] = system_admin_payload(auth)
             return self.send_json(body)
         if path == "/api/auth/logout":
             state = load_state()
@@ -5271,14 +5330,17 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(msg, 400)
             return self.send_json({"ok": True, "message": msg, "merchant_id": mid})
         if path == "/api/system-admin/merchant/save":
+            state = load_state()
             try:
-                merchant = save_system_merchant(data)
+                auth = self.request_system_admin(state)
+                merchant = save_system_merchant(data, auth)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
-            return self.send_json({"ok": True, "merchant": merchant, "system_admin": system_admin_payload()})
+            return self.send_json({"ok": True, "merchant": merchant, "system_admin": system_admin_payload(auth)})
         if path == "/api/system-admin/account/create":
+            state = load_state()
             try:
-                require_system_admin()
+                auth = self.request_system_admin(state)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
             ok, msg = create_account_record(
@@ -5287,10 +5349,11 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             )
             if not ok:
                 return self.send_error_json(msg, 400)
-            return self.send_json({"ok": True, "message": msg, "system_admin": system_admin_payload()})
+            return self.send_json({"ok": True, "message": msg, "system_admin": system_admin_payload(auth)})
         if path == "/api/system-admin/account/update":
+            state = load_state()
             try:
-                require_system_admin()
+                auth = self.request_system_admin(state)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
             ok, msg = update_account_record(
@@ -5299,16 +5362,20 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             )
             if not ok:
                 return self.send_error_json(msg, 400)
-            return self.send_json({"ok": True, "message": msg, "system_admin": system_admin_payload()})
+            return self.send_json({"ok": True, "message": msg, "system_admin": system_admin_payload(auth)})
         if path == "/api/system-admin/version/save":
+            state = load_state()
             try:
-                version = save_version_info(data)
+                auth = self.request_system_admin(state)
+                version = save_version_info(data, auth)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
-            return self.send_json({"ok": True, "version": version, "system_admin": system_admin_payload()})
+            return self.send_json({"ok": True, "version": version, "system_admin": system_admin_payload(auth)})
         if path == "/api/system-admin/transaction/update":
+            state = load_state()
             try:
-                updated = update_system_transaction(data)
+                auth = self.request_system_admin(state)
+                updated = update_system_transaction(data, auth)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
             except Exception as exc:
@@ -5559,7 +5626,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             ]
 
             return self.send_bytes(
-                make_history_export_pdf(records),
+                make_history_export_pdf(records, merchant_id=mid),
                 "application/pdf",
                 "invoice-history.pdf"
             )
@@ -5581,7 +5648,38 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         return self.send_error_json("Unknown API route", 404)
 
 
+def _email_deps_ready():
+    try:
+        import google.oauth2.credentials  # noqa: F401
+        import googleapiclient.discovery  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _pdf_deps_ready():
+    try:
+        import reportlab  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def run(host="127.0.0.1", port=8765):
+    if _email_deps_ready():
+        log.info("Gmail/receipt email dependencies: OK")
+    else:
+        log.warning(
+            "Gmail/receipt email disabled on this VPS. Install with: "
+            "pip install -r requirements.txt  (then restart the server)"
+        )
+    if _pdf_deps_ready():
+        log.info("PDF export dependencies: OK")
+    else:
+        log.warning(
+            "PDF export disabled on this VPS. Install with: "
+            "pip install -r requirements.txt  (then restart the server)"
+        )
     server = ThreadingHTTPServer((host, port), ConlectaWebHandler)
     log.info("Conlecta web app running at http://%s:%s", host, port)
     try:

@@ -988,6 +988,20 @@ textarea:focus {
   transition: transform 0.15s ease, border-color 0.15s ease;
   content-visibility: auto;
   contain-intrinsic-size: 245px;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.product-card button,
+.product-card input,
+.product-card label,
+.product-card .product-name,
+.product-card .product-price,
+.product-card .product-stock {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .product-card.in-cart {
@@ -1171,6 +1185,8 @@ textarea:focus {
   gap: 10px;
   padding: 12px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .cart-item strong {

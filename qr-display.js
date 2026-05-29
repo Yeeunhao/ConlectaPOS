@@ -5,6 +5,8 @@ const qrState = {
   displayEvent: null,
   cashierNotice: null,
   version: {},
+  merchantId: "",
+  accountId: "",
 };
 
 const qrChannel = "BroadcastChannel" in window ? new BroadcastChannel("conlecta-qr") : null;
@@ -202,7 +204,67 @@ function deviceStorageKey(name) {
   return `${name}:${getDeviceId()}`;
 }
 
+function sessionMerchantId() {
+  return String(
+    qrState.merchantId
+    || localStorage.getItem(deviceStorageKey("conlecta_display_merchant"))
+    || qrState.settings?.merchant_id
+    || "",
+  ).trim();
+}
+
+function sessionAccountId() {
+  return String(
+    qrState.accountId
+    || localStorage.getItem(deviceStorageKey("conlecta_display_account"))
+    || "",
+  ).trim();
+}
+
+function localMatchesSession(settings = {}) {
+  const sessionMid = sessionMerchantId();
+  const localMid = String(settings.merchant_id || "").trim();
+  if (!sessionMid) return true;
+  if (!localMid) return false;
+  return sessionMid === localMid;
+}
+
+function readRawLocalSettings() {
+  try {
+    const raw = localStorage.getItem(deviceStorageKey("conlecta_settings"));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberDisplaySession(merchantId = "", accountId = "") {
+  qrState.merchantId = String(merchantId || "").trim();
+  qrState.accountId = String(accountId || "").trim();
+  if (qrState.merchantId) {
+    localStorage.setItem(deviceStorageKey("conlecta_display_merchant"), qrState.merchantId);
+  }
+  if (qrState.accountId) {
+    localStorage.setItem(deviceStorageKey("conlecta_display_account"), qrState.accountId);
+  }
+}
+
+function clearDisplayLocalCache() {
+  localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
+  localStorage.removeItem(deviceStorageKey("conlecta_settings"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_preview"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_merchant"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_account"));
+  qrState.activeQr = null;
+  qrState.settings = {};
+  qrState.preview = null;
+  qrState.displayEvent = null;
+  qrState.cashierNotice = null;
+}
+
 function readLocalQr() {
+  if (!localMatchesSession(readRawLocalSettings())) return null;
   try {
     const raw = localStorage.getItem(deviceStorageKey("conlecta_active_qr"));
     return raw ? sanitizeActiveQr(JSON.parse(raw)) : null;
@@ -212,12 +274,8 @@ function readLocalQr() {
 }
 
 function readLocalSettings() {
-  try {
-    const raw = localStorage.getItem(deviceStorageKey("conlecta_settings"));
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
+  const settings = readRawLocalSettings();
+  return localMatchesSession(settings) ? settings : {};
 }
 
 function readLocalPreview() {
@@ -480,18 +538,49 @@ function renderDisplay() {
   $("#display-hint").textContent = "";
 }
 
+function applyDisplayPayload(data = {}) {
+  if (data.merchant_id || data.account_id) {
+    rememberDisplaySession(data.merchant_id, data.account_id);
+  } else if (data.settings?.merchant_id) {
+    rememberDisplaySession(data.settings.merchant_id, data.account_id || sessionAccountId());
+  }
+  const incomingSettings = data.settings || {};
+  if (incomingSettings.merchant_id) {
+    const previousMid = sessionMerchantId();
+    if (previousMid && previousMid !== String(incomingSettings.merchant_id).trim()) {
+      localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
+      localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
+      localStorage.removeItem(deviceStorageKey("conlecta_display_preview"));
+      qrState.activeQr = null;
+      qrState.displayEvent = null;
+      qrState.preview = null;
+    }
+    qrState.settings = incomingSettings;
+    localStorage.setItem(deviceStorageKey("conlecta_settings"), JSON.stringify(incomingSettings));
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "display_event")) {
+    qrState.displayEvent = data.display_event;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "cashier_notice")) {
+    qrState.cashierNotice = data.cashier_notice || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "active_qr")) {
+    qrState.activeQr = sanitizeActiveQr(data.active_qr);
+  }
+  if (data.preview) qrState.preview = data.preview;
+  if (data.version) qrState.version = data.version;
+  if (terminalDisplayEvent(qrState.displayEvent)) rememberClosedQr(qrState.displayEvent);
+  renderDisplay();
+}
+
 async function refreshFromServer() {
   if (displayClosed) return;
   try {
     const data = await api("/api/display-state");
-    qrState.settings = data.settings || readLocalSettings();
-    qrState.displayEvent = Object.prototype.hasOwnProperty.call(data, "display_event") ? data.display_event : readLocalDisplayEvent();
-    qrState.cashierNotice = data.cashier_notice || readLocalCashierNotice();
-    if (terminalDisplayEvent(qrState.displayEvent)) rememberClosedQr(qrState.displayEvent);
-    qrState.activeQr = sanitizeActiveQr(Object.prototype.hasOwnProperty.call(data, "active_qr") ? data.active_qr : readLocalQr());
-    qrState.version = data.version || readLocalVersion();
-    qrState.preview = readLocalPreview();
-    renderDisplay();
+    applyDisplayPayload({
+      ...data,
+      preview: readLocalPreview(),
+    });
   } catch {
     qrState.settings = readLocalSettings();
     qrState.displayEvent = readLocalDisplayEvent();
@@ -517,14 +606,16 @@ qrChannel?.addEventListener("message", (event) => {
     return;
   }
   if (event.data?.type === "display-state") {
-    qrState.settings = event.data.settings || qrState.settings;
-    qrState.preview = event.data.preview || null;
-    qrState.displayEvent = event.data.displayEvent || null;
-    qrState.cashierNotice = event.data.cashierNotice || readLocalCashierNotice();
-    if (terminalDisplayEvent(qrState.displayEvent)) rememberClosedQr(qrState.displayEvent);
-    qrState.activeQr = sanitizeActiveQr(event.data.activeQr || null);
-    qrState.version = event.data.version || qrState.version;
-    renderDisplay();
+    applyDisplayPayload({
+      settings: event.data.settings,
+      preview: event.data.preview,
+      display_event: event.data.displayEvent,
+      cashier_notice: event.data.cashierNotice,
+      active_qr: event.data.activeQr,
+      version: event.data.version,
+      merchant_id: event.data.settings?.merchant_id,
+      account_id: event.data.account_id,
+    });
   }
 });
 

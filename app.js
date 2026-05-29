@@ -119,6 +119,15 @@ function getDeviceId() {
 function deviceStorageKey(name) {
   return `${name}:${getDeviceId()}`;
 }
+
+function clearDisplayLocalCache() {
+  localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
+  localStorage.removeItem(deviceStorageKey("conlecta_settings"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_preview"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_merchant"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_account"));
+}
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -1283,6 +1292,7 @@ async function loginSubmit(event) {
 
 async function finishAuthLogin(result) {
   authEpoch += 1;
+  clearDisplayLocalCache();
   state.auth = result.auth;
   lastActivityTs = authActivityMs(result.auth) || Date.now();
   lastActivitySyncTs = 0;
@@ -1483,6 +1493,7 @@ function showLogoutModal() {
 async function logout() {
   authEpoch += 1;
   requestQrDisplayClose();
+  clearDisplayLocalCache();
   await withLoading("Menutup sesi...", async () => {
     await api("/api/auth/logout", { method: "POST", body: {} });
   });
@@ -1496,6 +1507,7 @@ async function logout() {
   state.activeQr = null;
   state.displayEvent = null;
   state.pendingPaymentClear = false;
+  state.logAdminPassword = "";
   state.cart = {};
   state.currentTxn = "";
   stopQrPolling();
@@ -1504,6 +1516,7 @@ async function logout() {
   stopHeartbeat();
   closeModal();
   resetAuthForms({ clearCredentials: true });
+  if ($("#log-admin-password")) $("#log-admin-password").value = "";
   setRoute("/login", true);
   renderAuth();
   renderCart();
@@ -1923,7 +1936,12 @@ function publishDisplayState() {
     displayEvent: state.displayEvent,
     cashierNotice: cashierNoticeRecord ? cashierNoticePayload(cashierNoticeRecord, true) : null,
     version: state.version,
+    account_id: state.auth?.id || "",
   };
+
+  const merchantId = state.settings?.merchant_id || state.auth?.merchant_id || "";
+  if (merchantId) localStorage.setItem(deviceStorageKey("conlecta_display_merchant"), merchantId);
+  if (state.auth?.id) localStorage.setItem(deviceStorageKey("conlecta_display_account"), state.auth.id);
 
   if (state.activeQr) localStorage.setItem(deviceStorageKey("conlecta_active_qr"), JSON.stringify(state.activeQr));
   else localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
@@ -2113,7 +2131,7 @@ function scheduleDailySessionReset() {
 
 function openQrDisplay() {
   publishDisplayState();
-  const win = window.open("/qr-display.html", "conlecta_qr_display");
+  const win = window.open("/qr-display.html", `conlecta_qr_display_${getDeviceId()}`);
   if (win) {
     qrDisplayWindow = win;
     win.focus();
@@ -4101,15 +4119,24 @@ async function handleAction(action, target) {
       const result = await api("/api/logs/read", { method: "POST", body: { admin_password: state.logAdminPassword } });
       state.logs = result.logs || [];
       renderLogs();
+      $("#log-admin-password").value = "";
       showToast("Log unlocked");
     } else if (action === "refresh-log") {
-      const result = await api("/api/logs/read", { method: "POST", body: { admin_password: state.logAdminPassword || $("#log-admin-password").value } });
+      if (!state.logAdminPassword) {
+        showToast("Unlock log dulu dengan password account.", "error");
+        return;
+      }
+      const result = await api("/api/logs/read", { method: "POST", body: { admin_password: state.logAdminPassword } });
       state.logs = result.logs || [];
       renderLogs();
     } else if (action === "export-log") {
       exportLogs();
     } else if (action === "clear-log") {
-      const result = await api("/api/logs/clear", { method: "POST", body: { admin_password: state.logAdminPassword || $("#log-admin-password").value } });
+      if (!state.logAdminPassword) {
+        showToast("Unlock log dulu dengan password account.", "error");
+        return;
+      }
+      const result = await api("/api/logs/clear", { method: "POST", body: { admin_password: state.logAdminPassword } });
       state.logs = result.logs || [];
       renderLogs();
       showToast("Session log cleared");
