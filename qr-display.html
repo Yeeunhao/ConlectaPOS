@@ -25,16 +25,13 @@
       try {
         var did = localStorage.getItem("conlecta_device_id") || "";
         var aid = did ? (localStorage.getItem("conlecta_display_account:" + did) || "") : "";
-        var keys = [];
-        if (did && aid) keys.push("conlecta_settings:" + did + ":" + aid);
-        if (did) keys.push("conlecta_settings:" + did);
-        for (var i = 0; i < keys.length; i += 1) {
-          var raw = localStorage.getItem(keys[i]);
-          if (!raw) continue;
-          var theme = String(JSON.parse(raw).active_theme || "").trim();
-          if (VALID[theme]) {
-            document.body.dataset.theme = theme;
-            break;
+        if (did && aid) {
+          var raw = localStorage.getItem("conlecta_settings:" + did + ":" + aid);
+          if (raw) {
+            var theme = String(JSON.parse(raw).active_theme || "").trim();
+            if (VALID[theme]) {
+              document.body.dataset.theme = theme;
+            }
           }
         }
       } catch (_) {}
@@ -168,8 +165,8 @@
     </aside>
   </main>
 
-  <script src="/theme-engine.js?v=4"></script>
+  <script src="/theme-engine.js?v=5"></script>
   <script src="/qris-frame.js?v=4"></script>
-  <script src="/qr-display.js?v=4"></script>
+  <script src="/qr-display.js?v=5"></script>
 </body>
 </html>

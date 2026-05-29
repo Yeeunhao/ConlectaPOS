@@ -619,11 +619,20 @@
      INIT
      ============================================================ */
   function boot() {
+    if (document.body.classList.contains("qr-display-body")) {
+      try {
+        const did = localStorage.getItem("conlecta_device_id") || "";
+        if (did) setStorageKey(`conlecta:display:theme:${did}`);
+      } catch (e) { /* ignore */ }
+    }
     reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) {
       const stored = readStoredTheme();
       const existing = document.body.dataset.theme;
-      const initial = isValidTheme(stored) ? stored : (isValidTheme(existing) ? existing : DEFAULT_THEME);
+      const preferExisting = document.body.classList.contains("qr-display-body");
+      const initial = preferExisting
+        ? (isValidTheme(existing) ? existing : (isValidTheme(stored) ? stored : DEFAULT_THEME))
+        : (isValidTheme(stored) ? stored : (isValidTheme(existing) ? existing : DEFAULT_THEME));
       document.body.dataset.theme = initial;
       lastAppliedTheme = initial;
       currentPalette = getPalette(initial);
@@ -650,7 +659,10 @@
 
     const stored = readStoredTheme();
     const existing = document.body.dataset.theme;
-    const initial = isValidTheme(stored) ? stored : (isValidTheme(existing) ? existing : DEFAULT_THEME);
+    const preferExisting = document.body.classList.contains("qr-display-body");
+    const initial = preferExisting
+      ? (isValidTheme(existing) ? existing : (isValidTheme(stored) ? stored : DEFAULT_THEME))
+      : (isValidTheme(stored) ? stored : (isValidTheme(existing) ? existing : DEFAULT_THEME));
     applyTheme(initial, { persist: false });
 
     start();

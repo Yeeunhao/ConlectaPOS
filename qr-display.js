@@ -274,10 +274,20 @@ function localMatchesSession(settings = {}) {
 
 function readRawLocalSettings() {
   try {
+    const did = getDeviceId();
+    const lockedAid = String(displaySession.accountId || "").trim();
+    if (lockedAid) {
+      const scoped = localStorage.getItem(`conlecta_settings:${did}:${lockedAid}`);
+      if (scoped) return JSON.parse(scoped);
+      return {};
+    }
     const raw = localStorage.getItem(settingsStorageKey());
     if (raw) return JSON.parse(raw);
-    const legacy = localStorage.getItem(deviceStorageKey("conlecta_settings"));
-    return legacy ? JSON.parse(legacy) : {};
+    if (!sessionAccountId()) {
+      const legacy = localStorage.getItem(deviceStorageKey("conlecta_settings"));
+      return legacy ? JSON.parse(legacy) : {};
+    }
+    return {};
   } catch {
     return {};
   }
@@ -411,10 +421,114 @@ function renderVersion() {
 
 const DISPLAY_DEFAULT_THEME = "crystal_bloom";
 
+let displayRenderTimer = null;
+let lastAppliedTheme = "";
+let lastBrandSignature = "";
+const displaySession = {
+  merchantId: "",
+  accountId: "",
+  theme: "",
+  locked: false,
+};
+
+function lockDisplaySession(merchantId = "", accountId = "", theme = "", { force = false } = {}) {
+  const mid = String(merchantId || "").trim();
+  const aid = String(accountId || "").trim();
+  const nextTheme = String(theme || "").trim();
+  const accountChanged = Boolean(
+    displaySession.locked
+    && aid
+    && displaySession.accountId
+    && aid !== displaySession.accountId,
+  );
+  if (accountChanged || force) {
+    displaySession.merchantId = mid || displaySession.merchantId;
+    displaySession.accountId = aid || displaySession.accountId;
+    displaySession.theme = nextTheme || displaySession.theme;
+    displaySession.locked = Boolean(displaySession.merchantId || displaySession.accountId);
+    return;
+  }
+  if (mid) displaySession.merchantId = mid;
+  if (aid) displaySession.accountId = aid;
+  if (nextTheme) displaySession.theme = nextTheme;
+  displaySession.locked = Boolean(displaySession.merchantId || displaySession.accountId);
+}
+
+function bootstrapDisplaySession() {
+  const mid = localStorage.getItem(deviceStorageKey("conlecta_display_merchant")) || "";
+  const aid = localStorage.getItem(deviceStorageKey("conlecta_display_account")) || "";
+  const settings = readLocalSettings();
+  lockDisplaySession(mid || settings.merchant_id || "", aid, settings.active_theme || "");
+}
+
+function displaySettingsSignature(settings = {}) {
+  return [
+    settings.merchant_id || "",
+    settings.active_theme || "",
+    settings.brand_logo_url || "",
+    JSON.stringify(settings.qris_frame || null),
+  ].join("|");
+}
+
+function scheduleRenderDisplay() {
+  clearTimeout(displayRenderTimer);
+  displayRenderTimer = setTimeout(() => {
+    displayRenderTimer = null;
+    renderDisplay();
+  }, 60);
+}
+
+function serverPayloadMatchesDisplaySession(data = {}) {
+  if (!displaySession.locked) return true;
+  const mid = String(data.merchant_id || data.settings?.merchant_id || "").trim();
+  const aid = String(data.account_id || "").trim();
+  if (displaySession.merchantId && mid && mid !== displaySession.merchantId) return false;
+  if (displaySession.accountId && aid && aid !== displaySession.accountId) return false;
+  return true;
+}
+
+function storageEventMatchesDisplaySession(key) {
+  if (!key) return false;
+  const did = getDeviceId();
+  const aid = displaySession.accountId || sessionAccountId();
+  const allowed = new Set([
+    deviceStorageKey("conlecta_active_qr"),
+    deviceStorageKey("conlecta_display_preview"),
+    deviceStorageKey("conlecta_display_event"),
+    deviceStorageKey("conlecta_display_merchant"),
+    deviceStorageKey("conlecta_display_account"),
+    CASHIER_NOTICE_STORAGE_KEY,
+    CLOSED_QR_STORAGE_KEY,
+    "conlecta_version",
+  ]);
+  if (allowed.has(key)) return true;
+  if (key === deviceStorageKey("conlecta_settings")) {
+    return !displaySession.accountId && !sessionAccountId();
+  }
+  if (aid && key === `conlecta_settings:${did}:${aid}`) return true;
+  if (!displaySession.accountId && key.startsWith(`conlecta_settings:${did}:`)) return false;
+  return false;
+}
+
+function reloadDisplayFromLocalStorage() {
+  const settings = readLocalSettings();
+  if (displaySession.theme) settings.active_theme = displaySession.theme;
+  qrState.settings = settings;
+  qrState.displayEvent = readLocalDisplayEvent();
+  qrState.cashierNotice = readLocalCashierNotice();
+  if (terminalDisplayEvent(qrState.displayEvent)) rememberClosedQr(qrState.displayEvent);
+  qrState.activeQr = readLocalQr();
+  qrState.version = readLocalVersion();
+  qrState.preview = readLocalPreview();
+}
+
 function applyDisplayTheme(themeId) {
   const theme = themeId && window.ConlectaTheme?.isValid?.(themeId)
     ? themeId
     : DISPLAY_DEFAULT_THEME;
+  if (theme === lastAppliedTheme) return theme;
+  lastAppliedTheme = theme;
+  displaySession.theme = theme;
   if (window.ConlectaTheme?.apply) {
     window.ConlectaTheme.apply(theme, { persist: false });
   } else {
@@ -429,11 +543,15 @@ function bootstrapDisplayTheme(settings = readLocalSettings()) {
 
 function applyBrand() {
   const settings = qrState.settings || {};
+  const theme = applyDisplayTheme(displaySession.theme || settings.active_theme);
+  const signature = displaySettingsSignature({ ...settings, active_theme: theme });
   const shop = settings.shop_name || "Conlecta";
   const address = [settings.shop_address, settings.shop_postcode].filter(Boolean).join(" | ") || "Point of Sale";
-  applyDisplayTheme(settings.active_theme);
-  applyDisplayQrisFrame(settings);
-  $$(".js-display-logo").forEach((img) => applyDisplayLogo(img, settings));
+  if (signature !== lastBrandSignature) {
+    lastBrandSignature = signature;
+    applyDisplayQrisFrame(settings);
+    $$(".js-display-logo").forEach((img) => applyDisplayLogo(img, settings));
+  }
   $("#display-shop").textContent = shop;
   $("#display-bottom-shop").textContent = shop;
   $("#display-bottom-address").textContent = address;
@@ -499,8 +617,14 @@ function applyVideoPlaylist() {
   }
 }
 
+let lastPaymentLogoSignature = "";
+
 function renderPaymentLogos() {
-  $("#display-payment-logos").innerHTML = paymentLogoPaths().map((src) => `
+  const paths = paymentLogoPaths();
+  const sig = paths.join("|");
+  if (sig === lastPaymentLogoSignature) return;
+  lastPaymentLogoSignature = sig;
+  $("#display-payment-logos").innerHTML = paths.map((src) => `
     <div class="payment-logo-cell">
       <span class="payment-logo-img"><img src="${escapeAttr(src)}" alt=""></span>
       <strong>${escapeHtml(paymentLogoLabel(src))}</strong>
@@ -704,30 +828,60 @@ function renderDisplay() {
     : "";
 }
 
-function applyDisplayPayload(data = {}) {
+function applyDisplayPayload(data = {}, options = {}) {
+  const fromCashier = options.fromCashier === true;
+  if (!fromCashier && displaySession.locked && !serverPayloadMatchesDisplaySession(data)) {
+    return;
+  }
+
   const previousMid = sessionMerchantId();
   const previousAid = sessionAccountId();
-  if (data.merchant_id || data.account_id) {
-    rememberDisplaySession(data.merchant_id, data.account_id);
-  } else if (data.settings?.merchant_id) {
-    rememberDisplaySession(data.settings.merchant_id, data.account_id || previousAid);
+  const nextMid = String(data.merchant_id || data.settings?.merchant_id || "").trim();
+  const nextAid = String(data.account_id || previousAid || "").trim();
+
+  if (nextMid || nextAid) {
+    rememberDisplaySession(nextMid || previousMid, nextAid || previousAid);
   }
-  const incomingSettings = data.settings || {};
+
+  const incomingSettings = { ...(data.settings || {}) };
   if (incomingSettings.merchant_id) {
-    const nextAid = String(data.account_id || sessionAccountId() || "").trim();
-    if (previousMid && previousMid !== String(incomingSettings.merchant_id).trim()) {
+    const accountChanged = Boolean(previousAid && nextAid && previousAid !== nextAid);
+    const merchantChanged = Boolean(previousMid && nextMid && previousMid !== nextMid);
+
+    if (merchantChanged) {
       localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
       localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
       localStorage.removeItem(deviceStorageKey("conlecta_display_preview"));
       qrState.activeQr = null;
       qrState.displayEvent = null;
       qrState.preview = null;
-    }
-    if (previousAid && nextAid && previousAid !== nextAid) {
+      lockDisplaySession(nextMid, nextAid, incomingSettings.active_theme || "", { force: true });
+      lastAppliedTheme = "";
+      lastBrandSignature = "";
+    } else if (accountChanged) {
       qrState.settings = {};
+      lockDisplaySession(nextMid, nextAid, incomingSettings.active_theme || "", { force: true });
+      lastAppliedTheme = "";
+      lastBrandSignature = "";
+    } else {
+      lockDisplaySession(
+        nextMid,
+        nextAid,
+        fromCashier ? (incomingSettings.active_theme || "") : (displaySession.theme || incomingSettings.active_theme || ""),
+      );
     }
+
+    if (fromCashier && incomingSettings.active_theme) {
+      displaySession.theme = incomingSettings.active_theme;
+      lastAppliedTheme = "";
+    } else if (displaySession.theme) {
+      incomingSettings.active_theme = displaySession.theme;
+    }
+
     qrState.settings = incomingSettings;
-    localStorage.setItem(settingsStorageKey(), JSON.stringify(incomingSettings));
+    if (fromCashier || accountChanged || merchantChanged) {
+      localStorage.setItem(settingsStorageKey(), JSON.stringify(incomingSettings));
+    }
   }
   if (Object.prototype.hasOwnProperty.call(data, "display_event")) {
     qrState.displayEvent = data.display_event;
@@ -736,31 +890,32 @@ function applyDisplayPayload(data = {}) {
     qrState.cashierNotice = data.cashier_notice || null;
   }
   if (Object.prototype.hasOwnProperty.call(data, "active_qr")) {
-    qrState.activeQr = sanitizeActiveQr(data.active_qr);
+    const next = sanitizeActiveQr(data.active_qr);
+    if (next || !hasQrPayload(qrState.activeQr) || fromCashier) {
+      qrState.activeQr = next;
+    }
   }
   if (data.preview) qrState.preview = data.preview;
   if (data.version) qrState.version = data.version;
   if (terminalDisplayEvent(qrState.displayEvent)) rememberClosedQr(qrState.displayEvent);
-  renderDisplay();
+  scheduleRenderDisplay();
 }
 
 async function refreshFromServer() {
   if (displayClosed) return;
   try {
     const data = await api("/api/display-state");
+    if (!serverPayloadMatchesDisplaySession(data)) return;
+    const serverSettings = { ...(data.settings || {}) };
+    if (displaySession.theme) serverSettings.active_theme = displaySession.theme;
     applyDisplayPayload({
       ...data,
+      settings: serverSettings,
       preview: readLocalPreview(),
     });
   } catch {
-    qrState.settings = readLocalSettings();
-    qrState.displayEvent = readLocalDisplayEvent();
-    qrState.cashierNotice = readLocalCashierNotice();
-    if (terminalDisplayEvent(qrState.displayEvent)) rememberClosedQr(qrState.displayEvent);
-    qrState.activeQr = readLocalQr();
-    qrState.version = readLocalVersion();
-    qrState.preview = readLocalPreview();
-    renderDisplay();
+    reloadDisplayFromLocalStorage();
+    scheduleRenderDisplay();
   }
 }
 
@@ -786,7 +941,7 @@ qrChannel?.addEventListener("message", (event) => {
       version: event.data.version,
       merchant_id: event.data.settings?.merchant_id,
       account_id: event.data.account_id,
-    });
+    }, { fromCashier: true });
   }
 });
 
@@ -795,25 +950,9 @@ window.addEventListener("storage", (event) => {
     shutdownDisplay();
     return;
   }
-  if (
-    event.key === deviceStorageKey("conlecta_active_qr")
-    || event.key === deviceStorageKey("conlecta_settings")
-    || event.key === settingsStorageKey()
-    || event.key === deviceStorageKey("conlecta_display_preview")
-    || event.key === deviceStorageKey("conlecta_display_event")
-    || event.key === CASHIER_NOTICE_STORAGE_KEY
-    || event.key === "conlecta_version"
-    || event.key === CLOSED_QR_STORAGE_KEY
-  ) {
-    qrState.settings = readLocalSettings();
-    qrState.displayEvent = readLocalDisplayEvent();
-    qrState.cashierNotice = readLocalCashierNotice();
-    if (terminalDisplayEvent(qrState.displayEvent)) rememberClosedQr(qrState.displayEvent);
-    qrState.activeQr = readLocalQr();
-    qrState.version = readLocalVersion();
-    qrState.preview = readLocalPreview();
-    renderDisplay();
-  }
+  if (!storageEventMatchesDisplaySession(event.key)) return;
+  reloadDisplayFromLocalStorage();
+  scheduleRenderDisplay();
 });
 
 function shutdownDisplay() {
@@ -839,9 +978,15 @@ function shutdownDisplay() {
   document.body.innerHTML = "";
 }
 
+bootstrapDisplaySession();
+qrState.settings = readLocalSettings();
+if (displaySession.theme) {
+  applyDisplayTheme(displaySession.theme);
+} else {
+  bootstrapDisplayTheme();
+}
 renderPaymentLogos();
 preloadQrisFrame();
-bootstrapDisplayTheme();
 updateClock();
 clockTimer = setInterval(updateClock, 1000);
 startSplash();
