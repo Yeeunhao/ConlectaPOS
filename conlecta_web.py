@@ -15,6 +15,7 @@ try:
 except Exception:
     pass
 import random
+import re
 import sys
 import threading
 import time
@@ -57,9 +58,16 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 
 SETTINGS_FILE = os.path.join(BASE_DIR, "pos_settings.json")
 WEB_STATE_FILE = os.path.join(BASE_DIR, "web_state.json")
-OAUTH_CREDS_FILE = os.path.join(BASE_DIR, "oauth_credentials.json")
-OAUTH_TOKEN_FILE = os.path.join(BASE_DIR, "oauth_token.json")
-GMAIL_TOKEN_FILE = os.path.join(BASE_DIR, "token.json")
+from conlecta_oauth import (
+    GMAIL_SCOPES,
+    GMAIL_TOKEN_FILE,
+    OAUTH_CREDS_FILE,
+    OAUTH_TOKEN_FILE,
+    SHEETS_SCOPES,
+    credentials_file_candidates,
+    load_google_credentials,
+    token_file_candidates,
+)
 
 SPREADSHEET_ID = "1wVrAETyYaK4Nj-qfZofT6Ki9eToeiVpmaKY3qu1bzlQ"
 SHEET_STOCK = "Stock Conlecta"
@@ -425,6 +433,152 @@ def _ensure_daily_session(state, merchant_id=None):
     return bucket
 
 
+DEVICE_SETTING_KEYS = frozenset({
+    "payment_image_paths",
+    "payment_image_path",
+    "video_playlist",
+    "active_theme",
+})
+
+
+def _device_settings_root(state):
+    root = state.setdefault("device_settings", {})
+    if not isinstance(root, dict):
+        root = {}
+        state["device_settings"] = root
+    return root
+
+
+def get_device_settings(state, device_id):
+    if not device_id:
+        return {}
+    bucket = _device_settings_root(state).get(device_id)
+    return dict(bucket) if isinstance(bucket, dict) else {}
+
+
+def set_device_settings(state, device_id, patch, merchant_id=None, account_id=None):
+    if not device_id:
+        return {}
+    clean = {k: v for k, v in dict(patch or {}).items() if k in DEVICE_SETTING_KEYS}
+    if not clean and merchant_id is None and account_id is None:
+        return get_device_settings(state, device_id)
+    root = _device_settings_root(state)
+    current = dict(root.get(device_id) or {})
+    current.update(clean)
+    if merchant_id is not None:
+        current["merchant_id"] = normalize_merchant_id(merchant_id)
+    if account_id is not None:
+        current["account_id"] = str(account_id or "")
+    current["updated_ts"] = time.time()
+    root[device_id] = current
+    return current
+
+
+def merge_settings_with_device(merchant_settings, device_settings):
+    merged = dict(merchant_settings or {})
+    device = dict(device_settings or {})
+    payment_paths = [str(path or "").strip() for path in device.get("payment_image_paths", []) if str(path or "").strip()]
+    if payment_paths:
+        merged["payment_image_paths"] = payment_paths
+        merged["payment_image_path"] = str(device.get("payment_image_path") or payment_paths[0]).strip() or payment_paths[0]
+    elif str(device.get("payment_image_path") or "").strip():
+        merged["payment_image_path"] = str(device.get("payment_image_path") or "").strip()
+        merged["payment_image_paths"] = [merged["payment_image_path"]]
+    if device.get("video_playlist"):
+        merged["video_playlist"] = list(device.get("video_playlist") or [])
+    if str(device.get("active_theme") or "").strip():
+        merged["active_theme"] = str(device.get("active_theme") or "").strip()
+    return merged
+
+
+def _active_qr_store(state, merchant_id):
+    bucket = _state_tenant_bucket(state, merchant_id)
+    store = bucket.setdefault("active_qrs_by_device", {})
+    if not isinstance(store, dict):
+        store = {}
+        bucket["active_qrs_by_device"] = store
+    return store
+
+
+def _display_event_store(state, merchant_id):
+    bucket = _state_tenant_bucket(state, merchant_id)
+    store = bucket.setdefault("display_events_by_device", {})
+    if not isinstance(store, dict):
+        store = {}
+        bucket["display_events_by_device"] = store
+    return store
+
+
+def _clear_device_session_state(state, merchant_id, device_id):
+    if not device_id:
+        return
+    mid = normalize_merchant_id(merchant_id)
+    _active_qr_store(state, mid).pop(device_id, None)
+    _display_event_store(state, mid).pop(device_id, None)
+    bucket = _state_tenant_bucket(state, mid)
+    legacy = bucket.get("active_qr") or {}
+    if str(legacy.get("device_id") or "") == str(device_id):
+        bucket["active_qr"] = None
+    legacy_event = bucket.get("display_event") or {}
+    if str(legacy_event.get("device_id") or "") == str(device_id):
+        bucket["display_event"] = None
+    _sync_legacy_state_for_default(state, mid)
+
+
+def set_active_qr_for_session(state, merchant_id, device_id, account_id, active):
+    mid = normalize_merchant_id(merchant_id)
+    if not device_id:
+        bucket = _state_tenant_bucket(state, mid)
+        bucket["active_qr"] = active
+        _sync_legacy_state_for_default(state, mid)
+        return active
+    store = _active_qr_store(state, mid)
+    if not active:
+        store.pop(device_id, None)
+    else:
+        payload = dict(active)
+        payload["device_id"] = device_id
+        payload["account_id"] = str(account_id or "")
+        store[device_id] = payload
+    bucket = _state_tenant_bucket(state, mid)
+    legacy = bucket.get("active_qr") or {}
+    if not legacy.get("device_id") or str(legacy.get("device_id")) == str(device_id):
+        bucket["active_qr"] = None
+    _sync_legacy_state_for_default(state, mid)
+    return active
+
+
+def get_active_qr_for_session(state, merchant_id=None, device_id=None, account_id=None, require_account=True):
+    mid = normalize_merchant_id(merchant_id)
+    bucket = _state_tenant_bucket(state, mid)
+    active = None
+    if device_id:
+        active = (_active_qr_store(state, mid).get(device_id) or None)
+    if not active:
+        legacy = bucket.get("active_qr")
+        if legacy:
+            legacy_device = str(legacy.get("device_id") or "")
+            legacy_account = str(legacy.get("account_id") or "")
+            if device_id and legacy_device and legacy_device != str(device_id):
+                legacy = None
+            elif require_account and account_id and legacy_account and legacy_account != str(account_id):
+                legacy = None
+        active = legacy
+    if active and require_account and account_id:
+        stored_account = str(active.get("account_id") or "")
+        if stored_account and stored_account != str(account_id):
+            return None
+    if active and _is_closed_qr(bucket, active):
+        _mark_closed_qr(bucket, active)
+        if device_id:
+            _active_qr_store(state, mid).pop(device_id, None)
+        if bucket.get("active_qr") and _qr_identity_keys(bucket.get("active_qr")) == _qr_identity_keys(active):
+            bucket["active_qr"] = None
+        _sync_legacy_state_for_default(state, mid)
+        return None
+    return active
+
+
 def _sync_legacy_state_for_default(state, merchant_id=None):
     mid = normalize_merchant_id(merchant_id)
     if mid != DEFAULT_MERCHANT_ID:
@@ -528,11 +682,11 @@ def _write_settings_for_merchant(settings, merchant_id=None):
 def save_settings(data, merchant_id=None):
     mid = normalize_merchant_id(merchant_id or current_merchant_id())
     current = load_settings(mid)
-    allowed = set(DEFAULT_SETTINGS)
+    allowed = set(DEFAULT_SETTINGS) - DEVICE_SETTING_KEYS
     for key, value in _strip_legacy_settings(data).items():
         if key in allowed:
             current[key] = value
-    log.info("Settings saved from web UI")
+    log.info("Settings saved from web UI merchant=%s", mid)
     sync_merchant_from_settings(current, mid)
     return _write_settings_for_merchant(current, mid)
 
@@ -578,34 +732,9 @@ def get_gspread_client():
     global _gspread_client
     if _gspread_client:
         return _gspread_client
-    if not GSHEETS_AVAILABLE or not os.path.isfile(OAUTH_CREDS_FILE):
+    if not GSHEETS_AVAILABLE or not credentials_file_candidates():
         return None
-    try:
-        from google.oauth2.credentials import Credentials
-        from google.auth.transport.requests import Request
-    except Exception as exc:
-        log.warning("Google auth import failed: %s", exc)
-        return None
-
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive.file",
-    ]
-    creds = None
-    if os.path.isfile(OAUTH_TOKEN_FILE):
-        try:
-            creds = Credentials.from_authorized_user_file(OAUTH_TOKEN_FILE, scopes)
-        except Exception as exc:
-            log.warning("Could not load Google token: %s", exc)
-    if creds and not creds.valid and creds.expired and creds.refresh_token:
-        try:
-            creds.refresh(Request())
-            with open(OAUTH_TOKEN_FILE, "w", encoding="utf-8") as f:
-                f.write(creds.to_json())
-            log.info("Google token refreshed")
-        except Exception as exc:
-            log.warning("Google token refresh failed: %s", exc)
-            creds = None
+    creds, _path = load_google_credentials(SHEETS_SCOPES)
     if not creds or not creds.valid:
         return None
     try:
@@ -1040,35 +1169,52 @@ def _is_closed_qr(bucket, source=None):
     return any(key in closed for key in _qr_identity_keys(source))
 
 
-def current_active_qr(state, merchant_id=None):
-    mid = normalize_merchant_id(merchant_id)
-    bucket = _state_tenant_bucket(state, mid)
-    active = bucket.get("active_qr")
-    if active and _is_closed_qr(bucket, active):
-        _mark_closed_qr(bucket, active)
-        bucket["active_qr"] = None
-        _sync_legacy_state_for_default(state, mid)
-        return None
-    return active
+def current_active_qr(state, merchant_id=None, device_id=None, account_id=None, require_account=True):
+    return get_active_qr_for_session(
+        state,
+        merchant_id,
+        device_id=device_id,
+        account_id=account_id,
+        require_account=require_account,
+    )
 
 
-def set_display_event(state, merchant_id, kind, source=None):
+def set_display_event(state, merchant_id, kind, source=None, device_id=None):
     mid = normalize_merchant_id(merchant_id)
     bucket = _state_tenant_bucket(state, mid)
     event = _display_event_payload(kind, source)
     event["merchant_id"] = mid
-    bucket["display_event"] = event
+    if device_id:
+        event["device_id"] = device_id
+        _display_event_store(state, mid)[device_id] = event
+        if bucket.get("display_event") and str((bucket.get("display_event") or {}).get("device_id") or "") in ("", str(device_id)):
+            bucket["display_event"] = None
+    else:
+        bucket["display_event"] = event
     if event.get("type") in {"success", "dismissed"}:
         _mark_closed_qr(bucket, event)
-        if bucket.get("active_qr") and _is_closed_qr(bucket, bucket.get("active_qr")):
+        if device_id:
+            _active_qr_store(state, mid).pop(device_id, None)
+        elif bucket.get("active_qr") and _is_closed_qr(bucket, bucket.get("active_qr")):
             bucket["active_qr"] = None
     _sync_legacy_state_for_default(state, mid)
     return event
 
 
-def clear_display_event(state, merchant_id=None, txn_id=None):
+def clear_display_event(state, merchant_id=None, txn_id=None, device_id=None):
     mid = normalize_merchant_id(merchant_id)
     bucket = _state_tenant_bucket(state, mid)
+    if device_id:
+        store = _display_event_store(state, mid)
+        event = store.get(device_id)
+        wanted_txn = str(txn_id or "").strip()
+        if event and wanted_txn:
+            event_txn = str(event.get("txn_id") or event.get("qr_id") or "").strip()
+            if event_txn and event_txn != wanted_txn:
+                return event
+        store.pop(device_id, None)
+        _sync_legacy_state_for_default(state, mid)
+        return None
     event = bucket.get("display_event")
     wanted_txn = str(txn_id or "").strip()
     if event and wanted_txn:
@@ -1080,12 +1226,15 @@ def clear_display_event(state, merchant_id=None, txn_id=None):
     return None
 
 
-def current_display_event(state, merchant_id=None):
+def current_display_event(state, merchant_id=None, device_id=None):
     mid = normalize_merchant_id(merchant_id)
     bucket = _state_tenant_bucket(state, mid)
-    event = bucket.get("display_event")
+    event = (_display_event_store(state, mid).get(device_id) if device_id else bucket.get("display_event"))
     if event and _display_event_expired(event):
-        bucket["display_event"] = None
+        if device_id:
+            _display_event_store(state, mid).pop(device_id, None)
+        else:
+            bucket["display_event"] = None
         _sync_legacy_state_for_default(state, mid)
         return None
     return event
@@ -1142,11 +1291,21 @@ def update_cashier_payment_notice(state, merchant_id=None, data=None):
     return notice
 
 
-def display_state_merchant_id(state):
+def display_state_merchant_id(state, device_id=None):
     auth = state.get("auth") or {}
     if auth.get("merchant_id"):
         return normalize_merchant_id(auth.get("merchant_id"))
     tenants = state.get("tenant_data") if isinstance(state.get("tenant_data"), dict) else {}
+    if device_id:
+        for mid, bucket in tenants.items():
+            if not isinstance(bucket, dict):
+                continue
+            store = bucket.get("active_qrs_by_device") or {}
+            if store.get(device_id):
+                return normalize_merchant_id(mid)
+            event = (bucket.get("display_events_by_device") or {}).get(device_id)
+            if event and not _display_event_expired(event):
+                return normalize_merchant_id(mid)
     for mid, bucket in tenants.items():
         if not isinstance(bucket, dict):
             continue
@@ -1266,16 +1425,12 @@ def _client_activity_ts(value):
     return ts
 
 
-def _active_qr_for_auth(state, auth):
+def _active_qr_for_auth(state, auth, device_id=None):
     if not auth:
         return None
     mid = normalize_merchant_id(auth.get("merchant_id"))
-    active = current_active_qr(state, mid)
-    if not active:
-        return None
-    if normalize_merchant_id(active.get("merchant_id") or mid) != mid:
-        return None
-    return active
+    did = str(device_id or auth.get("device_id") or "").strip()
+    return get_active_qr_for_session(state, mid, did, auth.get("id"), require_account=True)
 
 
 def _logout_auth_from_state(state, auth=None, reason=""):
@@ -1635,7 +1790,7 @@ def _clear_other_merchant_admins(ws, merchant_id, keep_account_id=""):
 
 
 def verify_admin_password(password, mid):
-    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    mid = normalize_merchant_id(mid or current_merchant_id())
     admin = _merchant_admin_account(mid)
     if not admin:
         return False, f"Admin merchant {mid} belum tersedia di database account."
@@ -1644,8 +1799,8 @@ def verify_admin_password(password, mid):
     return True, "OK"
 
 
-def verify_system_log_password(password):
-    auth = current_auth()
+def verify_system_log_password(password, auth=None):
+    auth = auth or current_auth()
     account_id = str(auth.get("id") or "").strip()
     if not account_id:
         return False, "Login ulang sebelum membuka log."
@@ -1655,6 +1810,25 @@ def verify_system_log_password(password):
     if str(password or "").strip() != str(account.get("password") or "").strip():
         return False, "Password account salah."
     return True, "OK"
+
+
+def _log_line_matches_session(line, auth=None, device_id=""):
+    auth = auth or {}
+    start_ts = _auth_log_start_ts(auth)
+    line_ts = _log_line_timestamp(line)
+    if start_ts and line_ts and line_ts < start_ts:
+        return False
+    account_id = str(auth.get("id") or "").strip()
+    if account_id:
+        match = re.search(r"account=([^\s,]+)", line)
+        if match and match.group(1) not in {account_id, "-"}:
+            return False
+    device_id = str(device_id or auth.get("device_id") or "").strip()
+    if device_id:
+        match = re.search(r"device=([^\s,]+)", line)
+        if match and match.group(1) not in {device_id, "-"}:
+            return False
+    return True
 
 
 def create_account_record(account_name, email, password, merchant_id=None, admin_account=False):
@@ -1853,26 +2027,8 @@ def save_email_template(key, data):
 
 
 def _load_gmail_credentials():
-    try:
-        from google.oauth2.credentials import Credentials
-        from google.auth.transport.requests import Request
-    except Exception:
-        return None
-    scopes = ["https://www.googleapis.com/auth/gmail.send"]
-    for path in (GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE):
-        if not os.path.isfile(path):
-            continue
-        try:
-            creds = Credentials.from_authorized_user_file(path, scopes)
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(creds.to_json())
-            if creds and creds.valid:
-                return creds
-        except Exception as exc:
-            log.warning("Gmail token skipped %s: %s", path, exc)
-    return None
+    creds, _path = load_google_credentials(GMAIL_SCOPES)
+    return creds
 
 
 def _fill_email_placeholders(text, values, escape_html=False):
@@ -2579,12 +2735,18 @@ def delete_vendor(vendor_id, merchant_id=None):
 
 
 def make_qr_data_uri(data):
-    if not qrcode:
+    text = str(data or "").strip()
+    if not text:
         return ""
-    img = qrcode.make(str(data or "CONLECTA"))
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    if qrcode:
+        try:
+            img = qrcode.make(text)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+        except Exception:
+            log.warning("qrcode image generation failed; using remote QR fallback", exc_info=True)
+    return f"https://api.qrserver.com/v1/create-qr-code/?size=320x320&data={quote(text)}"
 
 
 def _json_response_or_raw(response):
@@ -2816,16 +2978,18 @@ def load_and_validate_stock_for_items(items, merchant_id=None):
     return products, lookup
 
 
-def next_customer_name(merchant_id=None):
-    mid = merchant_id or current_merchant_id()
-    state = load_state()
+def next_customer_name(state=None, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    if state is None:
+        state = load_state()
     bucket = _ensure_daily_session(state, mid)
 
     seq = int(bucket.get("customer_seq", 0)) + 1
     bucket["customer_seq"] = seq
     save_state(state)
 
-    return f"Customer {seq:03d}"
+    prefix = str(load_settings(mid).get("default_customer_prefix") or "Conlecta Customer").strip() or "Conlecta Customer"
+    return f"{prefix} {seq:03d}"
 
 
 def _sheet_headers(ws, required_headers):
@@ -3168,7 +3332,7 @@ def send_receipt_email(record, email):
         log.warning("send_receipt_email call failed: %s", exc)
 
 
-def save_transaction(payload, payment_method, merchant_id=None, auth=None):
+def save_transaction(payload, payment_method, merchant_id=None, auth=None, device_id=None):
     global _stock_cache, _stock_cache_ts
     payment_method = normalize_payment_method(payment_method)
     state = load_state()
@@ -3232,10 +3396,8 @@ def save_transaction(payload, payment_method, merchant_id=None, auth=None):
             history.insert(0, existing)
             bucket["history"] = history[:1000]
         if payment_method == PAYMENT_METHOD_QRIS:
-            active = bucket.get("active_qr") or {}
             _mark_closed_qr(bucket, existing)
-            if not active or str(active.get("txn_id") or "") == txn_id:
-                bucket["active_qr"] = None
+            set_active_qr_for_session(state, mid, device_id, auth.get("id") if auth else None, None)
         _sync_legacy_state_for_default(state, mid)
         save_state(state)
         save_history_to_sheets(existing)
@@ -3257,8 +3419,8 @@ def save_transaction(payload, payment_method, merchant_id=None, auth=None):
     session["sales"] = _int_money(session.get("sales")) + 1
     session["revenue"] = _int_money(session.get("revenue")) + amount
     if payment_method == PAYMENT_METHOD_QRIS:
-        bucket["active_qr"] = None
-    set_display_event(state, mid, "success", record)
+        set_active_qr_for_session(state, mid, device_id, auth.get("id") if auth else None, None)
+    set_display_event(state, mid, "success", record, device_id=device_id)
 
     changed_stock_names = set()
     for item in items:
@@ -3277,7 +3439,7 @@ def save_transaction(payload, payment_method, merchant_id=None, auth=None):
     save_history_to_sheets(record)
     if customer_email:
         threading.Thread(target=lambda: send_receipt_email(record, customer_email), daemon=True).start()
-    log.info("%s payment success: txn=%s amount=%s", payment_method, txn_id, amount)
+    log.info("%s payment success: txn=%s amount=%s account=%s device=%s", payment_method, txn_id, amount, (auth or {}).get("id") or "-", device_id or "-")
     return record
 
 
@@ -3659,11 +3821,11 @@ def vendor_invoice_payload(vendor_id="", vendor_name="", date_from="", date_to="
     }
 
 
-def active_qr_status(qr_id=None):
-    mid = current_merchant_id()
+def active_qr_status(qr_id=None, merchant_id=None, device_id=None, account_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
     state = load_state()
     bucket = _state_tenant_bucket(state, mid)
-    active = current_active_qr(state, mid)
+    active = get_active_qr_for_session(state, mid, device_id, account_id, require_account=bool(account_id))
     if not active:
         save_state(state)
         return {"status": "NONE", "active_qr": None}
@@ -3679,9 +3841,9 @@ def active_qr_status(qr_id=None):
         active["raw_status"] = qris
         if str(status or "").strip().lower() in PAID_QRIS_STATUSES:
             _mark_closed_qr(bucket, active)
-            bucket["active_qr"] = None
+            set_active_qr_for_session(state, mid, device_id, account_id, None)
         else:
-            bucket["active_qr"] = active
+            set_active_qr_for_session(state, mid, device_id or active.get("device_id"), account_id or active.get("account_id"), active)
         _sync_legacy_state_for_default(state, mid)
         save_state(state)
     except Exception as exc:
@@ -4258,9 +4420,8 @@ def _auth_log_start_ts(auth=None):
     return _auth_timestamp(auth.get("log_start_ts")) or _auth_timestamp(auth.get("login_ts"))
 
 
-def load_logs(limit=220, auth=None):
+def load_logs(limit=220, auth=None, device_id=""):
     auth = auth or current_auth()
-    start_ts = _auth_log_start_ts(auth)
     paths = [
         os.path.join(LOGS_DIR, "conlecta_web.log"),
         os.path.join(LOGS_DIR, "conlecta_system.log"),
@@ -4276,23 +4437,26 @@ def load_logs(limit=220, auth=None):
             pass
     scoped = []
     for line in lines:
-        if start_ts:
-            line_ts = _log_line_timestamp(line)
-            if line_ts and line_ts < start_ts:
-                continue
+        if not _log_line_matches_session(line, auth, device_id):
+            continue
         scoped.append(line.rstrip("\n"))
     return scoped[-limit:]
 
 
-def clear_current_log_window():
-    state = load_state()
-    auth = state.get("auth") or {}
-    if not auth:
+def clear_current_log_window(auth=None, device_id="", state=None):
+    state = state or load_state()
+    auth = dict(auth or current_auth())
+    if not auth.get("id"):
         return
     auth["log_start_ts"] = time.time()
-    state["auth"] = auth
+    device_id = str(device_id or auth.get("device_id") or "").strip()
+    if device_id:
+        auth["device_id"] = device_id
+        state.setdefault("auth_by_device", {})[device_id] = auth
+    else:
+        state["auth"] = auth
     save_state(state)
-    log.info("Session log window cleared for account=%s", auth.get("id") or "-")
+    log.info("Session log window cleared for account=%s device=%s", auth.get("id") or "-", device_id or "-")
 
 
 def public_asset_url(path, fallback_logo=False):
@@ -4362,13 +4526,23 @@ def video_playlist_urls(settings=None):
 
 def scan_asset_payload():
     video_files = []
-    for path in sorted(glob.glob(os.path.join(VIDEO_FOLDER, "*.mp4"))):
-        video_files.append({
-            "name": os.path.basename(path),
-            "url": public_asset_url(path),
-            "path": path,
-            "size_mb": round(os.path.getsize(path) / (1024 * 1024), 1),
-        })
+    patterns = [os.path.join(VIDEO_FOLDER, "*.mp4")]
+    for device_dir in glob.glob(os.path.join(VIDEO_FOLDER, "*")):
+        if os.path.isdir(device_dir):
+            patterns.append(os.path.join(device_dir, "*.mp4"))
+    seen = set()
+    for pattern in patterns:
+        for path in sorted(glob.glob(pattern)):
+            norm = os.path.normcase(os.path.abspath(path))
+            if norm in seen:
+                continue
+            seen.add(norm)
+            video_files.append({
+                "name": os.path.basename(path),
+                "url": public_asset_url(path),
+                "path": path,
+                "size_mb": round(os.path.getsize(path) / (1024 * 1024), 1),
+            })
     return {
         "videos": video_files,
         "payment_icons": [{"name": os.path.basename(path), "url": public_asset_url(path), "path": path} for path in default_payment_icon_paths()],
@@ -4382,12 +4556,15 @@ def _decode_data_file(data_url):
     return base64.b64decode(raw)
 
 
-def save_payment_images(data):
-    mid = current_merchant_id()
+def save_payment_images(data, merchant_id=None, device_id=None, state=None):
+    state = state or load_state()
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
     files = data.get("files") or []
     if not files:
         raise ValueError("Pilih minimal satu gambar payment.")
-    dst_dir = os.path.join(PAYMENT_UPLOAD_FOLDER, mid)
+    if not device_id:
+        raise ValueError("Device ID tidak valid untuk custom payment image.")
+    dst_dir = os.path.join(PAYMENT_UPLOAD_FOLDER, mid, device_id)
     os.makedirs(dst_dir, exist_ok=True)
     saved = []
     for index, file_data in enumerate(files, start=1):
@@ -4401,23 +4578,36 @@ def save_payment_images(data):
         with open(dst, "wb") as f:
             f.write(_decode_data_file(file_data.get("data_url")))
         saved.append(dst)
-    settings = load_settings(mid)
-    settings["payment_image_paths"] = saved
-    settings["payment_image_path"] = saved[0] if saved else ""
-    return _write_settings_for_merchant(settings, mid)
+    device_settings = set_device_settings(
+        state,
+        device_id,
+        {
+            "payment_image_paths": saved,
+            "payment_image_path": saved[0] if saved else "",
+        },
+        merchant_id=mid,
+    )
+    save_state(state)
+    merged = merge_settings_with_device(load_settings(mid), device_settings)
+    log.info("Payment images saved for merchant=%s device=%s count=%s", mid, device_id, len(saved))
+    return settings_payload(merged, mid)
 
 
-def save_video_upload(data):
+def save_video_upload(data, device_id=None, state=None):
+    state = state or load_state()
+    if not device_id:
+        raise ValueError("Device ID tidak valid untuk upload video.")
     filename = os.path.basename(str(data.get("filename") or "video.mp4"))
     ext = os.path.splitext(filename)[1].lower()
     if ext not in (".mp4", ".mov", ".mkv", ".avi", ".webm"):
         ext = ".mp4"
-    safe_name = f"web_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
-    os.makedirs(VIDEO_FOLDER, exist_ok=True)
-    dst = os.path.join(VIDEO_FOLDER, safe_name)
+    safe_name = f"{device_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
+    device_dir = os.path.join(VIDEO_FOLDER, device_id)
+    os.makedirs(device_dir, exist_ok=True)
+    dst = os.path.join(device_dir, safe_name)
     with open(dst, "wb") as f:
         f.write(_decode_data_file(data.get("data_url")))
-    return {"name": os.path.basename(dst), "url": public_asset_url(dst), "path": dst}
+    return {"name": os.path.basename(dst), "url": public_asset_url(dst), "path": dst, "device_id": device_id}
 
 
 def _video_path_from_value(value):
@@ -4441,15 +4631,31 @@ def _video_path_from_value(value):
     return full
 
 
-def remove_video_asset(data):
-    mid = current_merchant_id()
+def _video_belongs_to_device(path, device_id=""):
+    if not path or not device_id:
+        return False
+    device_root = os.path.abspath(os.path.join(VIDEO_FOLDER, device_id))
+    try:
+        common = os.path.commonpath([os.path.normcase(os.path.abspath(path)), os.path.normcase(device_root)])
+    except Exception:
+        return False
+    return common == os.path.normcase(device_root) or f"/{device_id}/" in str(path).replace("\\", "/") or os.path.basename(path).startswith(f"{device_id}_")
+
+
+def remove_video_asset(data, merchant_id=None, device_id=None, state=None):
+    state = state or load_state()
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    if not device_id:
+        raise ValueError("Device ID tidak valid untuk hapus video.")
     target = _video_path_from_value(data.get("path") or data.get("url"))
     if not target:
         raise ValueError("Video tidak valid.")
+    if not _video_belongs_to_device(target, device_id):
+        raise ValueError("Video ini bukan milik device saat ini.")
     target_url = public_asset_url(target)
-    settings = load_settings(mid)
+    device_settings = get_device_settings(state, device_id)
     playlist = []
-    for value in settings.get("video_playlist", []) or []:
+    for value in device_settings.get("video_playlist", []) or []:
         value_path = _video_path_from_value(value)
         value_url = public_asset_url(value_path) if value_path else str(value or "")
         if os.path.normcase(value_path or "") == os.path.normcase(target):
@@ -4457,17 +4663,18 @@ def remove_video_asset(data):
         if target_url and value_url == target_url:
             continue
         playlist.append(value)
-    settings["video_playlist"] = playlist
+    set_device_settings(state, device_id, {"video_playlist": playlist}, merchant_id=mid)
+    save_state(state)
     if os.path.isfile(target):
         os.remove(target)
-    saved = _write_settings_for_merchant(settings, mid)
-    log.info("Video removed from web settings: merchant=%s file=%s", mid, os.path.basename(target))
-    return {"settings": saved, "assets": scan_asset_payload()}
+    merged = merge_settings_with_device(load_settings(mid), get_device_settings(state, device_id))
+    log.info("Video removed from device settings: merchant=%s device=%s file=%s", mid, device_id, os.path.basename(target))
+    return {"settings": settings_payload(merged, mid), "assets": scan_asset_payload()}
 
 
-def settings_payload(settings=None, merchant_id=None):
+def settings_payload(settings=None, merchant_id=None, device_settings=None):
     mid = normalize_merchant_id(merchant_id or (settings or {}).get("merchant_id") or current_merchant_id())
-    settings = dict(settings or load_settings(mid))
+    settings = merge_settings_with_device(dict(settings or load_settings(mid)), device_settings or {})
     merchant = merchant_payload(mid)
     if merchant.get("name") and (not settings.get("shop_name") or (mid != DEFAULT_MERCHANT_ID and settings.get("shop_name") == DEFAULT_MERCHANT_NAME)):
         settings["shop_name"] = merchant["name"]
@@ -4487,9 +4694,9 @@ def settings_payload(settings=None, merchant_id=None):
     return settings
 
 
-def display_settings_payload(merchant_id=None):
+def display_settings_payload(merchant_id=None, device_settings=None):
     mid = normalize_merchant_id(merchant_id or current_merchant_id())
-    settings = dict(load_settings(mid))
+    settings = merge_settings_with_device(dict(load_settings(mid)), device_settings or {})
     merchant = merchant_payload(mid)
     settings["merchant_id"] = mid
     settings["merchant_name"] = settings.get("shop_name") or merchant.get("name") or DEFAULT_MERCHANT_NAME
@@ -4542,7 +4749,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Conlecta-Device-Id")
         super().end_headers()
 
     server_version = "ConlectaWeb/2.0"
@@ -4572,22 +4779,32 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
     
-    def device_id(self):
-        return self.headers.get("X-Conlecta-Device-Id", "").strip()
-    def get_device_auth(self, state):
-        did = self.device_id()
+    def device_id(self, payload=None):
+        did = self.headers.get("X-Conlecta-Device-Id", "").strip()
+        if not did and isinstance(payload, dict):
+            did = str(payload.get("device_id") or "").strip()
+        return did
+
+    def get_device_auth(self, state, payload=None):
+        did = self.device_id(payload)
         if not did:
             return None
         return (state.get("auth_by_device") or {}).get(did)
     
-    def set_device_auth(self, state, auth):
-        did = self.device_id()
+    def set_device_auth(self, state, auth, payload=None):
+        did = self.device_id(payload)
         if not did:
             return
+        auth = dict(auth or {})
+        auth["device_id"] = did
+        prev = (state.get("auth_by_device") or {}).get(did) or {}
+        prev_id = str(prev.get("id") or "")
+        new_id = str(auth.get("id") or "")
         auth_by_device = state.setdefault("auth_by_device", {})
         auth_by_device[did] = auth
-
         state["auth"] = None
+        if new_id and prev_id and prev_id != new_id:
+            _clear_device_session_state(state, auth.get("merchant_id"), did)
 
 
     def read_json(self):
@@ -4666,15 +4883,16 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
     def handle_api_get(self, path, query):
         if path == "/api/display-state":
             state = load_state()
-            mid = display_state_merchant_id(state)
+            did = self.device_id()
+            mid = display_state_merchant_id(state, device_id=did or None)
             bucket = _state_tenant_bucket(state, mid)
-            display_event = current_display_event(state, mid)
+            display_event = current_display_event(state, mid, device_id=did or None)
             cashier_notice = current_cashier_payment_notice(state, mid)
-            active_qr = current_active_qr(state, mid)
+            active_qr = get_active_qr_for_session(state, mid, did or None, account_id=None, require_account=False)
             save_state(state)
             return self.send_json({
                 "ok": True,
-                "settings": display_settings_payload(mid),
+                "settings": display_settings_payload(mid, get_device_settings(state, did) if did else {}),
                 "active_qr": active_qr,
                 "display_event": display_event,
                 "cashier_notice": cashier_notice,
@@ -4726,8 +4944,10 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 })
 
             bucket = _ensure_daily_session(state, mid)
-            display_event = current_display_event(state, mid)
-            active_qr = current_active_qr(state, mid)
+            did = self.device_id()
+            device_settings = get_device_settings(state, did) if did else {}
+            display_event = current_display_event(state, mid, device_id=did or None)
+            active_qr = _active_qr_for_auth(state, auth, did) if auth else None
 
             products = load_stock(merchant_id=mid)
             history = load_history_for_merchant(mid)
@@ -4741,7 +4961,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json({
                 "ok": True,
                 "auth": auth,
-                "settings": settings_payload(merchant_id=mid),
+                "settings": settings_payload(merchant_id=mid, device_settings=device_settings),
                 "products": products,
                 "vendors": vendors,
                 "history": history,
@@ -4767,7 +4987,16 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             mid = normalize_merchant_id((auth or {}).get("merchant_id"))
             return self.send_json({"ok": True, "vendors": load_vendors(merchant_id=mid)})
         if path == "/api/assets":
-            return self.send_json({"ok": True, "assets": scan_asset_payload(), "settings": settings_payload()})
+            state = load_state()
+            auth = self.get_device_auth(state)
+            did = self.device_id()
+            mid = normalize_merchant_id((auth or {}).get("merchant_id") or current_merchant_id())
+            device_settings = get_device_settings(state, did) if did else {}
+            return self.send_json({
+                "ok": True,
+                "assets": scan_asset_payload(),
+                "settings": settings_payload(merchant_id=mid, device_settings=device_settings),
+            })
         if path == "/api/email-templates":
             return self.send_json({"ok": True, "templates": load_email_templates()})
         if path == "/api/history":
@@ -4785,11 +5014,13 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **payload})
         if path == "/api/logs":
+            state = load_state()
+            auth = self.get_device_auth(state)
             password = (query.get("admin_password") or [""])[0]
-            ok, msg = verify_system_log_password(password)
+            ok, msg = verify_system_log_password(password, auth=auth)
             if not ok:
                 return self.send_error_json(msg, 403)
-            return self.send_json({"ok": True, "logs": load_logs(260)})
+            return self.send_json({"ok": True, "logs": load_logs(260, auth=auth, device_id=self.device_id())})
         if path == "/api/qris/env":
             env_name, detail = qris_proxy_environment()
             return self.send_json({"ok": True, "environment": env_name, "detail": detail})
@@ -4812,7 +5043,22 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_bytes(make_vendor_invoice_pdf(payload), "application/pdf", f"vendor-invoice-{name}.pdf")
         if path == "/api/qr/status":
             qr_id = (query.get("id") or [""])[0]
-            return self.send_json({"ok": True, **active_qr_status(qr_id)})
+            state = load_state()
+            auth = self.get_device_auth(state)
+            if auth:
+                state["auth"] = auth
+                auth = validate_stored_auth(state)
+                state["auth"] = None
+            mid = normalize_merchant_id((auth or {}).get("merchant_id") or current_merchant_id())
+            return self.send_json({
+                "ok": True,
+                **active_qr_status(
+                    qr_id,
+                    merchant_id=mid,
+                    device_id=self.device_id(),
+                    account_id=(auth or {}).get("id"),
+                ),
+            })
         if path == "/api/receipt.pdf":
             txn_id = (query.get("txn_id") or [""])[0]
             record = find_record(txn_id)
@@ -4896,13 +5142,13 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json({"ok": True})
         if path == "/api/auth/heartbeat":
             state = load_state()
-            auth = self.get_device_auth(state)
+            auth = self.get_device_auth(state, data)
             if auth:
                 state["auth"] = auth
                 auth = validate_stored_auth(state, refresh_seen=True, activity_ts=data.get("last_activity_ts"))
                 state["auth"] = None
                 if auth:
-                    self.set_device_auth(state, auth)
+                    self.set_device_auth(state, auth, data)
             save_state(state)
             return self.send_json({"ok": True, "auth": auth})
         if path == "/api/auth/local-exit":
@@ -4976,6 +5222,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         if path == "/api/settings":
             state = load_state()
             mid, auth = self.request_merchant_id(state)
+            did = self.device_id()
             incoming = dict(data.get("settings", data) or {})
             current = load_settings(mid)
             identity_changed = (
@@ -4986,7 +5233,13 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 if not ok:
                     return self.send_error_json(msg, 403)
             incoming.pop("admin_password", None)
-            return self.send_json({"ok": True, "settings": save_settings(incoming, mid)})
+            device_patch = {k: incoming.pop(k) for k in list(incoming.keys()) if k in DEVICE_SETTING_KEYS}
+            merchant_saved = save_settings(incoming, mid)
+            if did:
+                set_device_settings(state, did, device_patch, merchant_id=mid, account_id=auth.get("id"))
+                save_state(state)
+            merged = settings_payload(merchant_saved, mid, get_device_settings(state, did) if did else {})
+            return self.send_json({"ok": True, "settings": merged})
         if path == "/api/brand-logo":
             state = load_state()
             mid, auth = self.request_merchant_id(state)
@@ -5000,13 +5253,35 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "settings": save_brand_logo(data, merchant_id=mid)
             })
         if path == "/api/payment-images":
-            return self.send_json({"ok": True, "settings": save_payment_images(data)})
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+            did = self.device_id()
+            if not did:
+                return self.send_error_json("Device ID tidak valid.", 400)
+            return self.send_json({"ok": True, "settings": save_payment_images(data, mid, did, state)})
         if path == "/api/video-upload":
-            saved = save_video_upload(data)
-            return self.send_json({"ok": True, "video": saved, "assets": scan_asset_payload()})
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+            did = self.device_id()
+            if not did:
+                return self.send_error_json("Device ID tidak valid.", 400)
+            saved = save_video_upload(data, did, state)
+            device_settings = get_device_settings(state, did)
+            playlist = list(device_settings.get("video_playlist") or [])
+            if saved.get("path") and saved["path"] not in playlist:
+                playlist.append(saved["path"])
+            set_device_settings(state, did, {"video_playlist": playlist}, merchant_id=mid, account_id=auth.get("id"))
+            save_state(state)
+            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did))
+            return self.send_json({"ok": True, "video": saved, "assets": scan_asset_payload(), "settings": merged})
         if path == "/api/video/remove":
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+            did = self.device_id()
+            if not did:
+                return self.send_error_json("Device ID tidak valid.", 400)
             try:
-                removed = remove_video_asset(data)
+                removed = remove_video_asset(data, mid, did, state)
             except Exception as exc:
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **removed})
@@ -5046,19 +5321,21 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         if path == "/api/checkout/cash":
             state = load_state()
             mid, auth = self.request_merchant_id(state)
+            did = self.device_id()
 
             try:
                 record = save_transaction(
                     data,
                     PAYMENT_METHOD_CASH,
                     merchant_id=mid,
-                    auth=auth
+                    auth=auth,
+                    device_id=did,
                 )
             except Exception as exc:
                 return self.send_error_json(exc, 400)
 
             bucket = _ensure_daily_session(state, mid)
-            display_event = current_display_event(state, mid)
+            display_event = current_display_event(state, mid, device_id=did or None)
             save_state(state)
 
             return self.send_json({
@@ -5070,14 +5347,15 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "display_event": display_event,
             })
         if path == "/api/checkout/qris-success":
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+            did = self.device_id()
             try:
-                record = save_transaction(data, PAYMENT_METHOD_QRIS)
+                record = save_transaction(data, PAYMENT_METHOD_QRIS, merchant_id=mid, auth=auth, device_id=did)
             except Exception as exc:
                 return self.send_error_json(exc, 400)
-            mid, auth = self.request_merchant_id(state)
-            state = load_state()
             bucket = _ensure_daily_session(state, mid)
-            display_event = current_display_event(state, mid)
+            display_event = current_display_event(state, mid, device_id=did or None)
             save_state(state)
             return self.send_json({
                 "ok": True, "record": record,
@@ -5099,6 +5377,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json("Session login tidak valid. Silakan login ulang.", 401)
 
             mid = normalize_merchant_id(auth.get("merchant_id"))
+            did = self.device_id()
 
             items = normalize_items(data.get("items", []), PAYMENT_METHOD_QRIS)
             if not items:
@@ -5114,6 +5393,8 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             active = dict(qris)
             active.update({
                 "merchant_id": mid,
+                "device_id": did,
+                "account_id": str(auth.get("id") or ""),
                 "created_ts": time.time(),
                 "amount": _int_money(data.get("amount")),
                 "txn_id": str(data.get("txn_id") or qris.get("txn_id") or generate_txn_id()),
@@ -5126,29 +5407,33 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
 
             bucket = _ensure_daily_session(state, mid)
             _forget_closed_qr(bucket, active)
-            bucket["active_qr"] = active
-            bucket["display_event"] = None
+            set_active_qr_for_session(state, mid, did, auth.get("id"), active)
+            if did:
+                _display_event_store(state, mid).pop(did, None)
+            else:
+                bucket["display_event"] = None
 
             _sync_legacy_state_for_default(state, mid)
             save_state(state)
 
-            return self.send_json({"ok": True, "active_qr": active}) 
+            return self.send_json({"ok": True, "active_qr": active})
         if path == "/api/qr/dismiss":
             state = load_state()
             mid, auth = self.request_merchant_id(state)
+            did = self.device_id()
             bucket = _ensure_daily_session(state, mid)
-            active = current_active_qr(state, mid)
+            active = get_active_qr_for_session(state, mid, did, auth.get("id"))
             if not active:
                 return self.send_error_json("Tidak ada QR aktif untuk dismiss.", 400)
-            display_event = set_display_event(state, mid, "dismissed", active)
-            bucket["active_qr"] = None
+            display_event = set_display_event(state, mid, "dismissed", active, device_id=did or None)
+            set_active_qr_for_session(state, mid, did, auth.get("id"), None)
             _sync_legacy_state_for_default(state, mid)
             save_state(state)
             return self.send_json({"ok": True, "display_event": display_event})
         if path == "/api/display-event/ack":
             state = load_state()
             mid = normalize_merchant_id(data.get("merchant_id") or display_state_merchant_id(state))
-            display_event = clear_display_event(state, mid, data.get("txn_id"))
+            display_event = clear_display_event(state, mid, data.get("txn_id"), device_id=self.device_id() or data.get("device_id"))
             save_state(state)
             return self.send_json({"ok": True, "display_event": display_event})
         if path == "/api/display-event/notice":
@@ -5178,15 +5463,19 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "invoice-history.pdf"
             )
         if path == "/api/logs/read":
-            ok, msg = verify_system_log_password(data.get("admin_password"))
+            state = load_state()
+            auth = self.get_device_auth(state)
+            ok, msg = verify_system_log_password(data.get("admin_password"), auth=auth)
             if not ok:
                 return self.send_error_json(msg, 403)
-            return self.send_json({"ok": True, "logs": load_logs(260)})
+            return self.send_json({"ok": True, "logs": load_logs(260, auth=auth, device_id=self.device_id())})
         if path == "/api/logs/clear":
-            ok, msg = verify_system_log_password(data.get("admin_password"))
+            state = load_state()
+            auth = self.get_device_auth(state)
+            ok, msg = verify_system_log_password(data.get("admin_password"), auth=auth)
             if not ok:
                 return self.send_error_json(msg, 403)
-            clear_current_log_window()
+            clear_current_log_window(auth=auth, device_id=self.device_id(), state=state)
             return self.send_json({"ok": True, "logs": []})
         return self.send_error_json("Unknown API route", 404)
 

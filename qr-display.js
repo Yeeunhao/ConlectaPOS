@@ -8,6 +8,7 @@ const qrState = {
 };
 
 const qrChannel = "BroadcastChannel" in window ? new BroadcastChannel("conlecta-qr") : null;
+const DEVICE_ID_KEY = "conlecta_device_id";
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const CLOSED_QR_STORAGE_KEY = "conlecta_closed_qr_ids";
@@ -174,16 +175,36 @@ function scheduleOrphanSuccessClear(event) {
 }
 
 async function api(path, options = {}) {
-  const init = { cache: "no-store", ...options };
+  const init = {
+    cache: "no-store",
+    headers: {
+      "X-Conlecta-Device-Id": getDeviceId(),
+      ...(options.headers || {}),
+    },
+    ...options,
+  };
   const res = await fetch(path, init);
   const data = await res.json();
   if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
 
+function getDeviceId() {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
+
+function deviceStorageKey(name) {
+  return `${name}:${getDeviceId()}`;
+}
+
 function readLocalQr() {
   try {
-    const raw = localStorage.getItem("conlecta_active_qr");
+    const raw = localStorage.getItem(deviceStorageKey("conlecta_active_qr"));
     return raw ? sanitizeActiveQr(JSON.parse(raw)) : null;
   } catch {
     return null;
@@ -192,7 +213,7 @@ function readLocalQr() {
 
 function readLocalSettings() {
   try {
-    const raw = localStorage.getItem("conlecta_settings");
+    const raw = localStorage.getItem(deviceStorageKey("conlecta_settings"));
     return raw ? JSON.parse(raw) : {};
   } catch {
     return {};
@@ -201,7 +222,7 @@ function readLocalSettings() {
 
 function readLocalPreview() {
   try {
-    const raw = localStorage.getItem("conlecta_display_preview");
+    const raw = localStorage.getItem(deviceStorageKey("conlecta_display_preview"));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -210,7 +231,7 @@ function readLocalPreview() {
 
 function readLocalDisplayEvent() {
   try {
-    const raw = localStorage.getItem("conlecta_display_event");
+    const raw = localStorage.getItem(deviceStorageKey("conlecta_display_event"));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -244,7 +265,7 @@ function displayEventExpired(event) {
 function currentDisplayEvent() {
   if (displayEventExpired(qrState.displayEvent)) {
     qrState.displayEvent = null;
-    localStorage.removeItem("conlecta_display_event");
+    localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
   } else if (terminalDisplayEvent(qrState.displayEvent)) {
     rememberClosedQr(qrState.displayEvent);
     qrState.activeQr = sanitizeActiveQr(qrState.activeQr);
@@ -261,7 +282,7 @@ function scheduleDisplayEventExpiry(event) {
   displayEventTimer = setTimeout(() => {
     if (displayEventExpired(qrState.displayEvent)) {
       qrState.displayEvent = null;
-      localStorage.removeItem("conlecta_display_event");
+      localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
       renderDisplay();
     }
   }, delay + 80);
@@ -363,6 +384,19 @@ function renderPaymentLogos() {
   `).join("");
 }
 
+function qrImageSrc(active, size = 420) {
+  if (!active) return "";
+  const image = String(active.qr_image || "").trim();
+  if (image) return image;
+  const data = String(active.qr_data || "").trim();
+  if (!data) return "";
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
+}
+
+function hasQrPayload(active) {
+  return Boolean(active && (String(active.qr_image || "").trim() || String(active.qr_data || "").trim()));
+}
+
 function renderDisplay() {
   if (displayClosed) return;
   applyBrand();
@@ -375,7 +409,7 @@ function renderDisplay() {
   scheduleOrphanSuccessClear(event);
   const preview = qrState.preview || {};
   const view = active || event || preview;
-  const hasActiveQr = Boolean(active?.qr_image);
+  const hasActiveQr = hasQrPayload(active);
   const hasEvent = Boolean(event);
   const items = hasEvent ? [] : (view.items || []);
   const stageQr = $("#display-stage-qr");
@@ -406,9 +440,7 @@ function renderDisplay() {
     $("#display-event-message").textContent = validation || eventMessage;
     $("#display-event-total").textContent = formatRp(event.amount);
   } else if (hasActiveQr) {
-    $("#display-stage-qr-img").src =
-    active.qr_image ||
-    `https://api.qrserver.com/v1/create-qr-code/?size=420x420&data=${encodeURIComponent(active.qr_data)}`;
+    $("#display-stage-qr-img").src = qrImageSrc(active, 420);
     $("#display-stage-total").textContent = formatRp(active.amount);
     stageQr.hidden = false;
     stageEvent.hidden = true;
@@ -502,10 +534,10 @@ window.addEventListener("storage", (event) => {
     return;
   }
   if (
-    event.key === "conlecta_active_qr"
-    || event.key === "conlecta_settings"
-    || event.key === "conlecta_display_preview"
-    || event.key === "conlecta_display_event"
+    event.key === deviceStorageKey("conlecta_active_qr")
+    || event.key === deviceStorageKey("conlecta_settings")
+    || event.key === deviceStorageKey("conlecta_display_preview")
+    || event.key === deviceStorageKey("conlecta_display_event")
     || event.key === CASHIER_NOTICE_STORAGE_KEY
     || event.key === "conlecta_version"
     || event.key === CLOSED_QR_STORAGE_KEY
@@ -528,9 +560,9 @@ function shutdownDisplay() {
   clearTimeout(orphanAckTimer);
   clearInterval(refreshTimer);
   clearInterval(clockTimer);
-  localStorage.removeItem("conlecta_active_qr");
-  localStorage.removeItem("conlecta_display_event");
-  localStorage.removeItem("conlecta_display_preview");
+  localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
+  localStorage.removeItem(deviceStorageKey("conlecta_display_preview"));
   qrState.activeQr = null;
   qrState.displayEvent = null;
   qrState.cashierNotice = null;

@@ -1,51 +1,36 @@
-# force_expire_token.py
-#
-# PURPOSE:
-# Force token.json to look expired
-# so you can test auto refresh
-#
-# RUN:
-# python force_expire_token.py
+# Force token.json to look expired so auto-refresh can be tested.
 
 import json
 from datetime import datetime, timedelta, timezone
 
-TOKEN_FILE = "token.json"
+from conlecta_oauth import GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE, token_file_candidates
 
-def main():
 
-    print("====================================")
-    print(" FORCE EXPIRE GOOGLE TOKEN")
-    print("====================================\n")
-
-    # ---------------------------------
-    # Load token
-    # ---------------------------------
-    with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+def force_expire(path):
+    with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-
-    # ---------------------------------
-    # Force expired time
-    # ---------------------------------
     expired_time = (
         datetime.now(timezone.utc) - timedelta(days=1)
     ).isoformat().replace("+00:00", "Z")
-
     data["expiry"] = expired_time
-
-    # ---------------------------------
-    # Save back
-    # ---------------------------------
-    with open(TOKEN_FILE, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
+    print(f"Forced expired: {path}")
+    print(f"New expiry: {expired_time}")
 
-    print("SUCCESS!")
-    print("Token forced expired.")
-    print("\nNew expiry:")
-    print(expired_time)
 
-    print("\nNow run your Gmail script.")
-    print("Google library should auto refresh token.")
+def main():
+    print("====================================")
+    print(" FORCE EXPIRE GOOGLE TOKEN")
+    print("====================================\n")
+    paths = [path for path in token_file_candidates() if __import__("os").path.isfile(path)]
+    if not paths:
+        print(f"No token files found. Expected {GMAIL_TOKEN_FILE} or {OAUTH_TOKEN_FILE}.")
+        return
+    for path in paths:
+        force_expire(path)
+    print("\nNow run the app; Google library should auto-refresh the token.")
+
 
 if __name__ == "__main__":
     main()

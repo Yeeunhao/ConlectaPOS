@@ -6,8 +6,9 @@
   <title>Conlecta Web POS</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/theme-pack.css">
 </head>
-<body>
+<body data-theme="crystal_bloom">
   <div class="app-bg"></div>
   <div class="bg-scene" aria-hidden="true">
     <div class="bg-gradient"></div>
@@ -113,29 +114,37 @@
           <img class="form-logo conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="Conlecta POS identity">
           <h2>Register PIN</h2>
           <p class="muted" id="pin-register-target">Buat PIN 6 angka untuk login berikutnya.</p>
+          <p class="pin-step-indicator" id="pin-step-indicator">Langkah 1 dari 2</p>
         </div>
-        <label class="field auth-field">
-          <span>New PIN</span>
-          <div class="otp-row pin-row compact" aria-label="New 6 digit PIN">
-            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-          </div>
-        </label>
-        <label class="field auth-field">
-          <span>Confirm PIN</span>
-          <div class="otp-row pin-row compact" aria-label="Confirm 6 digit PIN">
-            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-            <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
-          </div>
-        </label>
+        <div class="pin-register-step" id="pin-register-step1">
+          <label class="field auth-field">
+            <span>Buat PIN</span>
+            <div class="otp-row pin-row compact" aria-label="New 6 digit PIN">
+              <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-new-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            </div>
+          </label>
+          <button class="btn primary wide auth-primary" type="button" id="pin-register-continue">Lanjutkan</button>
+        </div>
+        <div class="pin-register-step hidden" id="pin-register-step2">
+          <label class="field auth-field">
+            <span>Konfirmasi PIN</span>
+            <div class="otp-row pin-row compact" aria-label="Confirm 6 digit PIN">
+              <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+              <input class="pin-confirm-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+            </div>
+          </label>
+          <button class="btn primary wide auth-primary" type="submit">Simpan</button>
+          <button class="text-btn" type="button" id="pin-register-back">Kembali</button>
+        </div>
         <input id="pin-new-code" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" hidden>
         <input id="pin-confirm-code" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" hidden>
         <div class="otp-actions">
@@ -790,6 +799,10 @@
               <label class="field">
                 <span>Theme</span>
                 <select id="set-active-theme">
+                  <option value="crystal_bloom">Crystal Bloom</option>
+                  <option value="pearl_mist">Pearl Mist</option>
+                  <option value="aurora_glass">Aurora Glass</option>
+                  <option value="midnight_velvet">Midnight Velvet</option>
                   <option value="deep_space">Deep Space</option>
                   <option value="warm_terminal">Warm Terminal</option>
                   <option value="midnight_teal">Midnight Teal</option>
@@ -969,7 +982,7 @@
 
   <div class="loading-overlay" id="loading-overlay" hidden>
     <div class="loading-card">
-      <img class="js-brand-logo" src="/assets/ConlectaPosLogo.png" alt="">
+      <img class="conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="">
       <div class="loading-ring"></div>
       <strong id="loading-title">Processing</strong>
       <span id="loading-message">Mohon tunggu...</span>
@@ -978,6 +991,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="/theme-engine.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

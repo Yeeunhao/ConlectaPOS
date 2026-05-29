@@ -12,14 +12,16 @@ from datetime import timezone
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
-# =========================================================
-# SCOPES
-# =========================================================
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive.file",
-]
+from conlecta_oauth import (
+    BASE_DIR,
+    CLIENT_SECRET_FILE,
+    GMAIL_TOKEN_FILE,
+    OAUTH_TOKEN_FILE,
+    SHEETS_SCOPES,
+    GMAIL_SCOPES,
+)
+
+SCOPES = list(dict.fromkeys(GMAIL_SCOPES + SHEETS_SCOPES))
 
 # =========================================================
 # MAIN
@@ -33,17 +35,18 @@ def main():
     # -----------------------------------------------------
     # Check client secret
     # -----------------------------------------------------
-    if not os.path.exists("client_secret.json"):
-        print("ERROR: client_secret.json not found")
+    client_secret = CLIENT_SECRET_FILE
+    if not os.path.exists(client_secret):
+        print(f"ERROR: {client_secret} not found")
         return
 
-    # -----------------------------------------------------
-    # Delete old token
-    # -----------------------------------------------------
-    if os.path.exists("token.json"):
+    token_path = GMAIL_TOKEN_FILE
+    oauth_token_path = OAUTH_TOKEN_FILE
+
+    if os.path.exists(token_path):
         try:
-            os.remove("token.json")
-            print("[INFO] Old token.json deleted")
+            os.remove(token_path)
+            print(f"[INFO] Old {token_path} deleted")
         except Exception as e:
             print(f"[WARNING] Failed delete old token: {e}")
 
@@ -53,7 +56,7 @@ def main():
     # OAuth Flow
     # -----------------------------------------------------
     flow = InstalledAppFlow.from_client_secrets_file(
-        "client_secret.json",
+        client_secret,
         SCOPES
     )
 
@@ -123,15 +126,16 @@ def main():
     # -----------------------------------------------------
     # Save token
     # -----------------------------------------------------
-    with open("token.json", "w", encoding="utf-8") as f:
+    with open(token_path, "w", encoding="utf-8") as f:
         json.dump(token_data, f, indent=4)
 
-    # -----------------------------------------------------
-    # Success
-    # -----------------------------------------------------
+    with open(oauth_token_path, "w", encoding="utf-8") as f:
+        json.dump(token_data, f, indent=4)
+
     print("\n=========================================")
     print("SUCCESS!")
-    print("token.json created")
+    print(f"Saved {token_path}")
+    print(f"Saved {oauth_token_path}")
     print("=========================================\n")
 
     print("Refresh Token Exists:",

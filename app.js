@@ -114,6 +114,10 @@ function getDeviceId() {
 
   return id;
 }
+
+function deviceStorageKey(name) {
+  return `${name}:${getDeviceId()}`;
+}
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -268,7 +272,7 @@ function isClosedQr(source) {
 function sanitizeActiveQr(active) {
   if (!active) return null;
   if (isClosedQr(active)) {
-    localStorage.removeItem("conlecta_active_qr");
+    localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
     return null;
   }
   return active;
@@ -312,6 +316,7 @@ function cashierNoticePayload(record, visible = true) {
   return {
     visible,
     merchant_id: state.auth?.merchant_id || state.settings?.merchant_id || "",
+    device_id: getDeviceId(),
     txn_id: String(data.txn_id || data.transaction_id || state.activePaymentModalTxn || "").trim(),
     qr_id: String(data.qr_id || data.id || "").trim(),
     amount: Number(data.amount || 0),
@@ -515,7 +520,12 @@ async function downloadFile(path, {
 } = {}) {
   showLoading(message);
   try {
-    const init = { method, headers: {} };
+    const init = {
+      method,
+      headers: {
+        "X-Conlecta-Device-Id": getDeviceId(),
+      },
+    };
     if (body !== null) {
       init.headers["Content-Type"] = "application/json";
       init.body = typeof body === "string" ? body : JSON.stringify(body);
@@ -569,11 +579,50 @@ function updateClock() {
   });
 }
 
+const DEFAULT_THEME = "crystal_bloom";
+
+function deviceThemeId() {
+  const current = window.ConlectaTheme?.current?.();
+  if (current && window.ConlectaTheme?.isValid?.(current)) return current;
+  const bodyTheme = document.body.dataset.theme;
+  if (bodyTheme && window.ConlectaTheme?.isValid?.(bodyTheme)) return bodyTheme;
+  return DEFAULT_THEME;
+}
+
+function applyDeviceTheme(themeId, { persist = true } = {}) {
+  const next = themeId && window.ConlectaTheme?.isValid?.(themeId) ? themeId : deviceThemeId();
+  if (window.ConlectaTheme?.apply) {
+    window.ConlectaTheme.apply(next, persist ? undefined : { persist: false });
+  } else {
+    document.body.dataset.theme = next;
+  }
+  return next;
+}
+
+function bootstrapDeviceTheme() {
+  if (!window.ConlectaTheme) return;
+  let stored = null;
+  try {
+    stored = localStorage.getItem("conlecta:theme");
+  } catch {
+    // Private browsing can block storage; fall back to the current body theme.
+  }
+  if (stored && window.ConlectaTheme.isValid(stored)) {
+    applyDeviceTheme(stored, { persist: false });
+    return;
+  }
+  const merchantDefault = state.settings?.active_theme;
+  if (merchantDefault && window.ConlectaTheme.isValid(merchantDefault)) {
+    applyDeviceTheme(merchantDefault);
+    return;
+  }
+  applyDeviceTheme(DEFAULT_THEME);
+}
+
 function applyBrand() {
   const s = state.settings || {};
   const name = s.shop_name || "Conlecta";
   const logo = s.brand_logo_url || "/assets/ConlectaPosLogo.png";
-  document.body.dataset.theme = s.active_theme || "deep_space";
   $$(".js-brand-name").forEach((el) => { el.textContent = name; });
   $$(".js-brand-logo").forEach((el) => { el.src = logo; });
   $$(".conlecta-identity-logo").forEach((el) => { el.src = CONLECTA_IDENTITY_LOGO; });
@@ -1050,6 +1099,7 @@ function heartbeatPayload() {
     cart_count: cartEntries().length,
     page: $(".page.active")?.id || "",
     last_activity_ts: Math.floor(lastActivityTs / 1000),
+    device_id: getDeviceId(),
   };
 }
 
@@ -1682,8 +1732,21 @@ function updateTotals() {
   queueDisplayPublish();
 }
 
+function qrImageSrc(active, size = 320) {
+  if (!active) return "";
+  const image = String(active.qr_image || "").trim();
+  if (image) return image;
+  const data = String(active.qr_data || "").trim();
+  if (!data) return "";
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
+}
+
+function hasQrPayload(active) {
+  return Boolean(active && (String(active.qr_image || "").trim() || String(active.qr_data || "").trim()));
+}
+
 function updateQrActions() {
-  const hasQr = Boolean(state.activeQr?.id || state.activeQr?.qr_image);
+  const hasQr = Boolean(state.activeQr?.id && hasQrPayload(state.activeQr));
   const dismissLocked = qrDismissInFlight || Date.now() < dismissQrLockedUntil;
   const actions = $("#qr-actions");
   if (actions) actions.hidden = !hasQr;
@@ -1798,15 +1861,15 @@ function publishDisplayState() {
     version: state.version,
   };
 
-  if (state.activeQr) localStorage.setItem("conlecta_active_qr", JSON.stringify(state.activeQr));
-  else localStorage.removeItem("conlecta_active_qr");
+  if (state.activeQr) localStorage.setItem(deviceStorageKey("conlecta_active_qr"), JSON.stringify(state.activeQr));
+  else localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
 
-  if (state.displayEvent) localStorage.setItem("conlecta_display_event", JSON.stringify(state.displayEvent));
-  else localStorage.removeItem("conlecta_display_event");
+  if (state.displayEvent) localStorage.setItem(deviceStorageKey("conlecta_display_event"), JSON.stringify(state.displayEvent));
+  else localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
 
   localStorage.setItem("conlecta_version", JSON.stringify(state.version || {}));
-  localStorage.setItem("conlecta_settings", JSON.stringify(state.settings || {}));
-  localStorage.setItem("conlecta_display_preview", JSON.stringify(preview));
+  localStorage.setItem(deviceStorageKey("conlecta_settings"), JSON.stringify(state.settings || {}));
+  localStorage.setItem(deviceStorageKey("conlecta_display_preview"), JSON.stringify(preview));
 
   qrChannel?.postMessage({ type: "display-state", ...payload });
 }
@@ -1945,7 +2008,7 @@ async function dismissQR() {
     closeModal(true);
     clearCart({ force: true });
     setDisplayEvent(result.display_event || null);
-    localStorage.removeItem("conlecta_active_qr");
+    localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
     publishDisplayState();
     showToast("QR dismissed", "error", PAYMENT_NOTICE_MS);
   } finally {
@@ -1997,9 +2060,9 @@ function requestQrDisplayClose() {
   try {
     qrChannel?.postMessage({ type: "close-display" });
     localStorage.setItem("conlecta_close_qr_display_at", String(Date.now()));
-    localStorage.removeItem("conlecta_active_qr");
-    localStorage.removeItem("conlecta_display_event");
-    localStorage.removeItem("conlecta_display_preview");
+    localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
+    localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
+    localStorage.removeItem(deviceStorageKey("conlecta_display_preview"));
     qrDisplayWindow?.close?.();
   } catch {
     // Closing a browser tab can be blocked; QR Display also listens for the close signal.
@@ -2052,15 +2115,14 @@ function showDismissModal(event) {
 }
 
 function showQrModal(active = state.activeQr) {
-  if (!active?.qr_image) return;
+  const src = qrImageSrc(active, 320);
+  if (!src) return;
   $("#payment-modal").hidden = true;
   $("#detail-modal").hidden = true;
   $("#dismiss-modal").hidden = true;
   $("#logout-modal").hidden = true;
   $("#qr-modal").hidden = false;
-  $("#qr-modal-img").src =
-  active.qr_image ||
-  `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(active.qr_data)}`;
+  $("#qr-modal-img").src = src;
   $("#qr-modal-txn").textContent = active.txn_id || "-";
   $("#qr-modal-id").textContent = active.id || "-";
   $("#qr-modal-total").textContent = formatRp(active.amount);
@@ -2916,7 +2978,7 @@ function renderSettings() {
   if ($("#set-admin-password")) $("#set-admin-password").value = "";
   if ($("#account-merchant-name")) $("#account-merchant-name").textContent = s.merchant_name || s.shop_name || "Conlecta";
   if ($("#account-merchant-id")) $("#account-merchant-id").textContent = s.merchant_id || "conlecta";
-  $("#set-active-theme").value = s.active_theme || "deep_space";
+  $("#set-active-theme").value = deviceThemeId() || s.active_theme || DEFAULT_THEME;
   const marquee = s.marquee_msgs || [];
   $$(".marquee-input").forEach((input, index) => { input.value = marquee[index] || ""; });
   applyBrand();
@@ -3008,9 +3070,13 @@ async function uploadVideo(file) {
   });
   const result = await api("/api/video-upload", { method: "POST", body: { filename: file.name, data_url: dataUrl } });
   state.assets = result.assets || state.assets;
-  const playlist = new Set(state.settings.video_playlist || []);
-  if (result.video?.url) playlist.add(result.video.url);
-  state.settings.video_playlist = Array.from(playlist);
+  if (result.settings) state.settings = result.settings;
+  else {
+    const playlist = new Set(state.settings.video_playlist || []);
+    if (result.video?.path) playlist.add(result.video.path);
+    else if (result.video?.url) playlist.add(result.video.url);
+    state.settings.video_playlist = Array.from(playlist);
+  }
   renderVideoAssets();
   publishDisplayState();
   showToast("Video uploaded");
@@ -3743,6 +3809,7 @@ async function reloadBootstrap() {
   state.session = result.session || { sales: 0, revenue: 0 };
   state.logs = result.logs || [];
   applyBrand();
+  bootstrapDeviceTheme();
   renderAuth();
   if (!hasBootstrapped) applyRouteAfterBootstrap();
   hasBootstrapped = true;
@@ -3921,16 +3988,30 @@ async function handleAction(action, target) {
     } else if (action === "pick-payment-images") {
       $("#payment-image-files").click();
     } else if (action === "use-sample-payment-images") {
-      state.settings.payment_image_paths = [];
-      state.settings.payment_image_path = "";
-      const result = await api("/api/settings", { method: "POST", body: { settings: collectSettings() } });
+      const result = await api("/api/settings", {
+        method: "POST",
+        body: {
+          settings: {
+            ...collectSettings(),
+            payment_image_paths: [],
+            payment_image_path: "",
+          },
+        },
+      });
       state.settings = result.settings;
       renderPaymentPreview();
       publishDisplayState();
     } else if (action === "clear-payment-images") {
-      state.settings.payment_image_paths = [];
-      state.settings.payment_image_path = "";
-      const result = await api("/api/settings", { method: "POST", body: { settings: collectSettings() } });
+      const result = await api("/api/settings", {
+        method: "POST",
+        body: {
+          settings: {
+            ...collectSettings(),
+            payment_image_paths: [],
+            payment_image_path: "",
+          },
+        },
+      });
       state.settings = result.settings;
       renderPaymentPreview();
       publishDisplayState();
@@ -4104,6 +4185,14 @@ function bindEvents() {
       state.systemTxnProducts = [];
       state.selectedSystemTxnId = "";
       renderSystemAdminTransactions();
+    }
+    if (event.target.id === "set-active-theme") {
+      const next = event.target.value;
+      if (window.ConlectaTheme && window.ConlectaTheme.isValid(next)) {
+        window.ConlectaTheme.apply(next);
+      } else {
+        document.body.dataset.theme = next;
+      }
     }
     const itemName = event.target.closest('[data-txn-item-field="item_name"]');
     if (itemName) {

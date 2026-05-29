@@ -1,0 +1,1795 @@
+/* ============================================================
+   Conlecta Theme Pack  -  Crystal Glass UI Revamp
+   ------------------------------------------------------------
+   Adds new themes (crystal_bloom, pearl_mist, aurora_glass,
+   midnight_velvet) and a richer glass-morphism feel that the
+   theme-engine canvas can paint on top of.
+   ============================================================ */
+
+:root {
+  --tp-iris-1: rgba(196, 181, 253, 0.55);
+  --tp-iris-2: rgba(191, 245, 255, 0.55);
+  --tp-iris-3: rgba(255, 213, 232, 0.55);
+  --tp-iris-4: rgba(255, 246, 216, 0.55);
+  --tp-glass-bg: rgba(20, 26, 60, 0.42);
+  --tp-glass-border: rgba(255, 255, 255, 0.22);
+  --tp-glass-inner: rgba(255, 255, 255, 0.08);
+  --tp-pearl: #fff6f1;
+  --tp-canvas-blend: screen;
+}
+
+/* ------------------------------------------------------------
+   New default-ish theme :: crystal_bloom
+   Deep iridescent indigo / lilac with pearl/crystal accents
+   ------------------------------------------------------------ */
+body[data-theme="crystal_bloom"] {
+  --bg: #0c0a24;
+  --bg2: #161037;
+  --surface: #1c1748;
+  --surface2: #261c5d;
+  --surface3: #312577;
+  --line: rgba(196, 181, 253, 0.28);
+  --line2: rgba(191, 245, 255, 0.26);
+  --text: #f6efff;
+  --text2: #cbbef0;
+  --text3: #8c80b8;
+  --purple: #b196ff;
+  --purple2: #d6c6ff;
+  --cyan: #9be7ff;
+  --gold: #ffe2c2;
+  --green: #6ee7d2;
+  --red: #ff97b8;
+  --tp-iris-1: rgba(196, 181, 253, 0.6);
+  --tp-iris-2: rgba(191, 245, 255, 0.55);
+  --tp-iris-3: rgba(255, 213, 232, 0.55);
+  --tp-iris-4: rgba(255, 246, 216, 0.6);
+  --tp-glass-bg: rgba(28, 23, 72, 0.4);
+  --tp-glass-border: rgba(214, 198, 255, 0.32);
+  --tp-glass-inner: rgba(255, 255, 255, 0.08);
+  --tp-pearl: #fff6f1;
+}
+
+/* ------------------------------------------------------------
+   pearl_mist :: light cream pastel
+   ------------------------------------------------------------ */
+body[data-theme="pearl_mist"] {
+  --bg: #f1edff;
+  --bg2: #e5dcff;
+  --surface: #ffffff;
+  --surface2: #f6f0ff;
+  --surface3: #ece2ff;
+  --line: rgba(94, 70, 178, 0.22);
+  --line2: rgba(70, 152, 200, 0.24);
+  --text: #25184c;
+  --text2: #4a3a82;
+  --text3: #7c6cab;
+  --purple: #7c5cff;
+  --purple2: #b196ff;
+  --cyan: #5cb8d8;
+  --gold: #d8a25c;
+  --green: #36a08a;
+  --red: #d8527a;
+  --tp-iris-1: rgba(124, 92, 255, 0.45);
+  --tp-iris-2: rgba(92, 184, 216, 0.42);
+  --tp-iris-3: rgba(255, 156, 192, 0.45);
+  --tp-iris-4: rgba(255, 213, 156, 0.5);
+  --tp-glass-bg: rgba(255, 255, 255, 0.55);
+  --tp-glass-border: rgba(120, 92, 200, 0.3);
+  --tp-glass-inner: rgba(255, 255, 255, 0.45);
+  --tp-pearl: #ffffff;
+  --tp-canvas-blend: multiply;
+}
+
+/* ------------------------------------------------------------
+   aurora_glass :: deep teal / aurora green
+   ------------------------------------------------------------ */
+body[data-theme="aurora_glass"] {
+  --bg: #061a1f;
+  --bg2: #082b32;
+  --surface: #0c3a42;
+  --surface2: #114a52;
+  --surface3: #166069;
+  --line: rgba(110, 231, 210, 0.28);
+  --line2: rgba(159, 232, 178, 0.26);
+  --text: #f1fff8;
+  --text2: #bce5d7;
+  --text3: #7da89a;
+  --purple: #6ee7d2;
+  --purple2: #a5f3df;
+  --cyan: #9fe8b2;
+  --gold: #facc15;
+  --green: #34d399;
+  --red: #f87171;
+  --tp-iris-1: rgba(110, 231, 210, 0.55);
+  --tp-iris-2: rgba(159, 232, 178, 0.5);
+  --tp-iris-3: rgba(250, 204, 21, 0.4);
+  --tp-iris-4: rgba(216, 247, 255, 0.55);
+  --tp-glass-bg: rgba(8, 43, 50, 0.42);
+  --tp-glass-border: rgba(165, 243, 223, 0.3);
+  --tp-glass-inner: rgba(255, 255, 255, 0.08);
+  --tp-pearl: #e8fff5;
+}
+
+/* ------------------------------------------------------------
+   midnight_velvet :: deep magenta / wine
+   ------------------------------------------------------------ */
+body[data-theme="midnight_velvet"] {
+  --bg: #15071a;
+  --bg2: #240b2c;
+  --surface: #2c0e38;
+  --surface2: #3a1349;
+  --surface3: #4a195e;
+  --line: rgba(255, 156, 220, 0.28);
+  --line2: rgba(196, 181, 253, 0.26);
+  --text: #fef0fa;
+  --text2: #e0c4dc;
+  --text3: #a98aaa;
+  --purple: #ff8ad0;
+  --purple2: #ffb7e0;
+  --cyan: #d6a7ff;
+  --gold: #ffd086;
+  --green: #76e8b8;
+  --red: #ff7196;
+  --tp-iris-1: rgba(255, 156, 220, 0.55);
+  --tp-iris-2: rgba(214, 167, 255, 0.55);
+  --tp-iris-3: rgba(255, 208, 134, 0.45);
+  --tp-iris-4: rgba(216, 247, 255, 0.4);
+  --tp-glass-bg: rgba(44, 14, 56, 0.45);
+  --tp-glass-border: rgba(255, 183, 224, 0.3);
+  --tp-glass-inner: rgba(255, 255, 255, 0.08);
+  --tp-pearl: #fff0f7;
+}
+
+/* ============================================================
+   Canvas-based animated background layer
+   Painted by theme-engine.js, sits beneath the existing static
+   bg-scene so we keep both effects layered for richness.
+   ============================================================ */
+.tp-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  mix-blend-mode: var(--tp-canvas-blend, screen);
+  transition: opacity 0.6s ease;
+  will-change: auto;
+}
+
+body[data-theme="crystal_bloom"] .tp-canvas { opacity: 0.82; }
+body[data-theme="aurora_glass"] .tp-canvas { opacity: 0.82; }
+body[data-theme="midnight_velvet"] .tp-canvas { opacity: 0.82; }
+body[data-theme="pearl_mist"] .tp-canvas {
+  mix-blend-mode: multiply;
+  opacity: 0.78;
+}
+
+/* ============================================================
+   Themed background overrides for app-bg + auth-screen so each
+   palette has a matching radial gradient base.
+   ============================================================ */
+body[data-theme="crystal_bloom"] .app-bg,
+body[data-theme="crystal_bloom"] .bg-gradient {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(177, 150, 255, 0.28) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 14%, rgba(155, 231, 255, 0.18) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 40% at 55% 95%, rgba(255, 213, 232, 0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 50% at 90% 80%, rgba(255, 246, 216, 0.14) 0%, transparent 70%),
+    linear-gradient(170deg, #0a0820 0%, #18113f 45%, #281a55 80%, #3a2270 100%);
+}
+
+body[data-theme="pearl_mist"] .app-bg,
+body[data-theme="pearl_mist"] .bg-gradient {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 18%, rgba(177, 150, 255, 0.35) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 14%, rgba(155, 231, 255, 0.32) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 40% at 55% 95%, rgba(255, 192, 220, 0.4) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 50% at 90% 80%, rgba(255, 246, 216, 0.4) 0%, transparent 70%),
+    linear-gradient(170deg, #f6f1ff 0%, #ebe4ff 45%, #e0d4ff 80%, #ffd5e6 100%);
+}
+
+body[data-theme="aurora_glass"] .app-bg,
+body[data-theme="aurora_glass"] .bg-gradient {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(52, 211, 153, 0.22) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 14%, rgba(110, 231, 210, 0.22) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 40% at 55% 95%, rgba(250, 204, 21, 0.14) 0%, transparent 65%),
+    linear-gradient(170deg, #04111a 0%, #06262e 45%, #0a3a3f 80%, #0d4d4f 100%);
+}
+
+body[data-theme="midnight_velvet"] .app-bg,
+body[data-theme="midnight_velvet"] .bg-gradient {
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(255, 138, 208, 0.26) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 14%, rgba(214, 167, 255, 0.22) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 40% at 55% 95%, rgba(255, 208, 134, 0.18) 0%, transparent 65%),
+    linear-gradient(170deg, #100416 0%, #270a30 45%, #401048 80%, #5a1564 100%);
+}
+
+/* Make auth-screen transparent on new themes so the canvas + app-bg gradient
+   show through, while keeping the auth-card glass distinct. */
+body[data-theme="crystal_bloom"] .auth-screen,
+body[data-theme="pearl_mist"] .auth-screen,
+body[data-theme="aurora_glass"] .auth-screen,
+body[data-theme="midnight_velvet"] .auth-screen {
+  background: transparent !important;
+}
+
+body[data-theme="crystal_bloom"] .auth-screen::before,
+body[data-theme="crystal_bloom"] .auth-screen::after,
+body[data-theme="pearl_mist"] .auth-screen::before,
+body[data-theme="pearl_mist"] .auth-screen::after,
+body[data-theme="aurora_glass"] .auth-screen::before,
+body[data-theme="aurora_glass"] .auth-screen::after,
+body[data-theme="midnight_velvet"] .auth-screen::before,
+body[data-theme="midnight_velvet"] .auth-screen::after {
+  opacity: 0.18;
+}
+
+/* Soften the legacy static crystals + particles on new themes so the
+   canvas effect leads the visual. */
+body[data-theme="crystal_bloom"] .bg-scene .crystal,
+body[data-theme="pearl_mist"] .bg-scene .crystal,
+body[data-theme="aurora_glass"] .bg-scene .crystal,
+body[data-theme="midnight_velvet"] .bg-scene .crystal {
+  opacity: 0;
+}
+
+body[data-theme="crystal_bloom"] .bg-scene::before,
+body[data-theme="pearl_mist"] .bg-scene::before,
+body[data-theme="aurora_glass"] .bg-scene::before,
+body[data-theme="midnight_velvet"] .bg-scene::before {
+  opacity: 0.18;
+}
+
+/* ============================================================
+   Pearl mist needs dark text + lighter panels (light theme)
+   ============================================================ */
+body[data-theme="pearl_mist"] {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .topbar,
+body[data-theme="pearl_mist"] .auth-card,
+body[data-theme="pearl_mist"] .panel,
+body[data-theme="pearl_mist"] .modal,
+body[data-theme="pearl_mist"] .loading-card {
+  background: rgba(255, 255, 255, 0.65);
+  border-color: rgba(120, 92, 200, 0.3);
+  color: var(--text);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
+  box-shadow: 0 24px 80px rgba(60, 40, 140, 0.18), 0 0 1px rgba(255, 255, 255, 0.7) inset;
+}
+
+body[data-theme="pearl_mist"] .auth-copy {
+  background:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(220, 200, 255, 0.6)),
+    url("/assets/BG_login3.png") center / cover no-repeat;
+}
+
+body[data-theme="pearl_mist"] .auth-copy h1 {
+  background: linear-gradient(180deg, #6a4cff 0%, #d8527a 50%, #5cb8d8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="pearl_mist"] .brand,
+body[data-theme="pearl_mist"] .brand-name,
+body[data-theme="pearl_mist"] .brand-sub,
+body[data-theme="pearl_mist"] .nav-btn,
+body[data-theme="pearl_mist"] .eyebrow,
+body[data-theme="pearl_mist"] h1,
+body[data-theme="pearl_mist"] h2,
+body[data-theme="pearl_mist"] h3,
+body[data-theme="pearl_mist"] .field span,
+body[data-theme="pearl_mist"] label,
+body[data-theme="pearl_mist"] .muted,
+body[data-theme="pearl_mist"] strong,
+body[data-theme="pearl_mist"] .clock-pill,
+body[data-theme="pearl_mist"] .user-pill {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .muted {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .nav-btn {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(120, 92, 200, 0.28);
+}
+
+body[data-theme="pearl_mist"] .nav-btn:hover,
+body[data-theme="pearl_mist"] .nav-btn.active {
+  background: rgba(124, 92, 255, 0.18);
+  border-color: rgba(124, 92, 255, 0.55);
+  color: var(--purple);
+}
+
+body[data-theme="pearl_mist"] input,
+body[data-theme="pearl_mist"] select,
+body[data-theme="pearl_mist"] textarea {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .field input,
+body[data-theme="pearl_mist"] .field select,
+body[data-theme="pearl_mist"] .field textarea {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(120, 92, 200, 0.25);
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .auth-input-wrap {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(124, 92, 255, 0.28);
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] #auth-screen input:not([hidden]) {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] #auth-screen .otp-row input {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(124, 92, 255, 0.3);
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .data-table th,
+body[data-theme="pearl_mist"] .data-table td {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .btn.primary {
+  color: #ffffff;
+}
+
+/* ============================================================
+   Iridescent edges + glow tuning for new themes (panels + auth)
+   ============================================================ */
+body[data-theme="crystal_bloom"] .auth-card,
+body[data-theme="midnight_velvet"] .auth-card,
+body[data-theme="aurora_glass"] .auth-card {
+  border: 1px solid var(--tp-glass-border);
+  background: var(--tp-glass-bg);
+  border-radius: 18px;
+  box-shadow:
+    0 32px 110px rgba(0, 0, 0, 0.55),
+    0 0 1px var(--tp-iris-1) inset,
+    0 0 60px rgba(155, 124, 255, 0.12);
+}
+
+body[data-theme="pearl_mist"] .auth-card {
+  border-radius: 18px;
+}
+
+body[data-theme="crystal_bloom"] .auth-card::after,
+body[data-theme="midnight_velvet"] .auth-card::after,
+body[data-theme="aurora_glass"] .auth-card::after,
+body[data-theme="pearl_mist"] .auth-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    var(--tp-iris-1),
+    var(--tp-iris-2),
+    var(--tp-iris-3),
+    var(--tp-iris-4));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.7;
+  animation: tpIrisShimmer 8s linear infinite;
+}
+
+@keyframes tpIrisShimmer {
+  0% { filter: hue-rotate(0deg) saturate(1); }
+  50% { filter: hue-rotate(20deg) saturate(1.2); }
+  100% { filter: hue-rotate(0deg) saturate(1); }
+}
+
+body[data-theme="crystal_bloom"] .panel,
+body[data-theme="aurora_glass"] .panel,
+body[data-theme="midnight_velvet"] .panel {
+  background: var(--tp-glass-bg);
+  border: 1px solid var(--tp-glass-border);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.42),
+    0 0 1px var(--tp-iris-1) inset;
+}
+
+body[data-theme="crystal_bloom"] .modal,
+body[data-theme="aurora_glass"] .modal,
+body[data-theme="midnight_velvet"] .modal,
+body[data-theme="pearl_mist"] .modal {
+  border: 1px solid var(--tp-glass-border);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.55),
+    0 0 60px var(--tp-iris-1) inset;
+}
+
+body[data-theme="crystal_bloom"] .topbar,
+body[data-theme="aurora_glass"] .topbar,
+body[data-theme="midnight_velvet"] .topbar {
+  background: var(--tp-glass-bg);
+  border-bottom-color: var(--tp-glass-border);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(20px) saturate(1.1);
+}
+
+/* ============================================================
+   Brand title gradient per theme (auth-copy h1)
+   ============================================================ */
+body[data-theme="crystal_bloom"] .auth-copy h1 {
+  background: linear-gradient(180deg, #fff6d8 0%, #f3c2d4 40%, #c9c3ff 70%, #bff5ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="aurora_glass"] .auth-copy h1 {
+  background: linear-gradient(180deg, #fef9c3 0%, #d9f99d 35%, #6ee7b7 70%, #a5f3fc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="midnight_velvet"] .auth-copy h1 {
+  background: linear-gradient(180deg, #ffe2c2 0%, #ffb7e0 40%, #ff8ad0 70%, #d6a7ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Theme switching is intentionally Settings-only (Settings -> Display).
+   The floating switcher has been removed; legacy class kept hidden in case
+   any third-party include adds it. */
+.tp-theme-switcher { display: none !important; }
+
+/* ============================================================
+   Sparkle dust hint for buttons + active nav
+   ============================================================ */
+body[data-theme="crystal_bloom"] .btn.primary,
+body[data-theme="aurora_glass"] .btn.primary,
+body[data-theme="midnight_velvet"] .btn.primary,
+body[data-theme="pearl_mist"] .btn.primary {
+  position: relative;
+  overflow: hidden;
+}
+
+body[data-theme="crystal_bloom"] .btn.primary::after,
+body[data-theme="aurora_glass"] .btn.primary::after,
+body[data-theme="midnight_velvet"] .btn.primary::after,
+body[data-theme="pearl_mist"] .btn.primary::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  transform: skewX(-18deg);
+  animation: tpPrimaryShine 4.6s ease-in-out infinite;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+@keyframes tpPrimaryShine {
+  0%, 70%, 100% { left: -120%; }
+  85% { left: 140%; }
+}
+
+/* ============================================================
+   Brand logo halo for non-default themes
+   ============================================================ */
+body[data-theme="crystal_bloom"] .brand-logo,
+body[data-theme="aurora_glass"] .brand-logo,
+body[data-theme="midnight_velvet"] .brand-logo,
+body[data-theme="pearl_mist"] .brand-logo {
+  box-shadow: 0 0 24px var(--tp-iris-1), 0 0 1px var(--tp-iris-2) inset;
+}
+
+/* ============================================================
+   Form-logo + auth-logo iridescent border tune-up
+   ============================================================ */
+body[data-theme="crystal_bloom"] .auth-logo,
+body[data-theme="aurora_glass"] .auth-logo,
+body[data-theme="midnight_velvet"] .auth-logo,
+body[data-theme="pearl_mist"] .auth-logo,
+body[data-theme="crystal_bloom"] .form-logo,
+body[data-theme="aurora_glass"] .form-logo,
+body[data-theme="midnight_velvet"] .form-logo,
+body[data-theme="pearl_mist"] .form-logo {
+  border-color: var(--tp-glass-border);
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.4),
+    0 0 28px var(--tp-iris-1),
+    0 0 1px var(--tp-iris-2) inset;
+}
+
+/* ============================================================
+   Loading overlay backdrop for new themes
+   ============================================================ */
+body[data-theme="crystal_bloom"] .loading-overlay,
+body[data-theme="aurora_glass"] .loading-overlay,
+body[data-theme="midnight_velvet"] .loading-overlay {
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.75));
+}
+
+body[data-theme="pearl_mist"] .loading-overlay {
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.45), rgba(200, 188, 255, 0.7));
+}
+
+/* Loading ring theme-aware colors */
+body[data-theme="pearl_mist"] .loading-ring {
+  border-color: rgba(124, 92, 255, 0.18);
+  border-top-color: var(--purple);
+  border-right-color: var(--gold);
+}
+
+body[data-theme="pearl_mist"] .loading-card strong {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .loading-card span {
+  color: var(--text2);
+}
+
+/* ============================================================
+   Cashier hero / page-head shared styling for new themes
+   ============================================================ */
+body[data-theme="crystal_bloom"] .cashier-hero,
+body[data-theme="aurora_glass"] .cashier-hero,
+body[data-theme="midnight_velvet"] .cashier-hero {
+  background: var(--tp-glass-bg);
+  border: 1px solid var(--tp-glass-border);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+  border-radius: 18px;
+  box-shadow:
+    0 18px 60px rgba(0, 0, 0, 0.42),
+    0 0 1px var(--tp-iris-1) inset;
+}
+
+body[data-theme="crystal_bloom"] .cashier-hero .hero-total strong,
+body[data-theme="aurora_glass"] .cashier-hero .hero-total strong,
+body[data-theme="midnight_velvet"] .cashier-hero .hero-total strong {
+  background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2), var(--tp-iris-4));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.25));
+}
+
+body[data-theme="pearl_mist"] .cashier-hero {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(120, 92, 200, 0.3);
+  color: var(--text);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
+  border-radius: 18px;
+  box-shadow:
+    0 18px 60px rgba(60, 40, 140, 0.16),
+    0 0 1px rgba(255, 255, 255, 0.7) inset;
+}
+
+body[data-theme="pearl_mist"] .cashier-hero .eyebrow,
+body[data-theme="pearl_mist"] .cashier-hero h1,
+body[data-theme="pearl_mist"] .cashier-hero .muted,
+body[data-theme="pearl_mist"] .cashier-hero strong,
+body[data-theme="pearl_mist"] .cashier-hero small,
+body[data-theme="pearl_mist"] .cashier-hero span {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .cashier-hero .muted,
+body[data-theme="pearl_mist"] .cashier-hero small {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .hero-total span {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .hero-total strong {
+  background: linear-gradient(135deg, #7c5cff 0%, #d8527a 60%, #5cb8d8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 6px 14px rgba(124, 92, 255, 0.18));
+}
+
+/* ============================================================
+   stat-card + log-panel + product-card + cart hardcoded dark
+   surfaces -> theme-aware glass for new themes.
+   ============================================================ */
+body[data-theme="crystal_bloom"] .stat-card,
+body[data-theme="aurora_glass"] .stat-card,
+body[data-theme="midnight_velvet"] .stat-card,
+body[data-theme="crystal_bloom"] .product-card,
+body[data-theme="aurora_glass"] .product-card,
+body[data-theme="midnight_velvet"] .product-card {
+  background: var(--tp-glass-bg);
+  border-color: var(--tp-glass-border);
+  -webkit-backdrop-filter: blur(14px) saturate(1.05);
+  backdrop-filter: blur(14px) saturate(1.05);
+}
+
+body[data-theme="pearl_mist"] .stat-card,
+body[data-theme="pearl_mist"] .product-card,
+body[data-theme="pearl_mist"] .cart-item,
+body[data-theme="pearl_mist"] .log-panel,
+body[data-theme="pearl_mist"] .qty-count,
+body[data-theme="pearl_mist"] .qty-control button,
+body[data-theme="pearl_mist"] .mini-btn,
+body[data-theme="pearl_mist"] .product-media {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(120, 92, 200, 0.28);
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .product-card.in-cart {
+  background: rgba(124, 92, 255, 0.12);
+  border-color: rgba(124, 92, 255, 0.5);
+}
+
+body[data-theme="pearl_mist"] .product-name,
+body[data-theme="pearl_mist"] .product-stock,
+body[data-theme="pearl_mist"] .product-fallback,
+body[data-theme="pearl_mist"] .cart-item strong,
+body[data-theme="pearl_mist"] .stat-card span {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .product-stock {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .product-price,
+body[data-theme="pearl_mist"] .stat-card strong,
+body[data-theme="pearl_mist"] .qty-count {
+  color: var(--purple);
+}
+
+body[data-theme="pearl_mist"] .product-stock.low {
+  color: #c47900;
+}
+
+body[data-theme="pearl_mist"] .product-stock.out {
+  color: var(--red);
+}
+
+body[data-theme="pearl_mist"] #log-viewer {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .modal-backdrop {
+  background: rgba(60, 40, 140, 0.32);
+}
+
+body[data-theme="pearl_mist"] .data-table th {
+  background: rgba(124, 92, 255, 0.08);
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .data-table td {
+  border-color: rgba(120, 92, 200, 0.18);
+}
+
+body[data-theme="pearl_mist"] .clock-pill,
+body[data-theme="pearl_mist"] .user-pill {
+  background: rgba(124, 92, 255, 0.12);
+  border-color: rgba(124, 92, 255, 0.32);
+  color: var(--purple);
+}
+
+/* ============================================================
+   ANALYTICS  -  bar rows, rank badges, donut, trend chart
+   ============================================================ */
+
+/* --- Analytics bar rows (all themes) --- */
+body[data-theme="crystal_bloom"] .analytics-bar-row,
+body[data-theme="aurora_glass"] .analytics-bar-row,
+body[data-theme="midnight_velvet"] .analytics-bar-row {
+  background: var(--tp-glass-inner);
+  border-color: var(--tp-glass-border);
+  border-radius: 12px;
+}
+
+body[data-theme="pearl_mist"] .analytics-bar-row {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(120, 92, 200, 0.22);
+  border-radius: 12px;
+  color: var(--text);
+}
+
+/* --- Rank badge --- */
+body[data-theme="crystal_bloom"] .analytics-rank,
+body[data-theme="aurora_glass"] .analytics-rank,
+body[data-theme="midnight_velvet"] .analytics-rank {
+  border-color: var(--tp-glass-border);
+  background: var(--tp-glass-bg);
+  border-radius: 10px;
+}
+
+body[data-theme="pearl_mist"] .analytics-rank {
+  border: 1px solid rgba(124, 92, 255, 0.32);
+  background: rgba(124, 92, 255, 0.1);
+  color: var(--purple);
+  border-radius: 10px;
+}
+
+/* --- Bar track --- */
+body[data-theme="crystal_bloom"] .analytics-bar-track,
+body[data-theme="aurora_glass"] .analytics-bar-track,
+body[data-theme="midnight_velvet"] .analytics-bar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+body[data-theme="crystal_bloom"] .analytics-bar-track i,
+body[data-theme="aurora_glass"] .analytics-bar-track i,
+body[data-theme="midnight_velvet"] .analytics-bar-track i {
+  border-radius: 999px;
+}
+
+body[data-theme="pearl_mist"] .analytics-bar-track {
+  background: rgba(120, 92, 200, 0.12);
+  border-radius: 999px;
+}
+
+body[data-theme="pearl_mist"] .analytics-bar-track i {
+  background: linear-gradient(90deg, var(--purple), var(--green));
+  border-radius: 999px;
+}
+
+/* --- Bar head span (amount) --- */
+body[data-theme="pearl_mist"] .analytics-bar-head span {
+  color: var(--purple);
+}
+
+body[data-theme="pearl_mist"] .analytics-bar-head strong {
+  color: var(--text);
+}
+
+/* --- Bar meta --- */
+body[data-theme="pearl_mist"] .analytics-bar-meta {
+  color: var(--text2);
+}
+
+/* --- Donut center hole --- */
+body[data-theme="crystal_bloom"] .analytics-donut > div,
+body[data-theme="aurora_glass"] .analytics-donut > div,
+body[data-theme="midnight_velvet"] .analytics-donut > div {
+  background: var(--bg);
+  border-color: var(--line);
+}
+
+body[data-theme="pearl_mist"] .analytics-donut > div {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(120, 92, 200, 0.22);
+}
+
+body[data-theme="pearl_mist"] .analytics-donut strong {
+  color: var(--green);
+}
+
+body[data-theme="pearl_mist"] .analytics-donut span {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .analytics-donut small {
+  color: var(--text2);
+}
+
+/* --- Trend chart axis --- */
+body[data-theme="crystal_bloom"] .trend-axis,
+body[data-theme="aurora_glass"] .trend-axis,
+body[data-theme="midnight_velvet"] .trend-axis {
+  stroke: var(--line);
+}
+
+body[data-theme="pearl_mist"] .trend-axis {
+  stroke: rgba(120, 92, 200, 0.22);
+}
+
+/* --- Trend line: revenue --- */
+body[data-theme="pearl_mist"] .trend-line.revenue,
+body[data-theme="pearl_mist"] .trend-dot.revenue {
+  stroke: var(--purple);
+  fill: var(--purple);
+}
+
+/* --- Trend line: profit --- */
+body[data-theme="pearl_mist"] .trend-line.profit,
+body[data-theme="pearl_mist"] .trend-dot.profit {
+  stroke: var(--gold);
+  fill: var(--gold);
+}
+
+/* ============================================================
+   CART UI  -  items, controls, checkout, discount, balance
+   ============================================================ */
+
+/* --- Cart item border --- */
+body[data-theme="crystal_bloom"] .cart-item,
+body[data-theme="aurora_glass"] .cart-item,
+body[data-theme="midnight_velvet"] .cart-item {
+  border-bottom-color: var(--line);
+  padding: 14px 0;
+}
+
+body[data-theme="pearl_mist"] .cart-item {
+  border-bottom: 1px solid rgba(120, 92, 200, 0.18);
+  padding: 14px 0;
+}
+
+/* --- Cart meta --- */
+body[data-theme="pearl_mist"] .cart-meta {
+  color: var(--text2);
+}
+
+/* --- Cart controls (qty buttons + count) --- */
+body[data-theme="crystal_bloom"] .cart-controls button,
+body[data-theme="aurora_glass"] .cart-controls button,
+body[data-theme="midnight_velvet"] .cart-controls button {
+  border-radius: 8px;
+}
+
+body[data-theme="pearl_mist"] .cart-controls button {
+  border-radius: 8px;
+}
+
+body[data-theme="crystal_bloom"] .cart-controls span,
+body[data-theme="aurora_glass"] .cart-controls span,
+body[data-theme="midnight_velvet"] .cart-controls span {
+  color: var(--cyan);
+}
+
+body[data-theme="pearl_mist"] .cart-controls span {
+  color: var(--purple);
+}
+
+/* --- Checkout total --- */
+body[data-theme="pearl_mist"] .checkout-total {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .checkout-total strong {
+  color: var(--purple);
+}
+
+/* --- Checkout footer --- */
+body[data-theme="crystal_bloom"] .checkout-footer,
+body[data-theme="aurora_glass"] .checkout-footer,
+body[data-theme="midnight_velvet"] .checkout-footer {
+  border-top: 1px solid var(--line);
+}
+
+body[data-theme="pearl_mist"] .checkout-footer {
+  border-top: 1px solid rgba(120, 92, 200, 0.2);
+}
+
+/* --- Balance row --- */
+body[data-theme="pearl_mist"] .balance-row {
+  color: var(--red);
+}
+
+body[data-theme="pearl_mist"] .balance-row.ready {
+  color: var(--green);
+}
+
+/* --- Money input prefix --- */
+body[data-theme="pearl_mist"] .money-input b {
+  color: var(--purple);
+  border-color: rgba(120, 92, 200, 0.25);
+  background: rgba(124, 92, 255, 0.06);
+}
+
+body[data-theme="pearl_mist"] .money-input input {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(120, 92, 200, 0.25);
+  color: var(--text);
+}
+
+/* --- Discount row --- */
+body[data-theme="pearl_mist"] .discount-row label {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .discount-row input {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(120, 92, 200, 0.25);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+body[data-theme="crystal_bloom"] .discount-row input,
+body[data-theme="aurora_glass"] .discount-row input,
+body[data-theme="midnight_velvet"] .discount-row input {
+  border-radius: 8px;
+}
+
+/* --- Free toggle --- */
+body[data-theme="pearl_mist"] .free-toggle {
+  color: var(--gold);
+}
+
+/* ============================================================
+   EMPTY STATE + TOAST
+   ============================================================ */
+
+/* --- Empty state --- */
+body[data-theme="crystal_bloom"] .empty-state,
+body[data-theme="aurora_glass"] .empty-state,
+body[data-theme="midnight_velvet"] .empty-state {
+  background: var(--tp-glass-inner);
+  color: var(--text3);
+  border-radius: 12px;
+}
+
+body[data-theme="pearl_mist"] .empty-state {
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text2);
+  border-radius: 12px;
+}
+
+/* --- Toast --- */
+body[data-theme="crystal_bloom"] .toast,
+body[data-theme="aurora_glass"] .toast,
+body[data-theme="midnight_velvet"] .toast {
+  background: var(--tp-glass-bg);
+  border: 1px solid var(--tp-glass-border);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(20px) saturate(1.1);
+  border-radius: 999px;
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .toast {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(120, 92, 200, 0.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  backdrop-filter: blur(20px) saturate(1.2);
+  border-radius: 999px;
+  color: var(--text);
+  box-shadow: 0 8px 32px rgba(60, 40, 140, 0.18);
+}
+
+/* ============================================================
+   DATA TABLE  -  theme-aware cell backgrounds + rounded ends
+   ============================================================ */
+body[data-theme="crystal_bloom"] .data-table td,
+body[data-theme="aurora_glass"] .data-table td,
+body[data-theme="midnight_velvet"] .data-table td {
+  background: var(--tp-glass-inner);
+  border-color: var(--line);
+}
+
+body[data-theme="pearl_mist"] .data-table td {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(120, 92, 200, 0.14);
+}
+
+body[data-theme="crystal_bloom"] .data-table td:first-child,
+body[data-theme="aurora_glass"] .data-table td:first-child,
+body[data-theme="midnight_velvet"] .data-table td:first-child,
+body[data-theme="pearl_mist"] .data-table td:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+body[data-theme="crystal_bloom"] .data-table td:last-child,
+body[data-theme="aurora_glass"] .data-table td:last-child,
+body[data-theme="midnight_velvet"] .data-table td:last-child,
+body[data-theme="pearl_mist"] .data-table td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+/* ============================================================
+   FILTER PANEL + SETTINGS + LOG panels  -  light treatment
+   ============================================================ */
+
+/* --- Filter panel --- */
+body[data-theme="pearl_mist"] .filter-panel {
+  background: rgba(255, 255, 255, 0.45);
+  border-color: rgba(120, 92, 200, 0.18);
+}
+
+body[data-theme="pearl_mist"] .filter-panel.embedded {
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(120, 92, 200, 0.14);
+}
+
+/* --- Settings tabs + sections --- */
+body[data-theme="pearl_mist"] .settings-tabs .tab {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(120, 92, 200, 0.18);
+}
+
+body[data-theme="pearl_mist"] .settings-tabs .tab:hover,
+body[data-theme="pearl_mist"] .settings-tabs .tab.active {
+  background: rgba(124, 92, 255, 0.14);
+  border-color: rgba(124, 92, 255, 0.4);
+  color: var(--purple);
+}
+
+body[data-theme="pearl_mist"] .settings-section {
+  color: var(--text);
+}
+
+body[data-theme="crystal_bloom"] .settings-tabs .tab,
+body[data-theme="aurora_glass"] .settings-tabs .tab,
+body[data-theme="midnight_velvet"] .settings-tabs .tab {
+  border-radius: 10px;
+}
+
+body[data-theme="pearl_mist"] .settings-tabs .tab {
+  border-radius: 10px;
+}
+
+/* --- Log filter + unlock --- */
+body[data-theme="pearl_mist"] .log-filter {
+  border-bottom-color: rgba(120, 92, 200, 0.22);
+}
+
+body[data-theme="pearl_mist"] .log-filter input {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(120, 92, 200, 0.25);
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .log-unlock {
+  border-bottom-color: rgba(120, 92, 200, 0.22);
+}
+
+body[data-theme="pearl_mist"] .log-unlock input {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(120, 92, 200, 0.25);
+  color: var(--text);
+}
+
+/* ============================================================
+   MODAL elements  -  success/dismiss marks, payment detail,
+   cash change alert
+   ============================================================ */
+body[data-theme="pearl_mist"] .success-mark {
+  color: var(--green);
+  border-color: var(--green);
+  background: rgba(54, 160, 138, 0.1);
+}
+
+body[data-theme="pearl_mist"] .dismiss-mark {
+  color: var(--purple);
+  border-color: var(--purple);
+  background: rgba(124, 92, 255, 0.1);
+}
+
+body[data-theme="pearl_mist"] .payment-detail dt,
+body[data-theme="pearl_mist"] .payment-detail div {
+  color: var(--text);
+  border-color: rgba(120, 92, 200, 0.12);
+}
+
+body[data-theme="pearl_mist"] .cash-change-alert {
+  border-color: rgba(54, 160, 138, 0.38);
+  background: rgba(54, 160, 138, 0.08);
+}
+
+body[data-theme="pearl_mist"] .cash-change-alert span {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .cash-change-alert strong {
+  color: var(--green);
+}
+
+/* ============================================================
+   BRAND UPLOAD + INFO LIST + INLINE FORM + SYSTEM ADMIN GRID
+   ============================================================ */
+
+/* --- Brand upload --- */
+body[data-theme="pearl_mist"] .brand-upload {
+  border-color: rgba(120, 92, 200, 0.22);
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+}
+
+body[data-theme="pearl_mist"] .brand-upload img {
+  border-color: rgba(120, 92, 200, 0.22);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+body[data-theme="crystal_bloom"] .brand-upload,
+body[data-theme="aurora_glass"] .brand-upload,
+body[data-theme="midnight_velvet"] .brand-upload {
+  border-color: var(--tp-glass-border);
+  border-radius: 12px;
+}
+
+/* --- Info list --- */
+body[data-theme="pearl_mist"] .info-list div {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(120, 92, 200, 0.16);
+  border-radius: 10px;
+  color: var(--text);
+}
+
+body[data-theme="crystal_bloom"] .info-list div,
+body[data-theme="aurora_glass"] .info-list div,
+body[data-theme="midnight_velvet"] .info-list div {
+  background: var(--tp-glass-inner);
+  border-color: var(--line);
+  border-radius: 10px;
+}
+
+/* --- Inline form --- */
+body[data-theme="pearl_mist"] .inline-form {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .inline-form input,
+body[data-theme="pearl_mist"] .inline-form select {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(120, 92, 200, 0.25);
+  color: var(--text);
+}
+
+/* --- System admin grid panels --- */
+body[data-theme="pearl_mist"] .system-admin-grid .panel {
+  background: rgba(255, 255, 255, 0.65);
+  border-color: rgba(120, 92, 200, 0.28);
+}
+
+/* --- Check row + inline check --- */
+body[data-theme="pearl_mist"] .check-row,
+body[data-theme="pearl_mist"] .inline-check {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .check-row input,
+body[data-theme="pearl_mist"] .inline-check input {
+  accent-color: var(--green);
+}
+
+/* ============================================================
+   QR DISPLAY  -  customer-facing screen, must follow theme.
+   ============================================================ */
+body[data-theme="crystal_bloom"].qr-display-body,
+body[data-theme="aurora_glass"].qr-display-body,
+body[data-theme="midnight_velvet"].qr-display-body,
+body[data-theme="pearl_mist"].qr-display-body {
+  background: transparent;
+}
+
+/* Display shell base */
+body[data-theme="crystal_bloom"] .display-shell,
+body[data-theme="aurora_glass"] .display-shell,
+body[data-theme="midnight_velvet"] .display-shell {
+  background:
+    linear-gradient(135deg, var(--tp-glass-bg), rgba(0, 0, 0, 0.18)),
+    radial-gradient(ellipse at 22% 44%, var(--tp-iris-2), transparent 42%),
+    radial-gradient(ellipse at 76% 20%, var(--tp-iris-4), transparent 38%);
+}
+
+body[data-theme="pearl_mist"] .display-shell {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(220, 200, 255, 0.4)),
+    radial-gradient(ellipse at 22% 44%, var(--tp-iris-2), transparent 42%),
+    radial-gradient(ellipse at 76% 20%, var(--tp-iris-1), transparent 38%);
+}
+
+/* Right side itemized panel */
+body[data-theme="crystal_bloom"] .display-panel,
+body[data-theme="aurora_glass"] .display-panel,
+body[data-theme="midnight_velvet"] .display-panel {
+  background:
+    linear-gradient(180deg, var(--tp-glass-bg), var(--tp-glass-bg)),
+    radial-gradient(circle at 80% 0%, var(--tp-iris-4), transparent 18rem);
+  border-left: 4px solid var(--purple);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  backdrop-filter: blur(20px) saturate(1.1);
+}
+
+body[data-theme="pearl_mist"] .display-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(245, 235, 255, 0.82)),
+    radial-gradient(circle at 80% 0%, rgba(124, 92, 255, 0.1), transparent 18rem);
+  border-left: 4px solid var(--purple);
+  color: var(--text);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
+}
+
+/* Brand block at top of right panel */
+body[data-theme="crystal_bloom"] .display-brand,
+body[data-theme="aurora_glass"] .display-brand,
+body[data-theme="midnight_velvet"] .display-brand {
+  border: 1px solid var(--tp-glass-border);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+}
+
+body[data-theme="pearl_mist"] .display-brand {
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+}
+
+body[data-theme="crystal_bloom"] .display-brand h2,
+body[data-theme="aurora_glass"] .display-brand h2,
+body[data-theme="midnight_velvet"] .display-brand h2 {
+  background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2), var(--tp-iris-4));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="pearl_mist"] .display-brand h2 {
+  background: linear-gradient(135deg, #7c5cff, #d8527a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="pearl_mist"] .display-brand p,
+body[data-theme="pearl_mist"] .display-brand .muted {
+  color: var(--text2);
+}
+
+/* Table head text + items text */
+body[data-theme="crystal_bloom"] .display-table-head,
+body[data-theme="aurora_glass"] .display-table-head,
+body[data-theme="midnight_velvet"] .display-table-head {
+  color: var(--purple2);
+  border-top-color: var(--tp-glass-border);
+}
+
+body[data-theme="pearl_mist"] .display-table-head {
+  color: var(--purple);
+  border-top-color: rgba(124, 92, 255, 0.22);
+}
+
+body[data-theme="pearl_mist"] .display-items {
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .display-item {
+  color: var(--text);
+}
+
+/* Total Payment block */
+body[data-theme="crystal_bloom"] .display-total strong,
+body[data-theme="aurora_glass"] .display-total strong,
+body[data-theme="midnight_velvet"] .display-total strong {
+  background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2), var(--tp-iris-4));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="pearl_mist"] .display-total strong {
+  background: linear-gradient(135deg, #7c5cff, #d8527a, #5cb8d8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-theme="pearl_mist"] .display-total span {
+  color: var(--text2);
+}
+
+/* Bottom address bar */
+body[data-theme="crystal_bloom"] .display-bottom-bar,
+body[data-theme="aurora_glass"] .display-bottom-bar,
+body[data-theme="midnight_velvet"] .display-bottom-bar {
+  background: var(--tp-glass-bg);
+  border-top: 2px solid var(--purple);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+body[data-theme="pearl_mist"] .display-bottom-bar {
+  background: rgba(255, 255, 255, 0.65);
+  border-top: 2px solid var(--purple);
+  color: var(--text);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+body[data-theme="pearl_mist"] .display-bottom-bar strong {
+  color: var(--purple);
+}
+
+body[data-theme="pearl_mist"] .display-bottom-bar span {
+  color: var(--text2);
+}
+
+/* Online pill */
+body[data-theme="crystal_bloom"] .display-online,
+body[data-theme="aurora_glass"] .display-online,
+body[data-theme="midnight_velvet"] .display-online,
+body[data-theme="pearl_mist"] .display-online {
+  border: 1px solid var(--tp-glass-border);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--green), var(--tp-iris-2));
+  color: #062e1f;
+  padding: 6px 14px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+/* QR splash + stage backgrounds */
+body[data-theme="crystal_bloom"] .display-splash,
+body[data-theme="aurora_glass"] .display-splash,
+body[data-theme="midnight_velvet"] .display-splash {
+  background:
+    radial-gradient(circle at center, var(--tp-iris-1), transparent 22rem),
+    var(--bg);
+}
+
+body[data-theme="pearl_mist"] .display-splash {
+  background:
+    radial-gradient(circle at center, var(--tp-iris-1), transparent 22rem),
+    var(--bg);
+  color: var(--text);
+}
+
+body[data-theme="crystal_bloom"] .display-stage-qr,
+body[data-theme="aurora_glass"] .display-stage-qr,
+body[data-theme="midnight_velvet"] .display-stage-qr {
+  background:
+    radial-gradient(circle at center, var(--tp-iris-2), transparent 24rem),
+    linear-gradient(160deg, var(--bg), var(--bg2));
+}
+
+body[data-theme="pearl_mist"] .display-stage-qr {
+  background:
+    radial-gradient(circle at center, var(--tp-iris-2), transparent 24rem),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.45), rgba(220, 200, 255, 0.55));
+}
+
+body[data-theme="crystal_bloom"] .display-stage-event,
+body[data-theme="aurora_glass"] .display-stage-event,
+body[data-theme="midnight_velvet"] .display-stage-event {
+  background:
+    radial-gradient(circle at center, var(--tp-iris-1), transparent 24rem),
+    linear-gradient(160deg, var(--bg), var(--bg2));
+}
+
+body[data-theme="pearl_mist"] .display-stage-event {
+  background:
+    radial-gradient(circle at center, var(--tp-iris-1), transparent 24rem),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(245, 230, 255, 0.65));
+  color: var(--text);
+}
+
+/* Stage event card */
+body[data-theme="crystal_bloom"] .stage-event-card,
+body[data-theme="aurora_glass"] .stage-event-card,
+body[data-theme="midnight_velvet"] .stage-event-card {
+  background:
+    linear-gradient(145deg, var(--tp-glass-bg), rgba(0, 0, 0, 0.2)),
+    radial-gradient(circle at top right, var(--tp-iris-4), transparent 18rem);
+  border: 1px solid var(--tp-glass-border);
+  border-radius: 18px;
+  box-shadow: 0 0 70px var(--tp-iris-1);
+}
+
+body[data-theme="pearl_mist"] .stage-event-card {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.85), rgba(245, 235, 255, 0.85)),
+    radial-gradient(circle at top right, var(--tp-iris-4), transparent 18rem);
+  border: 1px solid rgba(124, 92, 255, 0.3);
+  border-radius: 18px;
+  color: var(--text);
+  box-shadow: 0 0 70px rgba(124, 92, 255, 0.2);
+}
+
+body[data-theme="pearl_mist"] .stage-event-card p {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .stage-event-card em {
+  color: #2f8a64;
+}
+
+/* Display event panel (right side success/dismiss banner) */
+body[data-theme="crystal_bloom"] .display-event-panel,
+body[data-theme="aurora_glass"] .display-event-panel,
+body[data-theme="midnight_velvet"] .display-event-panel {
+  background:
+    linear-gradient(145deg, var(--tp-glass-bg), rgba(0, 0, 0, 0.18)),
+    radial-gradient(circle at 90% 0%, var(--tp-iris-4), transparent 9rem);
+  border: 1px solid var(--tp-glass-border);
+  border-radius: 14px;
+}
+
+body[data-theme="pearl_mist"] .display-event-panel {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(245, 235, 255, 0.82)),
+    radial-gradient(circle at 90% 0%, var(--tp-iris-3), transparent 9rem);
+  border: 1px solid rgba(124, 92, 255, 0.28);
+  border-radius: 14px;
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .display-event-panel p {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .display-event-panel dt {
+  color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .display-event-panel dd {
+  color: var(--text);
+}
+
+/* Stage copy hero text */
+body[data-theme="pearl_mist"] .display-stage-copy h1 {
+  color: rgba(60, 40, 140, 0.32);
+}
+
+body[data-theme="pearl_mist"] .display-stage-copy p {
+  color: var(--purple);
+}
+
+/* Marquee + footer */
+body[data-theme="pearl_mist"] .marquee {
+  background: rgba(124, 92, 255, 0.1);
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .marquee span {
+  color: var(--purple);
+}
+
+body[data-theme="pearl_mist"] .display-footer {
+  color: var(--text2);
+  border-top-color: rgba(124, 92, 255, 0.22);
+}
+
+/* Payment logo cells */
+body[data-theme="crystal_bloom"] .payment-logo-cell,
+body[data-theme="aurora_glass"] .payment-logo-cell,
+body[data-theme="midnight_velvet"] .payment-logo-cell {
+  border-color: var(--tp-glass-border);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+body[data-theme="pearl_mist"] .payment-logo-cell {
+  border-color: rgba(124, 92, 255, 0.25);
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  color: var(--text);
+}
+
+body[data-theme="pearl_mist"] .payment-logo-cell strong {
+  color: var(--text2);
+}
+
+/* Display crystal scene (DOM-based) softened on new themes since canvas
+   already drives the animation. */
+body[data-theme="crystal_bloom"] .display-crystal-scene,
+body[data-theme="aurora_glass"] .display-crystal-scene,
+body[data-theme="midnight_velvet"] .display-crystal-scene,
+body[data-theme="pearl_mist"] .display-crystal-scene {
+  opacity: 0.35;
+}
+
+/* Display hint text */
+body[data-theme="pearl_mist"] .display-hint {
+  color: var(--text2);
+}
+
+/* Display media overlay gradient */
+body[data-theme="pearl_mist"] .display-media {
+  background:
+    linear-gradient(to bottom, rgba(241, 237, 255, 0.2), rgba(241, 237, 255, 0.64)),
+    radial-gradient(ellipse at center, rgba(124, 92, 255, 0.12), transparent 42%);
+}
+
+/* QR card border uses theme accent */
+body[data-theme="crystal_bloom"] .qr-box,
+body[data-theme="aurora_glass"] .qr-box,
+body[data-theme="midnight_velvet"] .qr-box {
+  border-color: var(--tp-glass-border);
+}
+
+body[data-theme="pearl_mist"] .qr-box {
+  border-color: rgba(124, 92, 255, 0.28);
+}
+
+/* ============================================================
+   UX polish  -  new themes only, keeps function untouched
+   ============================================================ */
+body[data-theme="crystal_bloom"] .nav-btn,
+body[data-theme="aurora_glass"] .nav-btn,
+body[data-theme="midnight_velvet"] .nav-btn,
+body[data-theme="pearl_mist"] .nav-btn {
+  border-radius: 999px;
+  padding: 8px 16px;
+  transition: transform 0.15s ease, background 0.15s ease,
+              border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body[data-theme="crystal_bloom"] .nav-btn:hover,
+body[data-theme="aurora_glass"] .nav-btn:hover,
+body[data-theme="midnight_velvet"] .nav-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--tp-iris-2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--tp-iris-1);
+}
+
+body[data-theme="crystal_bloom"] .nav-btn.active,
+body[data-theme="aurora_glass"] .nav-btn.active,
+body[data-theme="midnight_velvet"] .nav-btn.active {
+  background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2));
+  border-color: transparent;
+  color: #1a0e3a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32), 0 0 0 1px var(--tp-iris-2) inset;
+}
+
+body[data-theme="pearl_mist"] .nav-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(124, 92, 255, 0.22);
+}
+
+body[data-theme="pearl_mist"] .nav-btn.active {
+  background: linear-gradient(135deg, #7c5cff, #d6a7ff);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+body[data-theme="crystal_bloom"] .seg,
+body[data-theme="aurora_glass"] .seg,
+body[data-theme="midnight_velvet"] .seg,
+body[data-theme="pearl_mist"] .seg {
+  border-radius: 999px;
+  transition: transform 0.15s ease, background 0.15s ease,
+              border-color 0.15s ease, color 0.15s ease;
+}
+
+body[data-theme="crystal_bloom"] .seg.active,
+body[data-theme="aurora_glass"] .seg.active,
+body[data-theme="midnight_velvet"] .seg.active {
+  background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2));
+  border-color: transparent;
+  color: #1a0e3a;
+}
+
+body[data-theme="pearl_mist"] .seg.active {
+  background: linear-gradient(135deg, #7c5cff, #d6a7ff);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+/* Soft rounded edges across the board so the glass aesthetic reads */
+body[data-theme="crystal_bloom"] .panel,
+body[data-theme="aurora_glass"] .panel,
+body[data-theme="midnight_velvet"] .panel,
+body[data-theme="pearl_mist"] .panel,
+body[data-theme="crystal_bloom"] .modal,
+body[data-theme="aurora_glass"] .modal,
+body[data-theme="midnight_velvet"] .modal,
+body[data-theme="pearl_mist"] .modal,
+body[data-theme="crystal_bloom"] .stat-card,
+body[data-theme="aurora_glass"] .stat-card,
+body[data-theme="midnight_velvet"] .stat-card,
+body[data-theme="pearl_mist"] .stat-card,
+body[data-theme="crystal_bloom"] .product-card,
+body[data-theme="aurora_glass"] .product-card,
+body[data-theme="midnight_velvet"] .product-card,
+body[data-theme="pearl_mist"] .product-card {
+  border-radius: 16px;
+}
+
+body[data-theme="crystal_bloom"] .btn,
+body[data-theme="aurora_glass"] .btn,
+body[data-theme="midnight_velvet"] .btn,
+body[data-theme="pearl_mist"] .btn {
+  border-radius: 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+body[data-theme="crystal_bloom"] .btn:hover,
+body[data-theme="aurora_glass"] .btn:hover,
+body[data-theme="midnight_velvet"] .btn:hover,
+body[data-theme="pearl_mist"] .btn:hover {
+  transform: translateY(-1px);
+}
+
+body[data-theme="crystal_bloom"] .btn.wide,
+body[data-theme="aurora_glass"] .btn.wide,
+body[data-theme="midnight_velvet"] .btn.wide,
+body[data-theme="pearl_mist"] .btn.wide {
+  border-radius: 999px;
+}
+
+/* ============================================================
+   Global UX polish  -  rounded corners, softer inputs
+   ============================================================ */
+
+/* Auth card rounded */
+body[data-theme="crystal_bloom"] .auth-card,
+body[data-theme="aurora_glass"] .auth-card,
+body[data-theme="midnight_velvet"] .auth-card,
+body[data-theme="pearl_mist"] .auth-card {
+  border-radius: 18px;
+}
+
+/* Product media rounded */
+body[data-theme="crystal_bloom"] .product-media,
+body[data-theme="aurora_glass"] .product-media,
+body[data-theme="midnight_velvet"] .product-media,
+body[data-theme="pearl_mist"] .product-media {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Image picker rounded */
+body[data-theme="crystal_bloom"] .image-picker,
+body[data-theme="aurora_glass"] .image-picker,
+body[data-theme="midnight_velvet"] .image-picker,
+body[data-theme="pearl_mist"] .image-picker {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+body[data-theme="pearl_mist"] .image-picker {
+  border-color: rgba(120, 92, 200, 0.28);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Softer field inputs */
+body[data-theme="crystal_bloom"] .field input,
+body[data-theme="crystal_bloom"] .field select,
+body[data-theme="aurora_glass"] .field input,
+body[data-theme="aurora_glass"] .field select,
+body[data-theme="midnight_velvet"] .field input,
+body[data-theme="midnight_velvet"] .field select,
+body[data-theme="pearl_mist"] .field input,
+body[data-theme="pearl_mist"] .field select {
+  border-radius: 10px;
+}
+
+/* Search field input */
+body[data-theme="crystal_bloom"] .search-field input,
+body[data-theme="aurora_glass"] .search-field input,
+body[data-theme="midnight_velvet"] .search-field input,
+body[data-theme="pearl_mist"] .search-field input {
+  border-radius: 10px;
+}
+
+body[data-theme="pearl_mist"] .search-field input {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(120, 92, 200, 0.25);
+  color: var(--text);
+}
+
+/* OTP + PIN inputs */
+body[data-theme="crystal_bloom"] .otp-row input,
+body[data-theme="crystal_bloom"] .pin-row input,
+body[data-theme="aurora_glass"] .otp-row input,
+body[data-theme="aurora_glass"] .pin-row input,
+body[data-theme="midnight_velvet"] .otp-row input,
+body[data-theme="midnight_velvet"] .pin-row input,
+body[data-theme="pearl_mist"] .otp-row input,
+body[data-theme="pearl_mist"] .pin-row input {
+  border-radius: 12px;
+}
+
+/* ============================================================
+   Smooth theme handoff so switching feels intentional
+   ============================================================ */
+body {
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+.app-bg,
+.bg-gradient,
+.topbar,
+.panel,
+.cashier-hero,
+.stat-card,
+.product-card,
+.cart-item,
+.modal,
+.auth-card,
+.display-shell,
+.display-panel,
+.display-bottom-bar,
+.nav-btn,
+.seg,
+.field input,
+.field select,
+.field textarea,
+.search-field input,
+.toast,
+.data-table td,
+.data-table th,
+.analytics-bar-row,
+.analytics-rank,
+.analytics-bar-track,
+.analytics-donut > div,
+.empty-state,
+.loading-card,
+.filter-panel,
+.settings-tabs .tab,
+.info-list div,
+.brand-upload,
+.log-filter,
+.log-unlock,
+.checkout-footer,
+.money-input b,
+.image-picker,
+.check-row,
+.inline-check,
+.clock-pill,
+.user-pill {
+  transition: background 0.4s ease, border-color 0.4s ease,
+              color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* ============================================================
+   Reduce motion support
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .tp-canvas { display: none; }
+  body,
+  .app-bg,
+  .bg-gradient,
+  .topbar,
+  .panel,
+  .cashier-hero,
+  .stat-card,
+  .product-card,
+  .cart-item,
+  .modal,
+  .auth-card,
+  .display-shell,
+  .display-panel,
+  .display-bottom-bar,
+  .nav-btn,
+  .seg,
+  .field input,
+  .field select,
+  .field textarea,
+  .search-field input,
+  .toast,
+  .data-table td,
+  .data-table th,
+  .analytics-bar-row,
+  .analytics-rank,
+  .analytics-bar-track,
+  .analytics-donut > div,
+  .empty-state,
+  .loading-card,
+  .filter-panel,
+  .settings-tabs .tab,
+  .info-list div,
+  .brand-upload,
+  .log-filter,
+  .log-unlock,
+  .checkout-footer,
+  .money-input b,
+  .image-picker,
+  .check-row,
+  .inline-check,
+  .clock-pill,
+  .user-pill {
+    transition: none !important;
+  }
+}

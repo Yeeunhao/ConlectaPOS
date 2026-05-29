@@ -5,8 +5,6 @@
 # =========================================================
 
 import os
-import sys
-import json
 import html
 import base64
 import threading
@@ -16,26 +14,21 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
-from email.header import Header
 
-from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 log = logging.getLogger(__name__)
 
-# =========================================================
-# CONFIG
-# =========================================================
-if getattr(sys, "frozen", False):
-    _BASE_DIR = os.path.dirname(sys.executable)
-else:
-    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from conlecta_oauth import (
+    BASE_DIR as _BASE_DIR,
+    GMAIL_SCOPES,
+    GMAIL_TOKEN_FILE,
+    OAUTH_TOKEN_FILE,
+    load_google_credentials,
+)
 
-TOKEN_FILE = os.path.join(_BASE_DIR, "token.json")
-OAUTH_TOKEN_FILE = os.path.join(_BASE_DIR, "oauth_token.json")
-
-OAUTH_CREDS_FILE = os.path.join(_BASE_DIR, "oauth_credentials.json")
+TOKEN_FILE = GMAIL_TOKEN_FILE
 
 LOGO_PATH = os.path.join(
     _BASE_DIR,
@@ -52,146 +45,12 @@ SENDER_EMAIL = (
 # =========================================================
 # SCOPES
 # =========================================================
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.send"
-]
+SCOPES = GMAIL_SCOPES
 
-# =========================================================
-# SAVE REFRESHED TOKEN
-# =========================================================
-def _save_refreshed_token(
-    creds: Credentials,
-    path: str
-):
 
-    try:
-
-        from datetime import timezone
-
-        token_data = {
-            "token": creds.token,
-            "refresh_token": creds.refresh_token,
-            "token_uri": creds.token_uri,
-            "client_id": creds.client_id,
-            "client_secret": creds.client_secret,
-            "scopes": list(creds.scopes),
-            "universe_domain": getattr(
-                creds,
-                "universe_domain",
-                "googleapis.com"
-            ),
-            "account": "",
-            "expiry": (
-                creds.expiry
-                .astimezone(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z")
-                if creds.expiry else None
-            )
-        }
-
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(token_data, f, indent=4)
-
-        log.info(f"Refreshed token saved -> {path}")
-
-    except Exception as e:
-
-        log.error(
-            f"Failed save refreshed token: {e}"
-        )
-
-# =========================================================
-# AUTH
-# =========================================================
 def _load_gmail_credentials() -> Credentials | None:
-    """
-    Load Gmail credentials from token.json
-    Auto refresh expired token
-    """
-
-    for path in (TOKEN_FILE, OAUTH_TOKEN_FILE):
-
-        if not os.path.isfile(path):
-            continue
-
-        try:
-
-            log.info(f"Loading Gmail token: {path}")
-
-            creds = Credentials.from_authorized_user_file(
-                path,
-                SCOPES
-            )
-
-            if not creds:
-                continue
-
-            # =====================================================
-            # TOKEN EXPIRED -> REFRESH
-            # =====================================================
-            if creds.expired:
-
-                log.warning(
-                    "Gmail token expired"
-                )
-
-                if creds.refresh_token:
-
-                    try:
-
-                        log.info(
-                            "Refreshing Gmail token..."
-                        )
-
-                        creds.refresh(Request())
-
-                        log.info(
-                            "Gmail token refreshed"
-                        )
-
-                        # SAVE NEW TOKEN
-                        _save_refreshed_token(
-                            creds,
-                            path
-                        )
-
-                    except Exception as refresh_error:
-
-                        log.error(
-                            f"Gmail token refresh failed: "
-                            f"{refresh_error}"
-                        )
-
-                        continue
-
-                else:
-
-                    log.error(
-                        "No refresh token available"
-                    )
-
-                    continue
-
-            # =====================================================
-            # VALID
-            # =====================================================
-            if creds.valid:
-
-                log.info(
-                    "Gmail credentials valid"
-                )
-
-                return creds
-
-        except Exception as e:
-
-            log.warning(
-                f"Gmail creds load failed "
-                f"from {path}: {e}"
-            )
-
-    return None
+    creds, _path = load_google_credentials(GMAIL_SCOPES)
+    return creds
 
 
 def google_auth() -> Credentials:
