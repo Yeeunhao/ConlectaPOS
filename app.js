@@ -3296,14 +3296,31 @@ function renderVideoAssets() {
   }).join("");
 }
 
+function videoPlaylistEntries() {
+  return Array.from(new Set(
+    (state.settings.video_playlist_urls || state.settings.video_playlist || []).map(String).filter(Boolean),
+  ));
+}
+
+async function persistVideoPlaylist(entries = videoPlaylistEntries()) {
+  const result = await api("/api/video-playlist", {
+    method: "POST",
+    body: { playlist: entries },
+  });
+  if (result.settings) state.settings = result.settings;
+  if (result.assets) state.assets = result.assets;
+  return result;
+}
+
 function toggleVideo(url) {
-  const list = new Set((state.settings.video_playlist || state.settings.video_playlist_urls || []).map(String));
+  const list = new Set(videoPlaylistEntries());
   if (list.has(url)) list.delete(url);
   else list.add(url);
   state.settings.video_playlist = Array.from(list);
   state.settings.video_playlist_urls = Array.from(list);
   renderVideoAssets();
   publishDisplayState();
+  persistVideoPlaylist(Array.from(list)).catch((err) => showToast(err.message, "error"));
 }
 
 async function uploadPaymentImages(files) {

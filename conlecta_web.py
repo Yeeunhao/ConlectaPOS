@@ -539,11 +539,40 @@ def merge_settings_with_device(merchant_settings, device_settings):
     elif str(device.get("payment_image_path") or "").strip():
         merged["payment_image_path"] = str(device.get("payment_image_path") or "").strip()
         merged["payment_image_paths"] = [merged["payment_image_path"]]
-    if device.get("video_playlist"):
+    if "video_playlist" in device:
         merged["video_playlist"] = list(device.get("video_playlist") or [])
     if str(device.get("active_theme") or "").strip():
         merged["active_theme"] = str(device.get("active_theme") or "").strip()
     return merged
+
+
+def normalize_video_playlist(entries):
+    paths = []
+    seen = set()
+    for value in entries or []:
+        path = _video_path_from_value(value)
+        if not path:
+            continue
+        key = os.path.normcase(os.path.abspath(path))
+        if key in seen:
+            continue
+        seen.add(key)
+        paths.append(path)
+    return paths
+
+
+def save_device_video_playlist(state, device_id, entries, merchant_id=None):
+    if not device_id:
+        raise ValueError("Device ID tidak valid untuk video playlist.")
+    playlist = normalize_video_playlist(entries)
+    set_device_settings(
+        state,
+        device_id,
+        {"video_playlist": playlist},
+        merchant_id=merchant_id,
+    )
+    save_state(state)
+    return playlist
 
 
 def _active_qr_store(state, merchant_id):
@@ -4768,12 +4797,18 @@ def video_playlist_urls(settings=None):
     return urls
 
 
-def scan_asset_payload():
+def scan_asset_payload(device_id=None):
     video_files = []
     patterns = [os.path.join(VIDEO_FOLDER, "*.mp4")]
-    for device_dir in glob.glob(os.path.join(VIDEO_FOLDER, "*")):
+    device_key = str(device_id or "").strip()
+    if device_key:
+        device_dir = os.path.join(VIDEO_FOLDER, device_key)
         if os.path.isdir(device_dir):
-            patterns.append(os.path.join(device_dir, "*.mp4"))
+            patterns = [os.path.join(device_dir, "*.mp4")]
+    else:
+        for device_dir in glob.glob(os.path.join(VIDEO_FOLDER, "*")):
+            if os.path.isdir(device_dir):
+                patterns.append(os.path.join(device_dir, "*.mp4"))
     seen = set()
     for pattern in patterns:
         for path in sorted(glob.glob(pattern)):
@@ -4786,6 +4821,7 @@ def scan_asset_payload():
                 "url": public_asset_url(path),
                 "path": path,
                 "size_mb": round(os.path.getsize(path) / (1024 * 1024), 1),
+                "device_id": device_key or "",
             })
     return {
         "videos": video_files,
@@ -4907,13 +4943,12 @@ def remove_video_asset(data, merchant_id=None, device_id=None, state=None):
         if target_url and value_url == target_url:
             continue
         playlist.append(value)
-    set_device_settings(state, device_id, {"video_playlist": playlist}, merchant_id=mid)
-    save_state(state)
+    save_device_video_playlist(state, device_id, playlist, merchant_id=mid)
     if os.path.isfile(target):
         os.remove(target)
     merged = merge_settings_with_device(load_settings(mid), get_device_settings(state, device_id))
     log.info("Video removed from device settings: merchant=%s device=%s file=%s", mid, device_id, os.path.basename(target))
-    return {"settings": settings_payload(merged, mid), "assets": scan_asset_payload()}
+    return {"settings": settings_payload(merged, mid, get_device_settings(state, device_id)), "assets": scan_asset_payload(device_id)}
 
 
 def settings_payload(settings=None, merchant_id=None, device_settings=None):
@@ -5243,7 +5278,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "session_reset_at": bucket.get("session_reset_at"),
                 "version": load_version_info(),
                 "logs": [],
-                "assets": scan_asset_payload(),
+                "assets": scan_asset_payload(did or None),
             })
         if path == "/api/stock":
             state = load_state()
@@ -5265,7 +5300,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             device_settings = get_device_settings(state, did, (auth or {}).get("id")) if did else {}
             return self.send_json({
                 "ok": True,
-                "assets": scan_asset_payload(),
+                "assets": scan_asset_payload(did or None),
                 "settings": settings_payload(merchant_id=mid, device_settings=device_settings),
             })
         if path == "/api/email-templates":
@@ -5547,6 +5582,10 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                     return self.send_error_json(msg, 403)
             incoming.pop("admin_password", None)
             device_patch = {k: incoming.pop(k) for k in list(incoming.keys()) if k in DEVICE_SETTING_KEYS}
+            if did and "video_playlist" in device_patch and not device_patch.get("video_playlist"):
+                existing_playlist = get_device_settings(state, did).get("video_playlist") or []
+                if existing_playlist:
+                    device_patch.pop("video_playlist")
             merchant_saved = save_settings(incoming, mid)
             if did:
                 set_device_settings(state, did, device_patch, merchant_id=mid, account_id=auth.get("id"))
@@ -5583,10 +5622,26 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             playlist = list(device_settings.get("video_playlist") or [])
             if saved.get("path") and saved["path"] not in playlist:
                 playlist.append(saved["path"])
-            set_device_settings(state, did, {"video_playlist": playlist}, merchant_id=mid, account_id=auth.get("id"))
-            save_state(state)
+            save_device_video_playlist(state, did, playlist, merchant_id=mid)
             merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, auth.get("id")))
-            return self.send_json({"ok": True, "video": saved, "assets": scan_asset_payload(), "settings": merged})
+            return self.send_json({"ok": True, "video": saved, "assets": scan_asset_payload(did), "settings": merged})
+        if path == "/api/video-playlist":
+            state = load_state()
+            mid, auth = self.request_merchant_id(state)
+            did = self.device_id()
+            if not did:
+                return self.send_error_json("Device ID tidak valid.", 400)
+            entries = data.get("playlist")
+            if entries is None:
+                entries = data.get("video_playlist") or []
+            playlist = save_device_video_playlist(state, did, entries, merchant_id=mid)
+            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, auth.get("id")))
+            return self.send_json({
+                "ok": True,
+                "playlist": playlist,
+                "settings": merged,
+                "assets": scan_asset_payload(did),
+            })
         if path == "/api/video/remove":
             state = load_state()
             mid, auth = self.request_merchant_id(state)
