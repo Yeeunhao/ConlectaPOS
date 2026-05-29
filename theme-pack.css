@@ -638,7 +638,8 @@ body[data-theme="pearl_mist"] .product-media {
 
 body[data-theme="pearl_mist"] .cart-item {
   border-radius: 12px;
-  padding: 12px;
+  padding: 10px 12px;
+  border-bottom: none;
 }
 
 body[data-theme="pearl_mist"] .product-card.in-cart {

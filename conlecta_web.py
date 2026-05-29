@@ -258,9 +258,9 @@ def _db_configured():
 
 
 def _db_mandatory():
-    if not _db_configured() or os.environ.get("CONLECTA_ALLOW_SHEETS") == "1":
+    if not _db_configured():
         return False
-    return _db_ready()
+    return os.environ.get("CONLECTA_ALLOW_SHEETS") != "1"
 
 
 def _db_unavailable_message(area="data"):

@@ -1764,23 +1764,33 @@ function renderCart() {
     return;
   }
   list.innerHTML = entries.map((item) => `
-    <div class="cart-item">
-      <div>
-        <strong>${escapeHtml(item.name)}${item.free ? " [FREE]" : ""}</strong>
-        <div class="cart-meta">${cartPricingHtml(item)}</div>
-        ${item.line_discount ? `<div class="cart-meta discount">Discount ${formatRp(item.line_discount)}</div>` : ""}
-        <div class="discount-row">
-          <label>Disc % <input type="text" inputmode="numeric" value="${item.disc_pct || ""}" data-discount-field="disc_pct" data-name="${escapeAttr(item.name)}" ${item.disc_fixed ? "disabled" : ""}></label>
-          <label>Disc Rp <input type="text" inputmode="numeric" value="${item.disc_fixed ? formatPlainNumber(item.disc_fixed) : ""}" data-discount-field="disc_fixed" data-name="${escapeAttr(item.name)}" ${item.disc_pct ? "disabled" : ""}></label>
-          <label class="free-toggle inline"><input type="checkbox" data-action="toggle-free" data-name="${escapeAttr(item.name)}" ${item.free ? "checked" : ""}><span>FREE</span></label>
+    <article class="cart-item">
+      <div class="cart-item-head">
+        <div class="cart-item-main">
+          <strong class="cart-item-name">${escapeHtml(item.name)}${item.free ? ' <span class="cart-free-badge">FREE</span>' : ""}</strong>
+          <div class="cart-item-line">${cartPricingHtml(item)}</div>
+        </div>
+        <div class="cart-controls">
+          <button class="mini-btn" type="button" data-action="cart-dec" data-name="${escapeAttr(item.name)}" aria-label="Kurangi">-</button>
+          <span>${item.qty}</span>
+          <button class="mini-btn add" type="button" data-action="cart-inc" data-name="${escapeAttr(item.name)}" aria-label="Tambah">+</button>
         </div>
       </div>
-      <div class="cart-controls">
-        <button class="mini-btn" type="button" data-action="cart-dec" data-name="${escapeAttr(item.name)}">-</button>
-        <span>${item.qty}</span>
-        <button class="mini-btn add" type="button" data-action="cart-inc" data-name="${escapeAttr(item.name)}">+</button>
+      <div class="cart-item-adjust">
+        <label class="cart-disc-chip">
+          <span>Disc %</span>
+          <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_pct || ""}" data-discount-field="disc_pct" data-name="${escapeAttr(item.name)}" ${item.disc_fixed ? "disabled" : ""}>
+        </label>
+        <label class="cart-disc-chip">
+          <span>Disc Rp</span>
+          <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_fixed ? formatPlainNumber(item.disc_fixed) : ""}" data-discount-field="disc_fixed" data-name="${escapeAttr(item.name)}" ${item.disc_pct ? "disabled" : ""}>
+        </label>
+        <label class="cart-free-chip">
+          <input type="checkbox" data-action="toggle-free" data-name="${escapeAttr(item.name)}" ${item.free ? "checked" : ""}>
+          <span>Free</span>
+        </label>
       </div>
-    </div>
+    </article>
   `).join("");
 }
 
@@ -1934,10 +1944,59 @@ async function payCash() {
   showToast("Payment success", "success", PAYMENT_NOTICE_MS);
 }
 
+function compactActiveQr(active) {
+  if (!active) return null;
+  const next = { ...active };
+  if (next.qr_data && next.qr_image) delete next.qr_image;
+  return next;
+}
+
+function safeSetLocalStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    if (err?.name === "QuotaExceededError" || /quota/i.test(String(err?.message || ""))) {
+      console.warn("localStorage quota exceeded for", key);
+      return false;
+    }
+    console.warn("localStorage set failed for", key, err);
+    return false;
+  }
+}
+
+function compactDisplayItem(item) {
+  return {
+    name: item.name,
+    item_name: item.item_name || item.name,
+    qty: item.qty,
+    price: item.price,
+    amount: item.amount,
+    unit_price: item.unit_price,
+    gross: item.gross,
+    line_discount: item.line_discount,
+    disc_pct: item.disc_pct,
+    disc_fixed: item.disc_fixed,
+    subtotal: item.subtotal,
+    free: item.free,
+  };
+}
+
+function compactDisplayPreview(preview) {
+  return {
+    items: (preview.items || []).map(compactDisplayItem),
+    amount: preview.amount,
+    payment_method: preview.payment_method,
+    cash_received: preview.cash_received,
+    change: preview.change,
+    customer_name: preview.customer_name,
+    cashier_name: preview.cashier_name,
+  };
+}
 function displaySnapshot() {
   const cash = parseMoney($("#cash-received")?.value || "");
   const total = cartTotal();
-  return {
+  return compactDisplayPreview({
     items: cartEntries(),
     amount: total,
     payment_method: cash > 0 ? "Cash" : "QRIS",
@@ -1945,7 +2004,7 @@ function displaySnapshot() {
     change: Math.max(0, cash - total),
     customer_name: $("#customer-name")?.value?.trim?.() || "",
     cashier_name: state.auth?.name || "Cashier",
-  };
+  });
 }
 
 function publishDisplayState() {
@@ -1963,18 +2022,18 @@ function publishDisplayState() {
   };
 
   const merchantId = state.settings?.merchant_id || state.auth?.merchant_id || "";
-  if (merchantId) localStorage.setItem(deviceStorageKey("conlecta_display_merchant"), merchantId);
-  if (state.auth?.id) localStorage.setItem(deviceStorageKey("conlecta_display_account"), state.auth.id);
+  if (merchantId) safeSetLocalStorage(deviceStorageKey("conlecta_display_merchant"), merchantId);
+  if (state.auth?.id) safeSetLocalStorage(deviceStorageKey("conlecta_display_account"), state.auth.id);
 
-  if (state.activeQr) localStorage.setItem(deviceStorageKey("conlecta_active_qr"), JSON.stringify(state.activeQr));
+  if (state.activeQr) safeSetLocalStorage(deviceStorageKey("conlecta_active_qr"), JSON.stringify(compactActiveQr(state.activeQr)));
   else localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
 
-  if (state.displayEvent) localStorage.setItem(deviceStorageKey("conlecta_display_event"), JSON.stringify(state.displayEvent));
+  if (state.displayEvent) safeSetLocalStorage(deviceStorageKey("conlecta_display_event"), JSON.stringify(state.displayEvent));
   else localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
 
-  localStorage.setItem("conlecta_version", JSON.stringify(state.version || {}));
-  localStorage.setItem(accountScopedStorageKey("conlecta_settings"), JSON.stringify(state.settings || {}));
-  localStorage.setItem(deviceStorageKey("conlecta_display_preview"), JSON.stringify(preview));
+  safeSetLocalStorage("conlecta_version", JSON.stringify(state.version || {}));
+  safeSetLocalStorage(accountScopedStorageKey("conlecta_settings"), JSON.stringify(state.settings || {}));
+  safeSetLocalStorage(deviceStorageKey("conlecta_display_preview"), JSON.stringify(preview));
 
   qrChannel?.postMessage({ type: "display-state", ...payload });
 }
@@ -3819,7 +3878,7 @@ async function refreshStockData({ loading = false } = {}) {
   if (nextProducts.length || !state.products.length) {
     state.products = nextProducts;
   } else {
-    showToast("Stock sheet kosong/gagal terbaca, katalog lokal dipertahankan.", "error");
+    showToast("Stock database kosong atau gagal dimuat, katalog lokal dipertahankan.", "error");
   }
   state.vendors = vendorResult.vendors || [];
   reconcileCartWithStock();
@@ -3831,7 +3890,7 @@ async function refreshStockData({ loading = false } = {}) {
 }
 
 async function refreshVendorData({ loading = false } = {}) {
-  const result = await api("/api/vendors", { loading: loading ? "Memuat vendor dari sheet..." : false });
+  const result = await api("/api/vendors", { loading: loading ? "Memuat vendor dari database..." : false });
   state.vendors = result.vendors || [];
   renderVendorOptions();
   renderVendors();
@@ -3985,7 +4044,7 @@ async function handleAction(action, target) {
       await deleteSelectedStock();
     } else if (action === "reload-stock") {
       await refreshActiveStockTab({ loading: true });
-      showToast("Data sheet refreshed");
+      showToast("Data refreshed");
     } else if (action === "add-vendor") {
       await addVendor();
     } else if (action === "delete-vendor") {
