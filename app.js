@@ -652,7 +652,7 @@ function bootstrapDeviceTheme() {
   applyDeviceTheme(DEFAULT_THEME);
 }
 
-const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png";
+const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png?v=2";
 const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
 
 function brandLogoUrl(settings = state.settings) {

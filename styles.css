@@ -2024,12 +2024,14 @@ textarea:focus {
 
 .cashier-qr-frame {
   position: relative;
-  width: min(380px, 88vw);
+  width: min(420px, 92vw);
   margin: 18px auto;
   line-height: 0;
 }
 
 .cashier-qr-frame-bg {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: auto;
   display: block;
@@ -2038,10 +2040,11 @@ textarea:focus {
 
 .cashier-qr-code {
   position: absolute;
+  z-index: 2;
   left: 50%;
-  top: 43.2%;
+  top: 46%;
   transform: translate(-50%, -50%);
-  width: 52.5%;
+  width: 52%;
   aspect-ratio: 1;
   height: auto;
   object-fit: contain;
@@ -3010,7 +3013,6 @@ body[data-theme="midnight_teal"] {
   width: min(620px, 94vw, 90vh);
   display: grid;
   place-items: center;
-  gap: 16px;
   padding: 0;
   background: transparent;
   color: #061018;
@@ -3027,6 +3029,8 @@ body[data-theme="midnight_teal"] {
 }
 
 .stage-qr-frame-bg {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: auto;
   display: block;
@@ -3035,10 +3039,11 @@ body[data-theme="midnight_teal"] {
 
 .stage-qr-code {
   position: absolute;
+  z-index: 2;
   left: 50%;
-  top: 43.2%;
+  top: 46%;
   transform: translate(-50%, -50%);
-  width: 52.5%;
+  width: 52%;
   aspect-ratio: 1;
   height: auto;
   object-fit: contain;
@@ -3046,20 +3051,6 @@ body[data-theme="midnight_teal"] {
   background: #fff;
   padding: 2px;
   box-sizing: border-box;
-}
-
-.stage-qr-card > strong {
-  color: #34d399;
-  font-family: var(--mono);
-  font-size: clamp(32px, 5vw, 54px);
-  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
-}
-
-.stage-qr-card > span {
-  color: #f8fafc;
-  font-weight: 800;
-  font-size: clamp(14px, 2vw, 18px);
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
 }
 
 .display-cash-live {

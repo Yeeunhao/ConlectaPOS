@@ -21,7 +21,7 @@ const CASHIER_NOTICE_STALE_MS = 8000;
 const CASHIER_NOTICE_GRACE_MS = 3000;
 const ORPHAN_SUCCESS_CLEAR_MS = 12000;
 const CASH_CHANGE_OVERLAY_MS = 7000;
-const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png";
+const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png?v=2";
 const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
 
 function displayBrandLogoUrl(settings = qrState.settings) {
@@ -619,7 +619,6 @@ function renderDisplay() {
     renderCashLive({});
   } else if (hasActiveQr) {
     updateStageQrImage(active);
-    $("#display-stage-total").textContent = formatRp(active.amount);
     stageQr.hidden = false;
     stageEvent.hidden = true;
     video.hidden = true;
