@@ -3296,7 +3296,10 @@ def send_receipt_email(record, email):
     try:
         from conlecta_email import send_receipt_email as _send
     except Exception as exc:
-        log.warning("Email module unavailable: %s", exc)
+        log.warning(
+            "Email module unavailable: %s (on VPS run: pip install -r requirements.txt)",
+            exc,
+        )
         return
 
     def ok(msg):

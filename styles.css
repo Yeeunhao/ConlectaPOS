@@ -764,9 +764,9 @@ button {
 }
 
 .panel {
-  background: rgba(20, 28, 53, 0.88);
+  background: rgba(20, 28, 53, 0.92);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
 }
 
 .panel-head,
@@ -840,8 +840,8 @@ h2 {
   padding: 26px;
   margin-bottom: 10px;
   border: 1px solid var(--line);
-  background: rgba(20, 28, 53, 0.86);
-  box-shadow: var(--shadow);
+  background: rgba(20, 28, 53, 0.9);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
 }
 
 .hero-total {
@@ -983,9 +983,11 @@ textarea:focus {
   gap: 10px;
   min-height: 245px;
   border: 1px solid rgba(160, 140, 255, 0.18);
-  background: rgba(31, 42, 74, 0.78);
+  background: rgba(31, 42, 74, 0.82);
   padding: 14px;
   transition: transform 0.15s ease, border-color 0.15s ease;
+  content-visibility: auto;
+  contain-intrinsic-size: 245px;
 }
 
 .product-card.in-cart {

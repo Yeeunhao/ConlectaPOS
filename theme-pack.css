@@ -560,16 +560,6 @@ body[data-theme="midnight_velvet"] .cashier-hero {
     0 0 1px var(--tp-iris-1) inset;
 }
 
-body[data-theme="crystal_bloom"] .cashier-hero .hero-total strong,
-body[data-theme="aurora_glass"] .cashier-hero .hero-total strong,
-body[data-theme="midnight_velvet"] .cashier-hero .hero-total strong {
-  background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2), var(--tp-iris-4));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.25));
-}
-
 body[data-theme="pearl_mist"] .cashier-hero {
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(120, 92, 200, 0.3);
@@ -600,13 +590,7 @@ body[data-theme="pearl_mist"] .hero-total span {
   color: var(--text2);
 }
 
-body[data-theme="pearl_mist"] .hero-total strong {
-  background: linear-gradient(135deg, #7c5cff 0%, #d8527a 60%, #5cb8d8 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 6px 14px rgba(124, 92, 255, 0.18));
-}
+/* hero-total / checkout-total gradient text -> see performance section at file end */
 
 /* ============================================================
    stat-card + log-panel + product-card + cart hardcoded dark
@@ -1791,5 +1775,135 @@ body {
   .clock-pill,
   .user-pill {
     transition: none !important;
+  }
+}
+
+/* ============================================================
+   Performance + readability (canvas bg + lite mode)
+   ============================================================ */
+body.conlecta-canvas-bg .app-bg {
+  opacity: 0.55;
+}
+
+body.conlecta-canvas-bg .bg-scene.is-reduced .crystal,
+body.conlecta-canvas-bg .bg-scene.is-reduced .particle,
+body.conlecta-canvas-bg .bg-scene.is-reduced::before,
+body.conlecta-canvas-bg .bg-scene.is-reduced .aurora-ring {
+  display: none;
+}
+
+body.conlecta-canvas-bg .bg-scene.is-reduced .bg-gradient {
+  opacity: 0.28;
+}
+
+body.conlecta-lite .panel,
+body.conlecta-lite .topbar,
+body.conlecta-lite .cashier-hero,
+body.conlecta-lite .auth-card,
+body.conlecta-lite .modal,
+body.conlecta-lite .stat-card,
+body.conlecta-lite .product-card,
+body.conlecta-lite .cart-item,
+body.conlecta-lite .log-panel,
+body.conlecta-lite .loading-card {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+body.conlecta-lite .tp-canvas {
+  opacity: 0.72;
+}
+
+/* Readable text on all themed surfaces */
+body[data-theme] .panel,
+body[data-theme] .checkout-panel,
+body[data-theme] .catalog-panel,
+body[data-theme] .modal,
+body[data-theme] .cart-item {
+  color: var(--text);
+}
+
+body[data-theme] .field span,
+body[data-theme] .checkout-total,
+body[data-theme] .panel-head h2,
+body[data-theme] .page-head h1 {
+  color: var(--text2);
+}
+
+body[data-theme] input,
+body[data-theme] select,
+body[data-theme] textarea {
+  color: #0f172a;
+  background: rgba(248, 250, 252, 0.96);
+  border-color: rgba(100, 116, 139, 0.35);
+}
+
+body[data-theme="pearl_mist"] input,
+body[data-theme="pearl_mist"] select,
+body[data-theme="pearl_mist"] textarea {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(120, 92, 200, 0.28);
+}
+
+body[data-theme="crystal_bloom"] .money-input input,
+body[data-theme="aurora_glass"] .money-input input,
+body[data-theme="midnight_velvet"] .money-input input,
+body[data-theme="deep_space"] .money-input input,
+body[data-theme="warm_terminal"] .money-input input,
+body[data-theme="midnight_teal"] .money-input input {
+  color: #0f172a;
+  background: rgba(248, 250, 252, 0.96);
+}
+
+/* Money totals: solid fallback before gradient clip */
+.hero-total strong,
+.checkout-total strong {
+  color: var(--cyan);
+}
+
+body[data-theme="pearl_mist"] .hero-total strong,
+body[data-theme="pearl_mist"] .checkout-total strong {
+  color: var(--purple);
+}
+
+body[data-theme="crystal_bloom"] .cashier-hero .hero-total strong,
+body[data-theme="aurora_glass"] .cashier-hero .hero-total strong,
+body[data-theme="midnight_velvet"] .cashier-hero .hero-total strong,
+body[data-theme="crystal_bloom"] .checkout-total strong,
+body[data-theme="aurora_glass"] .checkout-total strong,
+body[data-theme="midnight_velvet"] .checkout-total strong {
+  color: var(--purple2);
+}
+
+body[data-theme="crystal_bloom"] .cashier-hero .hero-total strong.due,
+body[data-theme="aurora_glass"] .cashier-hero .hero-total strong.due,
+body[data-theme="midnight_velvet"] .cashier-hero .hero-total strong.due {
+  color: var(--cyan);
+}
+
+body[data-theme="crystal_bloom"] .cashier-hero .hero-total strong.change,
+body[data-theme="aurora_glass"] .cashier-hero .hero-total strong.change,
+body[data-theme="midnight_velvet"] .cashier-hero .hero-total strong.change {
+  color: var(--green);
+}
+
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  body[data-theme="crystal_bloom"] .cashier-hero .hero-total strong:not(.change):not(.due),
+  body[data-theme="aurora_glass"] .cashier-hero .hero-total strong:not(.change):not(.due),
+  body[data-theme="midnight_velvet"] .cashier-hero .hero-total strong:not(.change):not(.due) {
+    background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2), var(--tp-iris-4));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  body[data-theme="pearl_mist"] .hero-total strong,
+  body[data-theme="pearl_mist"] .checkout-total strong {
+    background: linear-gradient(135deg, #7c5cff 0%, #d8527a 60%, #5cb8d8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 }

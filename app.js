@@ -1770,6 +1770,14 @@ function startDismissCooldown() {
   }, 3000);
 }
 
+function resetCustomerFields() {
+  const nameEl = $("#customer-name");
+  const emailEl = $("#customer-email");
+  if (nameEl) nameEl.value = "";
+  if (emailEl) emailEl.value = "";
+  queueDisplayPublish();
+}
+
 function clearCart({ force = false } = {}) {
   if (state.activeQr && !force) {
     showToast("Dismiss QR dulu sebelum clear cart", "error");
@@ -1777,6 +1785,7 @@ function clearCart({ force = false } = {}) {
   }
   state.cart = {};
   $("#cash-received").value = "";
+  resetCustomerFields();
   state.currentTxn = "";
   $("#txn-label").textContent = "TXN -";
   renderCatalog();
@@ -1826,6 +1835,7 @@ async function payCash() {
   }
   const result = await api("/api/checkout/cash", { method: "POST", body: checkoutPayload("Cash") });
   const record = result.record || {};
+  resetCustomerFields();
   state.pendingPaymentClear = true;
   applyServerData(result, { preserveCart: true });
   setDisplayEvent(result.display_event || null);
@@ -1974,6 +1984,7 @@ async function completeQrisPayment() {
     };
     const result = await api("/api/checkout/qris-success", { method: "POST", body: payload });
     const record = result.record || payload;
+    resetCustomerFields();
     state.pendingPaymentClear = true;
     applyServerData(result, { preserveCart: true });
     state.activeQr = null;

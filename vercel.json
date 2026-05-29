@@ -5,8 +5,15 @@
       "dest": "http://34.128.90.163:8765/api/$1"
     },
     {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/qr-display",
+      "dest": "/qr-display.html"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/$1"
+      "dest": "/index.html"
     }
   ]
 }

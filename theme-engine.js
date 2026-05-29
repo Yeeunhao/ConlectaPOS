@@ -167,10 +167,10 @@
 
   function seedScene() {
     const baseCount = Math.min(window.innerWidth, 1600) / 1600;
-    const reduction = 0.6 * particleReductionFactor;
-    const cCount = Math.round((8 + baseCount * 7) * reduction);
-    const pCount = Math.round((3 + baseCount * 2) * reduction);
-    const sCount = Math.round((24 + baseCount * 48) * reduction);
+    const reduction = (performanceMode ? 0.45 : 0.55) * particleReductionFactor;
+    const cCount = Math.round((6 + baseCount * 5) * reduction);
+    const pCount = Math.round((2 + baseCount * 2) * reduction);
+    const sCount = Math.round((16 + baseCount * 32) * reduction);
 
     crystals = [];
     for (let i = 0; i < cCount; i++) crystals.push(spawnCrystal(true));
@@ -623,11 +623,21 @@
     }
 
     try {
-      performanceMode = localStorage.getItem(PERF_MODE_KEY) === "true";
-    } catch (e) { /* ignore */ }
+      const storedPerf = localStorage.getItem(PERF_MODE_KEY);
+      performanceMode = storedPerf === null ? true : storedPerf === "true";
+      if (storedPerf === null) {
+        try { localStorage.setItem(PERF_MODE_KEY, "true"); } catch (e) { /* ignore */ }
+      }
+    } catch (e) {
+      performanceMode = true;
+    }
+    document.body.classList.toggle("conlecta-lite", performanceMode);
 
     ensureCanvas();
     resize();
+    document.body.classList.add("conlecta-canvas-bg");
+    const staticScene = document.querySelector(".bg-scene");
+    if (staticScene) staticScene.classList.add("is-reduced");
 
     const stored = readStoredTheme();
     const existing = document.body.dataset.theme;
@@ -680,6 +690,7 @@
   function setPerformanceMode(enabled) {
     performanceMode = !!enabled;
     try { localStorage.setItem(PERF_MODE_KEY, performanceMode ? "true" : "false"); } catch (e) { /* ignore */ }
+    document.body.classList.toggle("conlecta-lite", performanceMode);
     if (canvas) seedScene();
   }
 
