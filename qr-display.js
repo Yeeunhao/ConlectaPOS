@@ -20,8 +20,11 @@ const ACTIVE_QR_TTL_MS = 30 * 60 * 1000;
 const CASHIER_NOTICE_STALE_MS = 8000;
 const CASHIER_NOTICE_GRACE_MS = 3000;
 const ORPHAN_SUCCESS_CLEAR_MS = 12000;
+const CASH_CHANGE_OVERLAY_MS = 7000;
+const QRIS_FRAME_SRC = "/assets/Qris%20Frame/SingapayConlectaQrisFrame.png";
 let displayEventTimer = null;
 let orphanAckTimer = null;
+let cashChangeTimer = null;
 let refreshTimer = null;
 let clockTimer = null;
 let displayClosed = false;
@@ -417,18 +420,20 @@ function paymentLogoPaths() {
 }
 
 function paymentLogoLabel(src) {
-  const file = decodeURIComponent(String(src || "").split("/").pop() || "");
+  const clean = String(src || "").split("?")[0];
+  const file = decodeURIComponent(clean.split("/").pop() || "");
   const base = file.replace(/\.[a-z0-9]+$/i, "").replace(/^\d+[_-]/, "");
   const key = base.toLowerCase().replace(/[\s()]+/g, "_").replace(/[-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
   const known = {
     gsingapay: "SingaPay",
+    singapay: "SingaPay",
     mybca: "BCA",
     ovo: "OVO",
     qris: "QRIS",
     egopay: "GoPay",
     images_1: "BRI",
     images: "Mandiri",
-    "shopee_pay_logo_png_seeklogo_406839": "ShopeePay",
+    shopee_pay_logo_png_seeklogo_406839: "ShopeePay",
   };
   return known[key] || base.replace(/[_-]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()) || "Payment";
 }
@@ -464,6 +469,65 @@ function renderPaymentLogos() {
   `).join("");
 }
 
+function isCashPayment(source) {
+  return String(source?.payment_method || "").trim().toLowerCase() === "cash";
+}
+
+function previewCashInfo(preview) {
+  const cash = Number(preview?.cash_received || 0);
+  const amount = Number(preview?.amount || 0);
+  const change = Math.max(0, Number(preview?.change ?? (cash - amount)));
+  const active = cash > 0 || isCashPayment(preview);
+  return { active, cash, amount, change };
+}
+
+function updateStageQrImage(active) {
+  const img = $("#display-stage-qr-img");
+  const frame = $(".stage-qr-frame-bg");
+  if (!img) return;
+  const src = qrImageSrc(active, 512);
+  if (src && img.dataset.qrSrc !== src) {
+    img.dataset.qrSrc = src;
+    img.src = src;
+  }
+  if (frame && frame.dataset.frameSrc !== QRIS_FRAME_SRC) {
+    frame.dataset.frameSrc = QRIS_FRAME_SRC;
+    frame.src = QRIS_FRAME_SRC;
+  }
+}
+
+function scheduleCashChangeClear(event) {
+  clearTimeout(cashChangeTimer);
+  cashChangeTimer = null;
+  if (!event || event.type !== "success" || !isCashPayment(event)) return;
+  const delay = Math.max(0, CASH_CHANGE_OVERLAY_MS - displayEventAgeMs(event));
+  cashChangeTimer = setTimeout(() => {
+    if (qrState.displayEvent !== event) return;
+    qrState.displayEvent = null;
+    localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
+    renderDisplay();
+  }, delay + 80);
+}
+
+function renderCashLive(preview) {
+  const panel = $("#display-cash-live");
+  const changeRow = $("#display-cash-change-row");
+  if (!panel) return;
+  const cashInfo = previewCashInfo(preview);
+  if (!cashInfo.active || cashInfo.cash <= 0) {
+    panel.hidden = true;
+    if (changeRow) changeRow.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  $("#display-cash-received").textContent = formatRp(cashInfo.cash);
+  if (changeRow) {
+    const showChange = cashInfo.amount > 0 && cashInfo.cash >= cashInfo.amount;
+    changeRow.hidden = !showChange;
+    if (showChange) $("#display-cash-change").textContent = formatRp(cashInfo.change);
+  }
+}
+
 function qrImageSrc(active, size = 420) {
   if (!active) return "";
   const image = String(active.qr_image || "").trim();
@@ -487,6 +551,7 @@ function renderDisplay() {
   const active = qrState.activeQr;
   scheduleDisplayEventExpiry(event);
   scheduleOrphanSuccessClear(event);
+  scheduleCashChangeClear(event);
   const preview = qrState.preview || {};
   const view = active || event || preview;
   const hasActiveQr = hasQrPayload(active);
@@ -494,9 +559,11 @@ function renderDisplay() {
   const items = hasEvent ? [] : (view.items || []);
   const stageQr = $("#display-stage-qr");
   const stageEvent = $("#display-stage-event");
+  const stageEventCard = $(".stage-event-card");
   const video = $("#display-video");
   const paymentArea = $(".display-payment-area");
   const eventPanel = $("#display-event-panel");
+  const cashLive = previewCashInfo(hasEvent || hasActiveQr ? {} : preview);
 
   if (hasEvent) {
     stageQr.hidden = true;
@@ -505,44 +572,64 @@ function renderDisplay() {
     paymentArea.hidden = true;
     eventPanel.hidden = false;
     const isDismissed = event.type === "dismissed";
-    const isCashSuccess = !isDismissed && String(event.payment_method || "").toLowerCase() === "cash";
+    const isCashSuccess = !isDismissed && isCashPayment(event);
     const kicker = isDismissed ? "QRIS Dismissed" : "Payment Success";
-    const eventMessage = isDismissed
-      ? "Payment request closed."
-      : (isCashSuccess ? `Kembalian ${formatRp(event.change || 0)}` : (event.message || ""));
     const validation = cashierValidationMessage(event);
-    $("#display-stage-event-kicker").textContent = kicker;
-    $("#display-stage-event-title").textContent = event.title || kicker;
-    $("#display-stage-event-message").textContent = validation || eventMessage;
-    $("#display-stage-event-total").textContent = formatRp(event.amount);
-    $("#display-event-kicker").textContent = kicker;
-    $("#display-event-title").textContent = event.title || kicker;
-    $("#display-event-message").textContent = validation || eventMessage;
-    $("#display-event-total").textContent = formatRp(event.amount);
+    if (stageEventCard) stageEventCard.classList.toggle("is-cash-change", isCashSuccess);
+    if (isCashSuccess) {
+      $("#display-stage-event-kicker").textContent = "Pembayaran Tunai";
+      $("#display-stage-event-title").textContent = "Kembalian";
+      $("#display-stage-event-message").textContent = validation || `Total ${formatRp(event.amount)} · Bayar ${formatRp(event.cash_received || event.amount)}`;
+      $("#display-stage-event-total").textContent = formatRp(event.change || 0);
+      $("#display-event-kicker").textContent = "Pembayaran Tunai";
+      $("#display-event-title").textContent = "Kembalian";
+      $("#display-event-message").textContent = validation || `Total ${formatRp(event.amount)}`;
+      $("#display-event-total").textContent = formatRp(event.change || 0);
+    } else {
+      const eventMessage = isDismissed ? "Payment request closed." : (event.message || "");
+      $("#display-stage-event-kicker").textContent = kicker;
+      $("#display-stage-event-title").textContent = event.title || kicker;
+      $("#display-stage-event-message").textContent = validation || eventMessage;
+      $("#display-stage-event-total").textContent = formatRp(event.amount);
+      $("#display-event-kicker").textContent = kicker;
+      $("#display-event-title").textContent = event.title || kicker;
+      $("#display-event-message").textContent = validation || eventMessage;
+      $("#display-event-total").textContent = formatRp(event.amount);
+    }
+    renderCashLive({});
   } else if (hasActiveQr) {
-    $("#display-stage-qr-img").src = qrImageSrc(active, 420);
+    updateStageQrImage(active);
     $("#display-stage-total").textContent = formatRp(active.amount);
     stageQr.hidden = false;
     stageEvent.hidden = true;
     video.hidden = true;
     paymentArea.hidden = true;
     eventPanel.hidden = true;
+    renderCashLive({});
   } else {
-    $("#display-stage-qr-img").removeAttribute("src");
+    const qrImg = $("#display-stage-qr-img");
+    if (qrImg) {
+      qrImg.removeAttribute("src");
+      delete qrImg.dataset.qrSrc;
+    }
     stageQr.hidden = true;
     stageEvent.hidden = true;
     video.hidden = false;
     paymentArea.hidden = false;
     eventPanel.hidden = true;
+    if (stageEventCard) stageEventCard.classList.remove("is-cash-change");
     video.play?.().catch(() => null);
+    renderCashLive(preview);
   }
 
   if (!items.length) {
     $("#display-status").textContent = "";
-    $("#display-total").textContent = event ? formatRp(event.amount) : "Rp 0";
+    $("#display-total").textContent = event ? formatRp(event.amount) : formatRp(preview.amount || 0);
     $("#display-items").innerHTML = `<div class="empty-state">Waiting for order</div>`;
-    $("#display-payment-logos").hidden = hasEvent;
-    $("#display-hint").textContent = cashierValidationMessage(event);
+    $("#display-payment-logos").hidden = hasEvent || hasActiveQr;
+    $("#display-hint").textContent = cashLive.active && cashLive.cash > 0 && !hasEvent && !hasActiveQr
+      ? "Menunggu konfirmasi pembayaran tunai..."
+      : cashierValidationMessage(event);
     return;
   }
 
@@ -557,7 +644,9 @@ function renderDisplay() {
   `).join("") || `<div class="empty-state">No line items</div>`;
 
   $("#display-payment-logos").hidden = hasActiveQr || hasEvent;
-  $("#display-hint").textContent = "";
+  $("#display-hint").textContent = cashLive.active && cashLive.cash > 0 && !hasEvent && !hasActiveQr
+    ? "Menunggu konfirmasi pembayaran tunai..."
+    : "";
 }
 
 function applyDisplayPayload(data = {}) {
@@ -677,6 +766,7 @@ function shutdownDisplay() {
   displayClosed = true;
   clearTimeout(displayEventTimer);
   clearTimeout(orphanAckTimer);
+  clearTimeout(cashChangeTimer);
   clearInterval(refreshTimer);
   clearInterval(clockTimer);
   localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));

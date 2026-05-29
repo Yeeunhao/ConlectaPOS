@@ -157,6 +157,7 @@ OTP_TTL_SECONDS = 60
 OTP_RESEND_COOLDOWN_SECONDS = 60
 OTP_MAX_RESENDS = 1
 DISPLAY_EVENT_TTL_SECONDS = 5
+DISPLAY_CASH_CHANGE_SECONDS = 7
 DISPLAY_SUCCESS_MAX_HOLD_SECONDS = 24 * 60 * 60
 CASHIER_NOTICE_STALE_SECONDS = 8
 CLOSED_QR_TTL_SECONDS = 24 * 60 * 60
@@ -1141,7 +1142,13 @@ def _display_event_payload(kind, source=None):
     else:
         title = "Display Update"
         message = ""
-    requires_ack = kind == "success"
+    requires_ack = kind == "success" and payment_method != PAYMENT_METHOD_CASH
+    if kind == "success" and payment_method == PAYMENT_METHOD_CASH:
+        hold_seconds = DISPLAY_CASH_CHANGE_SECONDS
+    elif requires_ack:
+        hold_seconds = DISPLAY_SUCCESS_MAX_HOLD_SECONDS
+    else:
+        hold_seconds = DISPLAY_EVENT_TTL_SECONDS
     return {
         "type": kind,
         "title": title,
@@ -1156,7 +1163,7 @@ def _display_event_payload(kind, source=None):
         "cashier_name": str(source.get("cashier_name") or ""),
         "items": [],
         "created_ts": created,
-        "expires_ts": created + (DISPLAY_SUCCESS_MAX_HOLD_SECONDS if requires_ack else DISPLAY_EVENT_TTL_SECONDS),
+        "expires_ts": created + hold_seconds,
         "requires_ack": requires_ack,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
     }

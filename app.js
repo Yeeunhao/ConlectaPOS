@@ -319,7 +319,7 @@ function setDisplayEvent(event) {
     if (state.displayEvent.requires_ack) return;
     const delay = Math.max(0, Number(state.displayEvent.expires_ts || 0) * 1000 - Date.now());
     displayEventTimer = setTimeout(() => {
-      if (displayEventExpired(state.displayEvent)) {
+      if (!state.displayEvent || displayEventExpired(state.displayEvent)) {
         state.displayEvent = null;
         publishDisplayState();
       }
@@ -1677,6 +1677,10 @@ function toggleFreeItem(name, checked) {
   updateTotals();
 }
 
+function isDiscountFieldFocused() {
+  return Boolean(document.activeElement?.matches?.("[data-discount-field]"));
+}
+
 function cartItemElement(name) {
   const safe = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(name) : name.replace(/"/g, '\\"');
   return document.querySelector(`.cart-item[data-name="${safe}"]`);
@@ -1737,7 +1741,7 @@ function setLineDiscount(name, field, value, { repaint = false } = {}) {
     patchCartItemLine(name);
     patchCartDiscountFields(name);
   }
-  updateTotals();
+  updateTotals({ publishDisplay: false });
 }
 
 function cartPricingHtml(item) {
@@ -1792,6 +1796,7 @@ function renderCatalog() {
 }
 
 function renderCart() {
+  if (isDiscountFieldFocused()) return;
   const list = $("#cart-list");
   const entries = cartEntries();
   if (!entries.length) {
@@ -1829,7 +1834,7 @@ function renderCart() {
   `).join("");
 }
 
-function updateTotals() {
+function updateTotals({ publishDisplay = true } = {}) {
   const total = cartTotal();
   const cash = parseMoney($("#cash-received").value);
   const itemTypes = cartEntries().length;
@@ -1864,7 +1869,16 @@ function updateTotals() {
     payButton.disabled = total <= 0;
   }
   updateQrActions();
-  queueDisplayPublish();
+  if (publishDisplay) queueDisplayPublish();
+}
+
+let displayPublishTimer = null;
+function queueDisplayPublish() {
+  clearTimeout(displayPublishTimer);
+  displayPublishTimer = setTimeout(() => {
+    displayPublishTimer = null;
+    publishDisplayState();
+  }, isDiscountFieldFocused() ? 450 : 120);
 }
 
 function qrImageSrc(active, size = 320) {
@@ -2071,15 +2085,6 @@ function publishDisplayState() {
   safeSetLocalStorage(deviceStorageKey("conlecta_display_preview"), JSON.stringify(preview));
 
   qrChannel?.postMessage({ type: "display-state", ...payload });
-}
-
-function queueDisplayPublish() {
-  if (displayPublishQueued) return;
-  displayPublishQueued = true;
-  requestAnimationFrame(() => {
-    displayPublishQueued = false;
-    publishDisplayState();
-  });
 }
 
 async function generateQR() {
@@ -4346,7 +4351,7 @@ function bindEvents() {
   $("#search-input").addEventListener("input", renderCatalog);
   $("#cash-received").addEventListener("input", (event) => {
     const amount = parseMoney(event.target.value);
-    event.target.value = formatPlainNumber(amount);
+    event.target.value = amount ? formatPlainNumber(amount) : "";
     updateTotals();
   });
   $("#customer-name").addEventListener("input", queueDisplayPublish);
@@ -4374,7 +4379,6 @@ function bindEvents() {
     if (discountInput) {
       const field = discountInput.dataset.discountField;
       const value = parseMoney(discountInput.value);
-      if (field === "disc_fixed") discountInput.value = value ? formatPlainNumber(value) : "";
       setLineDiscount(discountInput.dataset.name, field, value, { repaint: false });
       return;
     }
@@ -4390,14 +4394,20 @@ function bindEvents() {
     }
   });
   document.addEventListener("focusout", (event) => {
-    const field = event.target.closest?.("[data-discount-field]");
-    if (!field) return;
-    const row = field.closest(".cart-item");
+    const discountInput = event.target.closest?.("[data-discount-field]");
+    if (!discountInput) return;
+    const row = discountInput.closest(".cart-item");
     requestAnimationFrame(() => {
       const active = document.activeElement;
       if (row && active && row.contains(active) && active.matches?.("[data-discount-field]")) return;
+      const field = discountInput.dataset.discountField;
+      if (field === "disc_fixed") {
+        const value = parseMoney(discountInput.value);
+        discountInput.value = value ? formatPlainNumber(value) : "";
+      }
       renderCatalog();
       renderCart();
+      updateTotals();
     });
   }, true);
   document.addEventListener("change", (event) => {

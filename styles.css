@@ -2994,35 +2994,94 @@ body[data-theme="midnight_teal"] {
 }
 
 .stage-qr-card {
-  width: min(520px, 78vh, 78vw);
+  width: min(420px, 78vh, 78vw);
   display: grid;
   place-items: center;
   gap: 14px;
-  padding: clamp(20px, 4vw, 34px);
-  background: #fff;
+  padding: 0;
+  background: transparent;
   color: #061018;
-  border: 12px solid rgba(52, 211, 153, 0.82);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.6),
-    0 0 60px rgba(52, 211, 153, 0.35);
-  animation: qrArrive 0.45s ease both, qrGlow 2.1s ease-in-out infinite;
+  border: none;
+  box-shadow: none;
+  animation: qrArrive 0.45s ease both;
 }
 
-.stage-qr-card img {
-  width: min(390px, 60vh, 62vw);
-  height: min(390px, 60vh, 62vw);
+.stage-qr-frame {
+  position: relative;
+  width: min(380px, 72vw);
+  line-height: 0;
+}
+
+.stage-qr-frame-bg {
+  width: 100%;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 18px 40px rgba(8, 12, 32, 0.35));
+}
+
+.stage-qr-code {
+  position: absolute;
+  left: 50%;
+  top: 41.5%;
+  transform: translate(-50%, -50%);
+  width: 58%;
+  aspect-ratio: 1;
+  height: auto;
   object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
 }
 
-.stage-qr-card strong {
+.stage-qr-card > strong {
   color: #047857;
   font-family: var(--mono);
   font-size: clamp(28px, 4vw, 48px);
 }
 
-.stage-qr-card span {
-  color: #0f172a;
-  font-weight: 900;
+.stage-qr-card > span {
+  color: #eef2ff;
+  font-weight: 800;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.display-cash-live {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 92, 255, 0.22);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.display-cash-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.display-cash-row strong {
+  color: var(--purple);
+  font-family: var(--mono);
+  font-size: 18px;
+}
+
+.display-cash-row.change strong {
+  color: var(--green);
+}
+
+.stage-event-card.is-cash-change strong {
+  color: var(--green);
+  font-size: clamp(42px, 8vw, 88px);
+}
+
+.stage-event-card.is-cash-change em {
+  color: #eef2ff;
+  font-size: clamp(22px, 3vw, 34px);
 }
 
 @keyframes qrArrive {

@@ -45,7 +45,10 @@
 
       <div class="display-stage-qr" id="display-stage-qr" hidden>
         <div class="stage-qr-card">
-          <img id="display-stage-qr-img" alt="QRIS payment code">
+          <div class="stage-qr-frame">
+            <img class="stage-qr-frame-bg" src="/assets/Qris%20Frame/SingapayConlectaQrisFrame.png" alt="">
+            <img id="display-stage-qr-img" class="stage-qr-code" alt="QRIS payment code">
+          </div>
           <strong id="display-stage-total">Rp 0</strong>
           <span>Scan QRIS untuk membayar</span>
         </div>
@@ -93,6 +96,17 @@
       <div class="display-total">
         <span>Total Payment</span>
         <strong id="display-total">Rp 0</strong>
+      </div>
+
+      <div class="display-cash-live" id="display-cash-live" hidden>
+        <div class="display-cash-row">
+          <span>Cash Received</span>
+          <strong id="display-cash-received">Rp 0</strong>
+        </div>
+        <div class="display-cash-row change" id="display-cash-change-row" hidden>
+          <span>Change</span>
+          <strong id="display-cash-change">Rp 0</strong>
+        </div>
       </div>
 
       <div class="display-event-panel" id="display-event-panel" hidden>
