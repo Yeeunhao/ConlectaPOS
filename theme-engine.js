@@ -12,6 +12,7 @@
   "use strict";
 
   const STORAGE_KEY = "conlecta:theme";
+  let storageKey = STORAGE_KEY;
   const PERF_MODE_KEY = "conlecta:perfMode";
   const DEFAULT_THEME = "crystal_bloom";
   const TARGET_FRAME_MS = 1000 / 30;
@@ -525,12 +526,20 @@
   /* ============================================================
      THEME APPLICATION
      ============================================================ */
+  function setStorageKey(key) {
+    storageKey = String(key || STORAGE_KEY).trim() || STORAGE_KEY;
+  }
+
+  function getStorageKey() {
+    return storageKey;
+  }
+
   function readStoredTheme() {
-    try { return localStorage.getItem(STORAGE_KEY) || null; } catch (e) { return null; }
+    try { return localStorage.getItem(storageKey) || null; } catch (e) { return null; }
   }
 
   function writeStoredTheme(id) {
-    try { localStorage.setItem(STORAGE_KEY, id); } catch (e) { /* ignore */ }
+    try { localStorage.setItem(storageKey, id); } catch (e) { /* ignore */ }
   }
 
   function applyTheme(id, opts) {
@@ -703,6 +712,8 @@
     apply: applyTheme,
     current: currentTheme,
     isValid: isValidTheme,
+    setStorageKey,
+    getStorageKey,
     setPerformanceMode,
     getPerformanceMode,
   };

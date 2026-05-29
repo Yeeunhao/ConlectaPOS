@@ -204,6 +204,12 @@ function deviceStorageKey(name) {
   return `${name}:${getDeviceId()}`;
 }
 
+function settingsStorageKey() {
+  const aid = sessionAccountId();
+  if (aid) return `${"conlecta_settings"}:${getDeviceId()}:${aid}`;
+  return deviceStorageKey("conlecta_settings");
+}
+
 function sessionMerchantId() {
   return String(
     qrState.merchantId
@@ -223,7 +229,15 @@ function sessionAccountId() {
 
 function localMatchesSession(settings = {}) {
   const sessionMid = sessionMerchantId();
+  const sessionAid = sessionAccountId();
   const localMid = String(settings.merchant_id || "").trim();
+  if (sessionMid && localMid && sessionMid !== localMid) return false;
+  if (sessionAid) {
+    const cachedAid = String(
+      localStorage.getItem(deviceStorageKey("conlecta_display_account")) || "",
+    ).trim();
+    if (cachedAid && cachedAid !== sessionAid) return false;
+  }
   if (!sessionMid) return true;
   if (!localMid) return false;
   return sessionMid === localMid;
@@ -231,8 +245,10 @@ function localMatchesSession(settings = {}) {
 
 function readRawLocalSettings() {
   try {
-    const raw = localStorage.getItem(deviceStorageKey("conlecta_settings"));
-    return raw ? JSON.parse(raw) : {};
+    const raw = localStorage.getItem(settingsStorageKey());
+    if (raw) return JSON.parse(raw);
+    const legacy = localStorage.getItem(deviceStorageKey("conlecta_settings"));
+    return legacy ? JSON.parse(legacy) : {};
   } catch {
     return {};
   }
@@ -252,6 +268,7 @@ function rememberDisplaySession(merchantId = "", accountId = "") {
 function clearDisplayLocalCache() {
   localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
   localStorage.removeItem(deviceStorageKey("conlecta_settings"));
+  localStorage.removeItem(settingsStorageKey());
   localStorage.removeItem(deviceStorageKey("conlecta_display_preview"));
   localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
   localStorage.removeItem(deviceStorageKey("conlecta_display_merchant"));
@@ -539,14 +556,16 @@ function renderDisplay() {
 }
 
 function applyDisplayPayload(data = {}) {
+  const previousMid = sessionMerchantId();
+  const previousAid = sessionAccountId();
   if (data.merchant_id || data.account_id) {
     rememberDisplaySession(data.merchant_id, data.account_id);
   } else if (data.settings?.merchant_id) {
-    rememberDisplaySession(data.settings.merchant_id, data.account_id || sessionAccountId());
+    rememberDisplaySession(data.settings.merchant_id, data.account_id || previousAid);
   }
   const incomingSettings = data.settings || {};
   if (incomingSettings.merchant_id) {
-    const previousMid = sessionMerchantId();
+    const nextAid = String(data.account_id || sessionAccountId() || "").trim();
     if (previousMid && previousMid !== String(incomingSettings.merchant_id).trim()) {
       localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
       localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
@@ -555,8 +574,11 @@ function applyDisplayPayload(data = {}) {
       qrState.displayEvent = null;
       qrState.preview = null;
     }
+    if (previousAid && nextAid && previousAid !== nextAid) {
+      qrState.settings = {};
+    }
     qrState.settings = incomingSettings;
-    localStorage.setItem(deviceStorageKey("conlecta_settings"), JSON.stringify(incomingSettings));
+    localStorage.setItem(settingsStorageKey(), JSON.stringify(incomingSettings));
   }
   if (Object.prototype.hasOwnProperty.call(data, "display_event")) {
     qrState.displayEvent = data.display_event;
@@ -627,6 +649,7 @@ window.addEventListener("storage", (event) => {
   if (
     event.key === deviceStorageKey("conlecta_active_qr")
     || event.key === deviceStorageKey("conlecta_settings")
+    || event.key === settingsStorageKey()
     || event.key === deviceStorageKey("conlecta_display_preview")
     || event.key === deviceStorageKey("conlecta_display_event")
     || event.key === CASHIER_NOTICE_STORAGE_KEY

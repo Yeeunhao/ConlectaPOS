@@ -120,6 +120,12 @@ function deviceStorageKey(name) {
   return `${name}:${getDeviceId()}`;
 }
 
+function accountScopedStorageKey(name, accountId = "") {
+  const aid = String(accountId || state.auth?.id || "").trim();
+  if (aid) return `${name}:${getDeviceId()}:${aid}`;
+  return deviceStorageKey(name);
+}
+
 function clearDisplayLocalCache() {
   localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
   localStorage.removeItem(deviceStorageKey("conlecta_settings"));
@@ -591,6 +597,21 @@ function updateClock() {
 
 const DEFAULT_THEME = "crystal_bloom";
 
+function accountThemeStorageKey() {
+  const accountId = String(state.auth?.id || "").trim();
+  const deviceId = getDeviceId();
+  if (accountId && deviceId) return `conlecta:theme:${deviceId}:${accountId}`;
+  return "conlecta:theme";
+}
+
+function syncThemeStorageContext() {
+  const key = accountThemeStorageKey();
+  if (window.ConlectaTheme?.setStorageKey) {
+    window.ConlectaTheme.setStorageKey(key);
+  }
+  return key;
+}
+
 function deviceThemeId() {
   const current = window.ConlectaTheme?.current?.();
   if (current && window.ConlectaTheme?.isValid?.(current)) return current;
@@ -611,9 +632,11 @@ function applyDeviceTheme(themeId, { persist = true } = {}) {
 
 function bootstrapDeviceTheme() {
   if (!window.ConlectaTheme) return;
+  syncThemeStorageContext();
+  const storageKey = accountThemeStorageKey();
   let stored = null;
   try {
-    stored = localStorage.getItem("conlecta:theme");
+    stored = localStorage.getItem(storageKey);
   } catch {
     // Private browsing can block storage; fall back to the current body theme.
   }
@@ -1950,7 +1973,7 @@ function publishDisplayState() {
   else localStorage.removeItem(deviceStorageKey("conlecta_display_event"));
 
   localStorage.setItem("conlecta_version", JSON.stringify(state.version || {}));
-  localStorage.setItem(deviceStorageKey("conlecta_settings"), JSON.stringify(state.settings || {}));
+  localStorage.setItem(accountScopedStorageKey("conlecta_settings"), JSON.stringify(state.settings || {}));
   localStorage.setItem(deviceStorageKey("conlecta_display_preview"), JSON.stringify(preview));
 
   qrChannel?.postMessage({ type: "display-state", ...payload });
@@ -4281,6 +4304,7 @@ function bindEvents() {
       renderSystemAdminTransactions();
     }
     if (event.target.id === "set-active-theme") {
+      syncThemeStorageContext();
       const next = event.target.value;
       if (window.ConlectaTheme && window.ConlectaTheme.isValid(next)) {
         window.ConlectaTheme.apply(next);

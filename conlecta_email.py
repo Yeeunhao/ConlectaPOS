@@ -25,7 +25,7 @@ from conlecta_oauth import (
     GMAIL_SCOPES,
     GMAIL_TOKEN_FILE,
     OAUTH_TOKEN_FILE,
-    load_google_credentials,
+    load_gmail_credentials,
 )
 
 TOKEN_FILE = GMAIL_TOKEN_FILE
@@ -49,7 +49,7 @@ SCOPES = GMAIL_SCOPES
 
 
 def _load_gmail_credentials() -> Credentials | None:
-    creds, _path = load_google_credentials(GMAIL_SCOPES)
+    creds, _path = load_gmail_credentials()
     return creds
 
 
@@ -61,11 +61,10 @@ def google_auth() -> Credentials:
         return creds
 
     raise FileNotFoundError(
-        "token.json tidak ditemukan "
-        "atau tidak valid untuk Gmail.\n"
-        "Pastikan OAuth Gmail "
-        "(scope gmail.send) "
-        "sudah di-setup."
+        "token.json / oauth_token.json tidak ditemukan "
+        "atau tidak valid untuk Gmail (scope gmail.send).\n"
+        "Jalankan TokenGenerator.py untuk OAuth gabungan, "
+        "atau pastikan oauth_token.json memiliki scope gmail.send."
     )
 
 # =========================================================

@@ -1,5 +1,6 @@
 """Shared Google OAuth token paths and loaders for Conlecta (repo / VPS local files)."""
 
+import json
 import os
 import logging
 
@@ -25,12 +26,13 @@ SHEETS_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.file",
 ]
+COMBINED_SCOPES = list(dict.fromkeys(GMAIL_SCOPES + SHEETS_SCOPES))
 
 
 def token_file_candidates():
     paths = []
     seen = set()
-    for path in (GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE):
+    for path in (OAUTH_TOKEN_FILE, GMAIL_TOKEN_FILE):
         abspath = os.path.normcase(os.path.abspath(path))
         if abspath in seen:
             continue
@@ -52,31 +54,113 @@ def credentials_file_candidates():
     return paths
 
 
-def load_google_credentials(scopes):
-    """Load and refresh OAuth credentials from repo-local token files."""
+def _read_token_scopes(path):
     try:
-        from google.oauth2.credentials import Credentials
-        from google.auth.transport.requests import Request
-    except Exception as exc:
-        log.warning("Google auth import failed: %s", exc)
-        return None, None
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        scopes = data.get("scopes") or []
+        return {str(scope).strip() for scope in scopes if str(scope).strip()}
+    except Exception:
+        return set()
 
+
+def _credentials_has_scopes(creds, required_scopes, token_path=""):
+    if not creds:
+        return False
+    required = {str(scope).strip() for scope in (required_scopes or []) if str(scope).strip()}
+    if not required:
+        return True
+    granted = {str(scope).strip() for scope in (getattr(creds, "scopes", None) or []) if str(scope).strip()}
+    if not granted and token_path:
+        granted = _read_token_scopes(token_path)
+    if not granted:
+        return False
+    return required.issubset(granted)
+
+
+def _persist_credentials(creds, path):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(creds.to_json())
+
+
+def _mirror_token_files(creds, source_path):
+    if not creds or not getattr(creds, "valid", False):
+        return
+    source_abs = os.path.normcase(os.path.abspath(source_path))
+    payload = creds.to_json()
     for path in token_file_candidates():
-        if not os.path.isfile(path):
-            log.debug("Google token file missing: %s", path)
+        target_abs = os.path.normcase(os.path.abspath(path))
+        if target_abs == source_abs:
             continue
         try:
-            creds = Credentials.from_authorized_user_file(path, scopes)
-            if not creds:
-                continue
-            if creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(creds.to_json())
-                log.info("Google token refreshed: %s", path)
-            if creds.valid:
-                log.info("Google credentials loaded from %s", path)
-                return creds, path
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(payload)
+            log.info("Google token mirrored to %s", path)
         except Exception as exc:
-            log.warning("Google token skipped %s: %s", path, exc)
+            log.warning("Google token mirror failed %s: %s", path, exc)
+
+
+def _refresh_credentials(creds, path):
+    try:
+        from google.auth.transport.requests import Request
+    except Exception as exc:
+        log.warning("Google auth refresh import failed: %s", exc)
+        return creds
+    if not creds or not creds.expired or not creds.refresh_token:
+        return creds
+    try:
+        creds.refresh(Request())
+        _persist_credentials(creds, path)
+        _mirror_token_files(creds, path)
+        log.info("Google token refreshed: %s", path)
+    except Exception as exc:
+        log.warning("Google token refresh failed %s: %s", path, exc)
+    return creds
+
+
+def _load_credentials_from_path(path, required_scopes):
+    if not os.path.isfile(path):
+        log.debug("Google token file missing: %s", path)
+        return None
+    try:
+        from google.oauth2.credentials import Credentials
+    except Exception as exc:
+        log.warning("Google auth import failed: %s", exc)
+        return None
+    try:
+        creds = Credentials.from_authorized_user_file(path, required_scopes)
+    except Exception as exc:
+        log.warning("Google token skipped %s: %s", path, exc)
+        return None
+    if not creds:
+        return None
+    if not _credentials_has_scopes(creds, required_scopes, path):
+        log.info("Google token %s lacks required scopes %s", path, required_scopes)
+        return None
+    creds = _refresh_credentials(creds, path)
+    if creds and creds.valid:
+        log.info("Google credentials loaded from %s", path)
+        return creds
+    return None
+
+
+def load_credentials_for_scopes(required_scopes):
+    """Load OAuth credentials that include all required scopes (oauth_token preferred)."""
+    for path in token_file_candidates():
+        creds = _load_credentials_from_path(path, required_scopes)
+        if creds:
+            return creds, path
     return None, None
+
+
+def load_gmail_credentials():
+    return load_credentials_for_scopes(GMAIL_SCOPES)
+
+
+def load_sheets_credentials():
+    return load_credentials_for_scopes(SHEETS_SCOPES)
+
+
+def load_google_credentials(scopes):
+    """Backward-compatible loader with scope validation."""
+    return load_credentials_for_scopes(scopes)

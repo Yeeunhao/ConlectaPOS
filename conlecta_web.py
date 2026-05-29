@@ -21,6 +21,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
@@ -65,7 +66,9 @@ from conlecta_oauth import (
     OAUTH_TOKEN_FILE,
     SHEETS_SCOPES,
     credentials_file_candidates,
+    load_gmail_credentials,
     load_google_credentials,
+    load_sheets_credentials,
     token_file_candidates,
 )
 
@@ -318,15 +321,36 @@ def format_rupiah(value):
         return f"Rp {value}"
 
 
+def _app_timezone():
+    name = str(os.environ.get("CONLECTA_TIMEZONE") or "Asia/Jakarta").strip()
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return ZoneInfo("Asia/Jakarta")
+
+
+def app_now():
+    return datetime.now(_app_timezone())
+
+
 def format_datetime(value=None):
+    tz = _app_timezone()
     if not value:
-        dt = datetime.now()
+        dt = app_now()
     elif isinstance(value, datetime):
         dt = value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=tz)
+        else:
+            dt = dt.astimezone(tz)
     else:
         text = str(value).replace("Z", "+00:00")
         try:
             dt = datetime.fromisoformat(text)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=tz)
+            else:
+                dt = dt.astimezone(tz)
         except Exception:
             return str(value)
     return dt.strftime("%A - %d-%m-%Y %H:%M")
@@ -462,21 +486,38 @@ def _device_settings_root(state):
     return root
 
 
-def get_device_settings(state, device_id):
+def get_device_settings(state, device_id, account_id=None):
     if not device_id:
         return {}
     bucket = _device_settings_root(state).get(device_id)
-    return dict(bucket) if isinstance(bucket, dict) else {}
+    current = dict(bucket) if isinstance(bucket, dict) else {}
+    aid = str(account_id or "").strip()
+    if aid:
+        themes = current.get("themes_by_account")
+        if isinstance(themes, dict) and themes.get(aid):
+            current["active_theme"] = themes[aid]
+    return current
 
 
 def set_device_settings(state, device_id, patch, merchant_id=None, account_id=None):
     if not device_id:
         return {}
     clean = {k: v for k, v in dict(patch or {}).items() if k in DEVICE_SETTING_KEYS}
-    if not clean and merchant_id is None and account_id is None:
-        return get_device_settings(state, device_id)
+    aid = str(account_id or "").strip()
+    theme_value = None
+    if aid and "active_theme" in clean:
+        theme_value = str(clean.pop("active_theme") or "").strip()
+    if not clean and theme_value is None and merchant_id is None and account_id is None:
+        return get_device_settings(state, device_id, account_id=aid or None)
     root = _device_settings_root(state)
     current = dict(root.get(device_id) or {})
+    if theme_value:
+        themes = current.get("themes_by_account")
+        if not isinstance(themes, dict):
+            themes = {}
+        themes[aid] = theme_value
+        current["themes_by_account"] = themes
+        current.pop("active_theme", None)
     current.update(clean)
     if merchant_id is not None:
         current["merchant_id"] = normalize_merchant_id(merchant_id)
@@ -484,7 +525,7 @@ def set_device_settings(state, device_id, patch, merchant_id=None, account_id=No
         current["account_id"] = str(account_id or "")
     current["updated_ts"] = time.time()
     root[device_id] = current
-    return current
+    return get_device_settings(state, device_id, account_id=aid or None)
 
 
 def merge_settings_with_device(merchant_settings, device_settings):
@@ -747,7 +788,7 @@ def get_gspread_client():
         return _gspread_client
     if not GSHEETS_AVAILABLE or not credentials_file_candidates():
         return None
-    creds, _path = load_google_credentials(SHEETS_SCOPES)
+    creds, _path = load_sheets_credentials()
     if not creds or not creds.valid:
         return None
     try:
@@ -2112,7 +2153,7 @@ def save_email_template(key, data):
 
 
 def _load_gmail_credentials():
-    creds, _path = load_google_credentials(GMAIL_SCOPES)
+    creds, _path = load_gmail_credentials()
     return creds
 
 
@@ -3955,10 +3996,43 @@ def _pdf_escape(value):
     return str(value if value is not None else "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _pdf_logo(settings, Image, size=46):
-    path = settings.get("brand_logo_path") or BRAND_DEFAULT_LOGO
-    if not path or not os.path.isfile(path):
-        path = BRAND_DEFAULT_LOGO if os.path.isfile(BRAND_DEFAULT_LOGO) else BRAND_EMAIL_LOGO
+def _normalize_asset_path(path):
+    path = str(path or "").strip()
+    if not path:
+        return ""
+    if path.startswith("/assets/"):
+        path = os.path.join(BASE_DIR, path.lstrip("/").replace("/", os.sep))
+    elif not os.path.isabs(path):
+        path = os.path.join(BASE_DIR, path)
+    return path if os.path.isfile(path) else ""
+
+
+def _resolve_brand_logo_path(settings=None, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or (settings or {}).get("merchant_id") or current_merchant_id())
+    settings = dict(settings or load_settings(mid))
+    merchant = merchant_payload(mid)
+    default_base = os.path.basename(BRAND_DEFAULT_LOGO or "").lower()
+
+    for raw in (settings.get("brand_logo_path"), merchant.get("logo_path")):
+        path = _normalize_asset_path(raw)
+        if path and os.path.basename(path).lower() != default_base:
+            return path
+
+    brand_dir = os.path.join(ASSETS_DIR, "Brand")
+    for ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp"):
+        guess = os.path.join(brand_dir, f"{mid}_brand_logo{ext}")
+        if os.path.isfile(guess):
+            return guess
+
+    for raw in (settings.get("brand_logo_path"), merchant.get("logo_path")):
+        path = _normalize_asset_path(raw)
+        if path:
+            return path
+    return _normalize_asset_path(BRAND_DEFAULT_LOGO) or _normalize_asset_path(BRAND_EMAIL_LOGO)
+
+
+def _pdf_logo(settings, Image, size=46, merchant_id=None):
+    path = _resolve_brand_logo_path(settings, merchant_id)
     if path and os.path.isfile(path):
         try:
             return Image(path, width=size, height=size)
@@ -3967,9 +4041,13 @@ def _pdf_logo(settings, Image, size=46):
     return ""
 
 
+def _pdf_now_display():
+    return app_now().strftime("%d %B %Y %H:%M")
+
+
 def _pdf_short_date(value=None):
     text = format_datetime(value)
-    return text if text else datetime.now().strftime("%A - %d-%m-%Y %H:%M")
+    return text if text else app_now().strftime("%A - %d-%m-%Y %H:%M")
 
 
 def _pdf_footer(canvas, doc):
@@ -3999,7 +4077,8 @@ def make_pdf(record, merchant=False):
     except Exception as exc:
         raise RuntimeError(f"ReportLab unavailable: {exc}")
 
-    settings = load_settings(record.get("merchant_id") or current_merchant_id())
+    mid = normalize_merchant_id(record.get("merchant_id") or current_merchant_id())
+    settings = load_settings(mid)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=56, leftMargin=56, topMargin=48, bottomMargin=40)
     W = doc.width
@@ -4042,7 +4121,7 @@ def make_pdf(record, merchant=False):
     accent_bar = Drawing(W, 4)
     accent_bar.add(Rect(0, 0, W, 4, fillColor=accent, strokeColor=None))
 
-    logo = _pdf_logo(settings, Image, 48)
+    logo = _pdf_logo(settings, Image, 48, mid)
     addr_html = f"<br/><font color='#6c727f' size='8'>{address}</font>" if address else ""
     header = Table([[
         logo if logo else "",
@@ -4295,14 +4374,14 @@ def make_history_export_pdf(records, title="Invoice History", merchant_id=None):
     accent_bar.add(Rect(0, 0, W, 4, fillColor=accent, strokeColor=None))
 
     shop = _pdf_escape(settings.get("shop_name") or merchant.get("name") or "Conlecta")
-    logo = _pdf_logo(settings, Image, 36)
+    logo = _pdf_logo(settings, Image, 36, mid)
     header_left = [[logo if logo else "", Paragraph(f"<b>{shop}</b><br/><font color='#6c727f' size='7'>{_pdf_escape(mid)}</font>", s_cell)]]
     header_brand = Table(header_left, colWidths=[42, 180])
     header_brand.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
 
     header = Table([[
         header_brand,
-        Paragraph(f"<b>{_pdf_escape(title)}</b><br/><font color='#6c727f' size='7'>Generated: {datetime.now().strftime('%d %B %Y %H:%M')}</font>", ParagraphStyle("hr2", parent=s_cell, alignment=TA_RIGHT, fontSize=14)),
+        Paragraph(f"<b>{_pdf_escape(title)}</b><br/><font color='#6c727f' size='7'>Generated: {_pdf_now_display()}</font>", ParagraphStyle("hr2", parent=s_cell, alignment=TA_RIGHT, fontSize=14)),
     ]], colWidths=[W * 0.45, W * 0.55])
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -4419,13 +4498,13 @@ def make_vendor_invoice_pdf(payload):
     accent_bar = Drawing(W, 4)
     accent_bar.add(Rect(0, 0, W, 4, fillColor=accent, strokeColor=None))
 
-    logo = _pdf_logo(settings, Image, 40)
+    logo = _pdf_logo(settings, Image, 40, mid)
     brand_cell = Table([[logo if logo else "", Paragraph(f"<b>{shop}</b><br/><font color='#6c727f' size='7'>{_pdf_escape(mid)}</font>", s_cell)]], colWidths=[46, 160])
     brand_cell.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
 
     header = Table([[
         brand_cell,
-        Paragraph(f"<b>VENDOR INVOICE</b><br/><font color='#6c727f' size='7'>{_pdf_escape(vendor)}</font><br/><font color='#6c727f' size='7'>Generated: {datetime.now().strftime('%d %B %Y %H:%M')}</font>", ParagraphStyle("vhr2", parent=s_cell, alignment=TA_RIGHT, fontSize=13)),
+        Paragraph(f"<b>VENDOR INVOICE</b><br/><font color='#6c727f' size='7'>{_pdf_escape(vendor)}</font><br/><font color='#6c727f' size='7'>Generated: {_pdf_now_display()}</font>", ParagraphStyle("vhr2", parent=s_cell, alignment=TA_RIGHT, fontSize=13)),
     ]], colWidths=[W * 0.5, W * 0.5])
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -4802,6 +4881,8 @@ def display_settings_payload(merchant_id=None, device_settings=None):
     mid = normalize_merchant_id(merchant_id or current_merchant_id())
     settings = merge_settings_with_device(dict(load_settings(mid)), device_settings or {})
     merchant = merchant_payload(mid)
+    if not settings.get("brand_logo_path") and merchant.get("logo_path"):
+        settings["brand_logo_path"] = merchant["logo_path"]
     settings["merchant_id"] = mid
     settings["merchant_name"] = settings.get("shop_name") or merchant.get("name") or DEFAULT_MERCHANT_NAME
     settings["brand_logo_url"] = (
@@ -5018,7 +5099,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "ok": True,
                 "merchant_id": mid,
                 "account_id": account_id,
-                "settings": display_settings_payload(mid, get_device_settings(state, did) if did else {}),
+                "settings": display_settings_payload(mid, get_device_settings(state, did, account_id) if did else {}),
                 "active_qr": active_qr,
                 "display_event": display_event,
                 "cashier_notice": cashier_notice,
@@ -5071,7 +5152,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
 
             bucket = _ensure_daily_session(state, mid)
             did = self.device_id()
-            device_settings = get_device_settings(state, did) if did else {}
+            device_settings = get_device_settings(state, did, (auth or {}).get("id")) if did else {}
             display_event = current_display_event(state, mid, device_id=did or None)
             active_qr = _active_qr_for_auth(state, auth, did) if auth else None
 
@@ -5117,7 +5198,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             auth = self.get_device_auth(state)
             did = self.device_id()
             mid = normalize_merchant_id((auth or {}).get("merchant_id") or current_merchant_id())
-            device_settings = get_device_settings(state, did) if did else {}
+            device_settings = get_device_settings(state, did, (auth or {}).get("id")) if did else {}
             return self.send_json({
                 "ok": True,
                 "assets": scan_asset_payload(),
@@ -5406,7 +5487,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             if did:
                 set_device_settings(state, did, device_patch, merchant_id=mid, account_id=auth.get("id"))
                 save_state(state)
-            merged = settings_payload(merchant_saved, mid, get_device_settings(state, did) if did else {})
+            merged = settings_payload(merchant_saved, mid, get_device_settings(state, did, auth.get("id")) if did else {})
             return self.send_json({"ok": True, "settings": merged})
         if path == "/api/brand-logo":
             state = load_state()
@@ -5440,7 +5521,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 playlist.append(saved["path"])
             set_device_settings(state, did, {"video_playlist": playlist}, merchant_id=mid, account_id=auth.get("id"))
             save_state(state)
-            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did))
+            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, auth.get("id")))
             return self.send_json({"ok": True, "video": saved, "assets": scan_asset_payload(), "settings": merged})
         if path == "/api/video/remove":
             state = load_state()
