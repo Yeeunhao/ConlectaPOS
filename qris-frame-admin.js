@@ -2,6 +2,7 @@
   "use strict";
 
   const QR = window.ConlectaQrisFrame;
+  const CROP = window.ConlectaImageCrop;
   if (!QR) return;
 
   function cloneLayout(layout) {
@@ -25,6 +26,49 @@
     el.style.top = `${box.y * 100}%`;
     el.style.width = `${box.w * 100}%`;
     el.style.height = `${box.h * 100}%`;
+  }
+
+  function qrBoxAspect(wrapEl, draft) {
+    const rect = wrapEl?.getBoundingClientRect?.();
+    if (rect?.width > 0 && rect?.height > 0) {
+      return rect.height / rect.width;
+    }
+    const layout = QR.normalizeLayout(draft || window.state.qrisFrameDraft || {});
+    const crop = layout.crop;
+    const vpW = Math.max(1, layout.source_width * crop.w);
+    const vpH = Math.max(1, layout.source_height * crop.h);
+    return vpH / vpW;
+  }
+
+  function squareQrBox(qr, wrapEl, draft) {
+    const aspect = qrBoxAspect(wrapEl, draft);
+    if (CROP?.fitCropBox) return CROP.fitCropBox(qr || {}, aspect);
+    const next = { ...(qr || { x: 0, y: 0, w: 0.4, h: 0.4 }) };
+    if (next.w / next.h > aspect) next.w = next.h * aspect;
+    else next.h = next.w / aspect;
+    next.x = Math.max(0, Math.min(1 - next.w, next.x));
+    next.y = Math.max(0, Math.min(1 - next.h, next.y));
+    return next;
+  }
+
+  function bindSquareQrBox(boxEl, wrapEl, getBox, setBox, onChange) {
+    const aspect = qrBoxAspect(wrapEl, window.state.qrisFrameDraft);
+    if (CROP?.bindFixedAspectCropBox) {
+      CROP.bindFixedAspectCropBox(
+        boxEl,
+        getBox,
+        (next) => {
+          setBox(squareQrBox(next, wrapEl, window.state.qrisFrameDraft));
+          onChange?.();
+        },
+        aspect,
+      );
+      return;
+    }
+    bindDragBox(boxEl, getBox, (next) => {
+      setBox(squareQrBox(next, wrapEl, window.state.qrisFrameDraft));
+      onChange?.();
+    });
   }
 
   function bindDragBox(boxEl, getBox, setBox, minSize = 0.05) {
@@ -92,6 +136,7 @@
 
   function renderCropStage(draft, stage) {
     stage.innerHTML = `
+      <p class="muted qris-frame-crop-note">Drag to move. Corner handles resize the frame crop freely.</p>
       <div class="qris-frame-crop-stage">
         <img class="qris-frame-crop-image" src="${escapeAttr(draft.frame_url || draft.frame_src)}" alt="">
         <div class="qris-frame-crop-box" data-qris-crop-box></div>
@@ -101,17 +146,24 @@
     const box = stage.querySelector("[data-qris-crop-box]");
     box.innerHTML = `<span data-handle="nw"></span><span data-handle="ne"></span><span data-handle="sw"></span><span data-handle="se"></span>`;
     applyBoxStyle(box, draft.crop);
+    const bindCropControls = () => {
+      if (box.dataset.cropBound === "1") return;
+      box.dataset.cropBound = "1";
+      bindDragBox(box, () => window.state.qrisFrameDraft.crop, (next) => {
+        window.state.qrisFrameDraft.crop = next;
+      });
+    };
     img.addEventListener("load", () => {
       window.state.qrisFrameDraft.source_width = img.naturalWidth || draft.source_width;
       window.state.qrisFrameDraft.source_height = img.naturalHeight || draft.source_height;
+      bindCropControls();
     }, { once: true });
-    bindDragBox(box, () => window.state.qrisFrameDraft.crop, (next) => {
-      window.state.qrisFrameDraft.crop = next;
-    });
+    if (img.complete && img.naturalWidth) bindCropControls();
   }
 
   function renderLayoutStage(draft, stage) {
     stage.innerHTML = `
+      <p class="muted qris-frame-crop-note">Drag to move. Corner handles resize the QR slot while keeping a fixed square ratio.</p>
       <div class="qris-frame-layout-stage">
         <div class="qris-frame-wrap qris-frame-editor-preview">
           <div class="qris-frame-viewport">
@@ -126,12 +178,34 @@
     `;
     const wrap = stage.querySelector(".qris-frame-wrap");
     const overlay = stage.querySelector("[data-qris-qr-box]");
-    QR.applyQrisFrame(wrap, draft);
-    applyBoxStyle(overlay, draft.qr);
-    bindDragBox(overlay, () => window.state.qrisFrameDraft.qr, (next) => {
-      window.state.qrisFrameDraft.qr = next;
+    const syncLayout = () => {
+      window.state.qrisFrameDraft.qr = squareQrBox(
+        window.state.qrisFrameDraft.qr,
+        wrap,
+        window.state.qrisFrameDraft,
+      );
+      applyBoxStyle(overlay, window.state.qrisFrameDraft.qr);
       QR.applyQrisFrame(wrap, window.state.qrisFrameDraft);
-    });
+    };
+    syncLayout();
+    const bindLayoutControls = () => {
+      if (overlay.dataset.qrBound === "1") return;
+      overlay.dataset.qrBound = "1";
+      bindSquareQrBox(
+        overlay,
+        wrap,
+        () => window.state.qrisFrameDraft.qr,
+        (next) => { window.state.qrisFrameDraft.qr = next; },
+        syncLayout,
+      );
+    };
+    const bg = wrap.querySelector(".qris-frame-bg");
+    if (bg?.complete && bg.naturalWidth) {
+      bindLayoutControls();
+    } else {
+      bg?.addEventListener("load", bindLayoutControls, { once: true });
+    }
+    requestAnimationFrame(bindLayoutControls);
   }
 
   function renderEditorStage() {

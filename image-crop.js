@@ -267,5 +267,9 @@
   global.ConlectaImageCrop = {
     PRESETS,
     open,
+    initialCropBox,
+    fitCropBox,
+    applyBoxStyle,
+    bindFixedAspectCropBox,
   };
 })(window);

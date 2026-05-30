@@ -8,7 +8,7 @@
     source_width: 1086,
     source_height: 1448,
     crop: { x: 0, y: 0, w: 1, h: 1 },
-    qr: { x: 0.18, y: 0.28, w: 0.64, h: 0.32 },
+    qr: { x: 0.18, y: 0.24, w: 0.45, h: 0.45 },
   };
 
   function clamp(value, min, max) {
@@ -26,19 +26,37 @@
     };
   }
 
+  function fitVisualSquareBox(box, viewportWidth, viewportHeight) {
+    const next = normalizeBox(box, DEFAULT_LAYOUT.qr);
+    const vpW = Math.max(1, Number(viewportWidth || 1));
+    const vpH = Math.max(1, Number(viewportHeight || 1));
+    const whRatio = vpH / vpW;
+    if (next.w / next.h > whRatio) next.w = next.h * whRatio;
+    else next.h = next.w / whRatio;
+    if (next.x + next.w > 1) next.x = Math.max(0, 1 - next.w);
+    if (next.y + next.h > 1) next.y = Math.max(0, 1 - next.h);
+    next.x = clamp(next.x, 0, 1 - next.w);
+    next.y = clamp(next.y, 0, 1 - next.h);
+    return next;
+  }
+
   function normalizeLayout(raw) {
     const input = raw || {};
     const crop = normalizeBox(input.crop, DEFAULT_LAYOUT.crop);
     if (crop.x + crop.w > 1) crop.w = 1 - crop.x;
     if (crop.y + crop.h > 1) crop.h = 1 - crop.y;
-    const qr = normalizeBox(input.qr, DEFAULT_LAYOUT.qr);
-    if (qr.x + qr.w > 1) qr.w = 1 - qr.x;
-    if (qr.y + qr.h > 1) qr.h = 1 - qr.y;
+    const source_width = Math.max(1, Number(input.source_width || DEFAULT_LAYOUT.source_width));
+    const source_height = Math.max(1, Number(input.source_height || DEFAULT_LAYOUT.source_height));
+    const qr = fitVisualSquareBox(
+      input.qr,
+      source_width * crop.w,
+      source_height * crop.h,
+    );
     return {
       frame_src: String(input.frame_src || input.frame_url || DEFAULT_LAYOUT.frame_src).split("?")[0],
       frame_url: String(input.frame_url || input.frame_src || DEFAULT_LAYOUT.frame_src),
-      source_width: Math.max(1, Number(input.source_width || DEFAULT_LAYOUT.source_width)),
-      source_height: Math.max(1, Number(input.source_height || DEFAULT_LAYOUT.source_height)),
+      source_width,
+      source_height,
       crop,
       qr,
     };
