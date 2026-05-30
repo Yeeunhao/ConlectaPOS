@@ -143,6 +143,36 @@ function accountScopedStorageKey(name, accountId = "") {
   return deviceStorageKey(name);
 }
 
+function writeDisableDefaultSplashPreference(enabled) {
+  safeSetLocalStorage(
+    accountScopedStorageKey("conlecta_disable_default_splash"),
+    enabled ? "1" : "0",
+  );
+}
+
+function readDisableDefaultSplashPreference() {
+  try {
+    const raw = localStorage.getItem(accountScopedStorageKey("conlecta_disable_default_splash"));
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+  } catch {
+    // Ignore storage read failures.
+  }
+  return null;
+}
+
+function applyServerSettings(incoming, assets = null) {
+  if (!incoming || typeof incoming !== "object") return;
+  const merged = { ...(state.settings || {}), ...incoming };
+  if (Object.prototype.hasOwnProperty.call(incoming, "video_disable_default_splash")) {
+    merged.video_disable_default_splash = Boolean(incoming.video_disable_default_splash);
+    writeDisableDefaultSplashPreference(merged.video_disable_default_splash);
+  }
+  state.settings = merged;
+  if (assets) state.assets = assets;
+  applyVideoPlaylistState(state.settings.video_playlist || []);
+}
+
 function clearDisplayLocalCache() {
   localStorage.removeItem(deviceStorageKey("conlecta_active_qr"));
   localStorage.removeItem(deviceStorageKey("conlecta_settings"));
@@ -3653,7 +3683,12 @@ function hasUserUploadedVideo() {
 }
 
 function isDisableDefaultSplash() {
-  return Boolean(state.settings?.video_disable_default_splash);
+  if (Object.prototype.hasOwnProperty.call(state.settings || {}, "video_disable_default_splash")) {
+    return Boolean(state.settings.video_disable_default_splash);
+  }
+  const local = readDisableDefaultSplashPreference();
+  if (local !== null) return local;
+  return false;
 }
 
 function userPlaylistEntries(playlist = videoPlaylistEntries()) {
@@ -3750,22 +3785,18 @@ function applyVideoPlaylistState(entries) {
   syncVideoPlaylistUrls();
 }
 
-async function persistVideoPlaylist(entries = videoPlaylistEntries(), extra = {}) {
+async function persistVideoPlaylist(entries = null, extra = {}) {
+  const body = { ...extra };
+  if (entries !== null && entries !== undefined) {
+    body.playlist = entries;
+  }
   const result = await api("/api/video-playlist", {
     method: "POST",
-    body: { playlist: entries, ...extra },
+    body,
   });
-  if (result.settings) {
-    const disableDefaultSplash = result.settings.video_disable_default_splash;
-    state.settings = result.settings;
-    applyVideoPlaylistState(result.settings.video_playlist || []);
-    if (Object.prototype.hasOwnProperty.call(result.settings, "video_disable_default_splash")) {
-      state.settings.video_disable_default_splash = disableDefaultSplash;
-    }
-  } else if (result.playlist) {
-    applyVideoPlaylistState(result.playlist);
-  }
-  if (result.assets) state.assets = result.assets;
+  if (result.settings) applyServerSettings(result.settings, result.assets || null);
+  else if (result.playlist) applyVideoPlaylistState(result.playlist);
+  else if (result.assets) state.assets = result.assets;
   return result;
 }
 
@@ -3773,7 +3804,10 @@ async function persistDisableDefaultSplash(disabled) {
   if (disabled && !hasUserUploadedVideo()) {
     throw new Error("Upload at least one video before disabling the default sample video.");
   }
-  return persistVideoPlaylist(videoPlaylistEntries(), { disable_default_splash: disabled });
+  const result = await persistVideoPlaylist(null, { disable_default_splash: disabled });
+  state.settings.video_disable_default_splash = disabled;
+  writeDisableDefaultSplashPreference(disabled);
+  return result;
 }
 
 function toggleVideo(target) {
@@ -3844,8 +3878,8 @@ async function removeVideo(target) {
     method: "POST",
     body: { url, path },
   });
-  state.settings = result.settings || state.settings;
-  state.assets = result.assets || state.assets;
+  if (result.settings) applyServerSettings(result.settings, result.assets || null);
+  else if (result.assets) state.assets = result.assets;
   renderVideoAssets();
   publishDisplayState();
   showToast("Video removed");
@@ -3877,8 +3911,7 @@ async function uploadVideo(file) {
   const result = await api("/api/video-upload", { method: "POST", body: { filename: file.name, data_url: dataUrl } });
   state.assets = result.assets || state.assets;
   if (result.settings) {
-    state.settings = result.settings;
-    applyVideoPlaylistState(result.settings.video_playlist || []);
+    applyServerSettings(result.settings, result.assets || null);
   } else if (result.video?.path || result.video?.url) {
     const next = videoPlaylistEntries().concat([result.video.path || result.video.url]);
     applyVideoPlaylistState(next);
@@ -4693,8 +4726,8 @@ async function syncMenuData(name) {
     await refreshHistoryData({ loading: false });
   } else if (name === "settings") {
     const result = await api("/api/assets", { loading: false });
-    state.assets = result.assets || state.assets;
-    if (result.settings) state.settings = result.settings;
+    if (result.settings) applyServerSettings(result.settings, result.assets || null);
+    else if (result.assets) state.assets = result.assets;
     renderSettings();
     publishDisplayState();
   }
@@ -4706,11 +4739,6 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   const result = await api("/api/bootstrap", { loading: false });
   if (epoch !== authEpoch) return;
   if (bootProgress) updateBootLoading("catalog", 28);
-  state.settings = result.settings || {};
-  applyVideoPlaylistState(state.settings.video_playlist || []);
-  if (Object.prototype.hasOwnProperty.call(result.settings || {}, "video_disable_default_splash")) {
-    state.settings.video_disable_default_splash = result.settings.video_disable_default_splash;
-  }
   if (Object.prototype.hasOwnProperty.call(result, "auth")) state.auth = result.auth || null;
   if (state.auth) {
     lastActivityTs = authActivityMs(state.auth) || lastActivityTs || Date.now();
@@ -4724,6 +4752,7 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   reconcileCartWithStock();
   state.history = result.history || [];
   state.assets = result.assets || { videos: [], payment_icons: [] };
+  applyServerSettings(result.settings || {});
   state.version = result.version || state.version || {};
   state.systemAdmin = result.system_admin || state.systemAdmin || null;
   if (!Object.keys(state.emailTemplates || {}).length) {
@@ -4949,8 +4978,8 @@ async function handleAction(action, target) {
       $("#video-upload-file").click();
     } else if (action === "scan-assets") {
       const result = await api("/api/assets");
-      state.assets = result.assets || state.assets;
-      if (result.settings) state.settings = result.settings;
+      if (result.settings) applyServerSettings(result.settings, result.assets || null);
+      else if (result.assets) state.assets = result.assets;
       renderVideoAssets();
       showToast("Assets scanned");
     } else if (action === "toggle-video") {
@@ -5214,7 +5243,9 @@ function bindEvents() {
     event.target.value = "";
   });
   $("#video-disable-default-splash")?.addEventListener("change", (event) => {
-    const enabled = Boolean(event.target.checked);
+    const input = event.target;
+    const enabled = Boolean(input.checked);
+    const previous = isDisableDefaultSplash();
     persistDisableDefaultSplash(enabled)
       .then(() => {
         renderVideoAssets();
@@ -5222,7 +5253,10 @@ function bindEvents() {
         showToast(enabled ? "Default sample video disabled" : "Default sample video enabled");
       })
       .catch((err) => {
-        event.target.checked = isDisableDefaultSplash();
+        input.checked = previous;
+        state.settings.video_disable_default_splash = previous;
+        writeDisableDefaultSplashPreference(previous);
+        renderVideoSplashToggle();
         showToast(err.message, "error");
       });
   });

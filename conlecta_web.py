@@ -535,8 +535,10 @@ def _resolve_account_disable_default_splash(device_settings, account_id=""):
     device_settings = dict(device_settings or {})
     aid = str(account_id or "").strip()
     by_account = device_settings.get("video_disable_default_splash_by_account")
-    if isinstance(by_account, dict) and aid and aid in by_account:
-        return bool(by_account.get(aid))
+    if isinstance(by_account, dict):
+        by_account = {str(key).strip(): bool(value) for key, value in by_account.items() if str(key).strip()}
+        if aid and aid in by_account:
+            return bool(by_account.get(aid))
     legacy = bool(device_settings.get("video_disable_default_splash"))
     legacy_aid = str(device_settings.get("account_id") or "").strip()
     if legacy and (not aid or not legacy_aid or legacy_aid == aid):
@@ -552,6 +554,7 @@ def _store_account_disable_default_splash(current, account_id, disabled):
         by_account = current.get("video_disable_default_splash_by_account")
         if not isinstance(by_account, dict):
             by_account = {}
+        by_account = {str(key).strip(): bool(value) for key, value in by_account.items() if str(key).strip()}
         by_account[aid] = disabled
         current["video_disable_default_splash_by_account"] = by_account
         if str(current.get("account_id") or "") == aid:
@@ -721,6 +724,11 @@ def save_account_disable_default_splash(state, device_id, account_id, disabled, 
             if not _is_default_splash_value(entry)
         ]
         current = _store_account_video_playlist(current, aid, playlist)
+    else:
+        playlist = list(_resolve_account_video_playlist(current, aid) or [])
+        if not any(_is_default_splash_value(entry) for entry in playlist) and os.path.isfile(SPLASH_VIDEO):
+            playlist.append(SPLASH_VIDEO)
+            current = _store_account_video_playlist(current, aid, playlist)
     current["updated_ts"] = time.time()
     root[device_id] = current
     save_state(state)
@@ -745,11 +753,13 @@ def normalize_video_playlist(entries):
 def save_device_video_playlist(state, device_id, entries, merchant_id=None, account_id=None):
     if not device_id:
         raise ValueError("Device ID tidak valid untuk video playlist.")
-    playlist = normalize_video_playlist(entries)
     root = _device_settings_root(state)
     current = dict(root.get(device_id) or {})
     aid = str(account_id or "").strip()
     disable_default = _resolve_account_disable_default_splash(current, aid)
+    playlist = normalize_video_playlist(entries)
+    if disable_default:
+        playlist = [entry for entry in playlist if not _is_default_splash_value(entry)]
     _validate_user_playlist_not_empty(playlist, disable_default)
     current = _store_account_video_playlist(current, aid, playlist)
     if merchant_id is not None:
@@ -5489,12 +5499,12 @@ def remove_video_asset(data, merchant_id=None, device_id=None, account_id=None, 
         os.path.basename(target),
     )
     return {
-        "settings": settings_payload(merged, mid, get_device_settings(state, device_id, account_id)),
+        "settings": settings_payload(merged, mid, get_device_settings(state, device_id, account_id), account_id=account_id),
         "assets": scan_asset_payload(device_id, account_id),
     }
 
 
-def settings_payload(settings=None, merchant_id=None, device_settings=None):
+def settings_payload(settings=None, merchant_id=None, device_settings=None, account_id=None):
     mid = normalize_merchant_id(merchant_id or (settings or {}).get("merchant_id") or current_merchant_id())
     settings = merge_settings_with_device(dict(settings or load_settings(mid)), device_settings or {})
     merchant = merchant_payload(mid)
@@ -5508,7 +5518,11 @@ def settings_payload(settings=None, merchant_id=None, device_settings=None):
     settings["payment_image_urls"] = [public_asset_url(path) for path in configured_payment_image_paths(settings)]
     settings["payment_image_urls"] = [url for url in settings["payment_image_urls"] if url]
     if device_settings is not None:
-        settings["video_disable_default_splash"] = bool(device_settings.get("video_disable_default_splash"))
+        aid = str(account_id or device_settings.get("account_id") or "").strip()
+        if aid:
+            settings["video_disable_default_splash"] = _resolve_account_disable_default_splash(device_settings, aid)
+        elif "video_disable_default_splash" in device_settings:
+            settings["video_disable_default_splash"] = bool(device_settings.get("video_disable_default_splash"))
     settings["video_playlist_urls"] = video_playlist_urls(settings)
     settings["qris_frame"] = resolve_qris_frame_config(mid, load_state())
     settings["qris_vps_env_var"] = "CONLECTA_QRIS_VPS_URL"
@@ -5831,7 +5845,11 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json({
                 "ok": True,
                 "auth": auth,
-                "settings": settings_payload(merchant_id=mid, device_settings=device_settings),
+                "settings": settings_payload(
+                    merchant_id=mid,
+                    device_settings=device_settings,
+                    account_id=(auth or {}).get("id"),
+                ),
                 "products": products,
                 "vendors": vendors,
                 "history": history,
@@ -5881,7 +5899,11 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json({
                 "ok": True,
                 "assets": scan_asset_payload(did or None, (auth or {}).get("id")),
-                "settings": settings_payload(merchant_id=mid, device_settings=device_settings),
+                "settings": settings_payload(
+                    merchant_id=mid,
+                    device_settings=device_settings,
+                    account_id=(auth or {}).get("id"),
+                ),
             })
         if path == "/api/email-templates":
             return self.send_json({"ok": True, "templates": load_email_templates()})
@@ -6267,7 +6289,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             if did:
                 set_device_settings(state, did, device_patch, merchant_id=mid, account_id=auth.get("id"))
                 save_state(state)
-            merged = settings_payload(merchant_saved, mid, get_device_settings(state, did, auth.get("id")) if did else {})
+            merged = settings_payload(merchant_saved, mid, get_device_settings(state, did, auth.get("id")) if did else {}, account_id=auth.get("id"))
             return self.send_json({"ok": True, "settings": merged})
         if path == "/api/brand-logo":
             state = load_state()
@@ -6301,7 +6323,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             if saved.get("path") and saved["path"] not in playlist:
                 playlist.append(saved["path"])
             save_device_video_playlist(state, did, playlist, merchant_id=mid, account_id=auth.get("id"))
-            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, auth.get("id")))
+            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, auth.get("id")), account_id=auth.get("id"))
             return self.send_json({
                 "ok": True,
                 "video": saved,
@@ -6316,12 +6338,14 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json("Device ID tidak valid.", 400)
             aid = auth.get("id")
             try:
+                disable_default = None
                 if "disable_default_splash" in data:
+                    disable_default = bool(data.get("disable_default_splash"))
                     save_account_disable_default_splash(
                         state,
                         did,
                         aid,
-                        bool(data.get("disable_default_splash")),
+                        disable_default,
                         merchant_id=mid,
                     )
                 entries = data.get("playlist")
@@ -6334,7 +6358,12 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                     playlist = list(device_settings.get("video_playlist") or [])
             except ValueError as exc:
                 return self.send_error_json(exc, 400)
-            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, aid))
+            merged = settings_payload(
+                load_settings(mid),
+                mid,
+                get_device_settings(state, did, aid),
+                account_id=aid,
+            )
             return self.send_json({
                 "ok": True,
                 "playlist": playlist,
