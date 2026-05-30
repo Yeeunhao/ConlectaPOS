@@ -21,12 +21,14 @@
 
   const THEMES = [
     { id: "crystal_bloom",  label: "Crystal Bloom" },
-    { id: "lilac_glass",    label: "Lilac Glass" },
+    { id: "ocean_azure",    label: "Ocean Azure" },
+    { id: "obsidian_glass", label: "Obsidian Glass" },
+    { id: "bubblegum_pop",  label: "Bubblegum Pop" },
+    { id: "forest_emerald", label: "Forest Emerald" },
+    { id: "cobalt_night",   label: "Cobalt Night" },
     { id: "pearl_mist",     label: "Pearl Mist" },
     { id: "aurora_glass",   label: "Aurora Glass" },
-    { id: "mint_prism",     label: "Mint Prism" },
     { id: "midnight_velvet",label: "Midnight Velvet" },
-    { id: "rose_quartz",    label: "Rose Quartz" },
     { id: "deep_space",     label: "Deep Space" },
     { id: "warm_terminal",  label: "Warm Terminal" },
     { id: "midnight_teal",  label: "Midnight Teal" },
@@ -72,30 +74,48 @@
       mode: "screen",
       light: false,
     },
-    lilac_glass: {
-      sky: ["#08061e", "#15103a", "#261a58", "#3d2580"],
-      iris: ["#c4b5fd", "#bae6fd", "#fbcfe8", "#fef3c7"],
-      pearl: "#fff8ff",
-      sparkle: "#f5f3ff",
-      aurora: ["rgba(177,150,255,0.22)", "rgba(155,231,255,0.18)", "rgba(255,213,232,0.18)"],
+    ocean_azure: {
+      sky: ["#010a14", "#031428", "#062447", "#08305c"],
+      iris: ["#38bdf8", "#0ea5e9", "#bae6fd", "#e0f2fe"],
+      pearl: "#f0f9ff",
+      sparkle: "#7dd3fc",
+      aurora: ["rgba(56,189,248,0.22)", "rgba(14,165,233,0.18)", "rgba(186,230,253,0.16)"],
       mode: "screen",
       light: false,
     },
-    mint_prism: {
-      sky: ["#031015", "#052028", "#08343a", "#0a484e"],
-      iris: ["#5eead4", "#bef264", "#fde047", "#a5f3fc"],
-      pearl: "#ecfffa",
-      sparkle: "#d9f99d",
-      aurora: ["rgba(110,231,210,0.2)", "rgba(159,232,178,0.18)", "rgba(250,204,21,0.14)"],
+    obsidian_glass: {
+      sky: ["#000000", "#050508", "#0a0a0f", "#121218"],
+      iris: ["#e2e8f0", "#94a3b8", "#64748b", "#f8fafc"],
+      pearl: "#f8fafc",
+      sparkle: "#cbd5e1",
+      aurora: ["rgba(148,163,184,0.14)", "rgba(226,232,240,0.1)", "rgba(100,116,139,0.08)"],
       mode: "screen",
       light: false,
     },
-    rose_quartz: {
-      sky: ["#120414", "#280a2c", "#401040", "#581658"],
-      iris: ["#f9a8d4", "#e9d5ff", "#fcd34d", "#ffe4e6"],
+    bubblegum_pop: {
+      sky: ["#10040c", "#220818", "#401030", "#52143e"],
+      iris: ["#ff4da6", "#ff85c0", "#ffc2dc", "#ffe4ef"],
       pearl: "#fff0f7",
-      sparkle: "#fbcfe8",
-      aurora: ["rgba(255,138,208,0.2)", "rgba(214,167,255,0.18)", "rgba(255,208,134,0.14)"],
+      sparkle: "#ff85c0",
+      aurora: ["rgba(255,77,166,0.22)", "rgba(255,133,192,0.18)", "rgba(255,194,220,0.14)"],
+      mode: "screen",
+      light: false,
+    },
+    forest_emerald: {
+      sky: ["#020a06", "#061810", "#0c341c", "#104224"],
+      iris: ["#22c55e", "#86efac", "#dcfce7", "#fde047"],
+      pearl: "#ecfdf5",
+      sparkle: "#bbf7d0",
+      aurora: ["rgba(34,197,94,0.18)", "rgba(134,239,172,0.16)", "rgba(253,224,71,0.1)"],
+      mode: "screen",
+      light: false,
+    },
+    cobalt_night: {
+      sky: ["#00040c", "#030d24", "#071842", "#091f52"],
+      iris: ["#3b82f6", "#6366f1", "#93c5fd", "#dbeafe"],
+      pearl: "#eff6ff",
+      sparkle: "#93c5fd",
+      aurora: ["rgba(59,130,246,0.2)", "rgba(99,102,241,0.16)", "rgba(147,197,253,0.14)"],
       mode: "screen",
       light: false,
     },
@@ -128,12 +148,23 @@
     },
   };
 
+  const LEGACY_THEME_MAP = {
+    lilac_glass: "ocean_azure",
+    mint_prism: "forest_emerald",
+    rose_quartz: "bubblegum_pop",
+  };
+
+  function normalizeThemeId(id) {
+    const key = String(id || "").trim();
+    return LEGACY_THEME_MAP[key] || key;
+  }
+
   function getPalette(themeId) {
-    return PALETTES[themeId] || PALETTES[DEFAULT_THEME];
+    return PALETTES[normalizeThemeId(themeId)] || PALETTES[DEFAULT_THEME];
   }
 
   function isValidTheme(id) {
-    return !!PALETTES[id];
+    return !!PALETTES[normalizeThemeId(id)];
   }
 
   /* ------------------------------------------------------------
@@ -208,13 +239,18 @@
     lilac_glass: { density: 1.65, motion: 0.82, auroraSpeed: 0.00055, shooting: 0.0012, pearls: 1.55, sparkles: 1.75, crystals: 1.1 },
     mint_prism: { density: 1.6, motion: 1.0, auroraSpeed: 0.0012, shooting: 0.0007, pearls: 0.55, sparkles: 1.9, crystals: 0.65 },
     rose_quartz: { density: 1.55, motion: 0.72, auroraSpeed: 0.00052, shooting: 0.0011, pearls: 1.35, sparkles: 1.65, crystals: 0.95 },
+    ocean_azure: { density: 1.62, motion: 0.84, auroraSpeed: 0.0005, shooting: 0.001, pearls: 1.4, sparkles: 1.8, crystals: 0.9 },
+    obsidian_glass: { density: 1.45, motion: 0.62, auroraSpeed: 0.00038, shooting: 0.0014, pearls: 0.8, sparkles: 2.1, crystals: 0.5 },
+    bubblegum_pop: { density: 1.58, motion: 0.78, auroraSpeed: 0.00048, shooting: 0.0009, pearls: 1.2, sparkles: 1.85, crystals: 0.75 },
+    forest_emerald: { density: 1.52, motion: 0.86, auroraSpeed: 0.00056, shooting: 0.0008, pearls: 0.65, sparkles: 1.7, crystals: 0.55 },
+    cobalt_night: { density: 1.5, motion: 0.8, auroraSpeed: 0.00046, shooting: 0.0011, pearls: 0.9, sparkles: 1.95, crystals: 0.6 },
     deep_space: { density: 1.15, motion: 0.38, auroraSpeed: 0.00018, shooting: 0.0022, pearls: 0.25, sparkles: 2.4, crystals: 0.2 },
     warm_terminal: { density: 1.05, motion: 0.58, auroraSpeed: 0.00042, shooting: 0.00028, pearls: 0.35, sparkles: 2, crystals: 0.15 },
     midnight_teal: { density: 1.3, motion: 0.8, auroraSpeed: 0.00058, shooting: 0.00075, pearls: 0.7, sparkles: 1.75, crystals: 0.4 },
   };
 
   function themeSceneProfile() {
-    const base = THEME_SCENE_PROFILES[currentThemeId()] || THEME_SCENE_PROFILES.crystal_bloom;
+    const base = THEME_SCENE_PROFILES[normalizeThemeId(currentThemeId())] || THEME_SCENE_PROFILES.crystal_bloom;
     const authBoost = isAuthVisible() ? 1.18 : 1;
     const displayBoost = document.body.classList.contains("qr-display-body") ? 1.12 : 1;
     return {
@@ -589,8 +625,13 @@
       s.y -= s.rise * dt * 0.06 * dtScale;
       s.x += s.drift * dt * 0.06 * dtScale;
       s.t += s.tSpeed * dt;
-      if (s.y < -10 || s.x < -10 || s.x > width + 10) {
-        Object.assign(s, spawnSparkle(false));
+      if (s.y < -12) {
+        s.y = height + rand(8, 40);
+        s.x = rand(0, width);
+      } else if (s.x < -12) {
+        s.x = width + rand(8, 24);
+      } else if (s.x > width + 12) {
+        s.x = -rand(8, 24);
       }
       drawSparkle(s);
     });
@@ -600,8 +641,13 @@
       c.x += c.drift * dt * 0.06 * dtScale;
       c.rot += c.rotSpeed * dt * dtScale;
       c.twinkleT += c.twinkleSpeed * dt * dtScale;
-      if (c.y < -60) {
-        Object.assign(c, spawnCrystal(false));
+      if (c.y < -80) {
+        c.y = height + rand(20, 120);
+        c.x = rand(0, width);
+      } else if (c.x < -80) {
+        c.x = width + rand(20, 60);
+      } else if (c.x > width + 80) {
+        c.x = -rand(20, 60);
       }
       drawCrystal(c);
     });
@@ -652,7 +698,8 @@
   }
 
   function applyTheme(id, opts) {
-    const themeId = isValidTheme(id) ? id : DEFAULT_THEME;
+    const normalized = normalizeThemeId(id);
+    const themeId = isValidTheme(normalized) ? normalized : DEFAULT_THEME;
     document.body.dataset.theme = themeId;
     lastAppliedTheme = themeId;
     currentPalette = getPalette(themeId);

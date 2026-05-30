@@ -87,7 +87,8 @@ button {
     radial-gradient(circle, rgba(196, 181, 253, 0.44) 0 1px, transparent 2px) 18px 28px / 86px 86px,
     radial-gradient(circle, rgba(103, 232, 249, 0.34) 0 1px, transparent 2px) 42px 12px / 128px 128px;
   opacity: 0.42;
-  animation: starDriftMain 24s linear infinite;
+  animation: starDriftMain 48s linear infinite;
+  will-change: transform;
 }
 
 .crystal {
@@ -119,7 +120,8 @@ button {
 }
 
 @keyframes starDriftMain {
-  to { transform: translateY(-96px); }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, -124px, 0); }
 }
 
 .particle {
@@ -171,10 +173,10 @@ button {
 }
 
 @keyframes particleDrift {
-  0% { opacity: 0; transform: translateY(0) translateX(0); }
-  12% { opacity: 0.8; }
-  80% { opacity: 0.35; }
-  100% { opacity: 0; transform: translateY(-140px) translateX(26px); }
+  0% { opacity: 0; transform: translate3d(0, 0, 0); }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.35; }
+  100% { opacity: 0; transform: translate3d(26px, -140px, 0); }
 }
 
 @keyframes auroraSpin {
@@ -707,22 +709,27 @@ button {
 
 body.is-merchant-admin .merchant-admin-only.nav-btn,
 body.is-merchant-admin .merchant-admin-only.tab {
-  display: inline-flex;
+  display: inline-flex !important;
+}
+
+body.is-merchant-admin .settings-tabs .merchant-admin-only.tab {
+  display: flex !important;
+  width: 100%;
 }
 
 body.can-crud-stock .can-crud-stock-only.nav-btn,
 body.can-crud-stock .can-crud-stock-only.btn,
 body.can-crud-stock .can-crud-stock-only.seg,
 body.can-crud-stock .can-crud-stock-only.button-row {
-  display: inline-flex;
+  display: inline-flex !important;
 }
 
 body.can-crud-stock .can-crud-stock-only.button-row {
-  display: flex;
+  display: flex !important;
 }
 
 body.can-view-analytics .can-view-analytics-only.nav-btn {
-  display: inline-flex;
+  display: inline-flex !important;
 }
 
 body.is-cashier-only .stock-readonly-note {
@@ -779,7 +786,8 @@ body.is-merchant-admin:not(.can-crud-stock) #stock-form label.image-picker {
     radial-gradient(circle, rgba(255, 246, 216, 0.26) 0 1px, transparent 2px) 56px 46px / 142px 142px;
   opacity: 0.18;
   mix-blend-mode: screen;
-  animation: starDriftMain 26s linear infinite;
+  animation: starDriftMain 52s linear infinite;
+  will-change: transform;
 }
 
 .page {
@@ -3023,7 +3031,8 @@ body[data-theme="midnight_teal"] {
     radial-gradient(circle, rgba(196, 181, 253, 0.38) 0 1px, transparent 2px) 18px 28px / 86px 86px,
     radial-gradient(circle, rgba(103, 232, 249, 0.28) 0 1px, transparent 2px) 42px 12px / 128px 128px;
   opacity: 0.36;
-  animation: starDriftMain 24s linear infinite;
+  animation: starDriftMain 48s linear infinite;
+  will-change: transform;
 }
 
 .display-crystal-scene::after {
