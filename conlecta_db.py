@@ -84,6 +84,21 @@ def normalize_merchant_id(value):
     return safe or DEFAULT_MERCHANT_ID
 
 
+def normalize_admin_account(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, Decimal)):
+        return value != 0
+    text = str(value).strip().lower()
+    if text in {"", "0", "false", "no", "n", "off"}:
+        return False
+    if text in {"1", "yes", "true", "admin", "owner", "y"}:
+        return True
+    return default
+
+
 def _int_money(value, default=0):
     if value in ("", None):
         return default
@@ -346,6 +361,7 @@ def ensure_schema():
         """,
         "ALTER TABLE conlecta_account ADD COLUMN IF NOT EXISTS last_activity_ts TIMESTAMP",
         "ALTER TABLE conlecta_account ADD COLUMN IF NOT EXISTS pin VARCHAR(20)",
+        "ALTER TABLE conlecta_account ADD COLUMN IF NOT EXISTS admin_account BOOLEAN DEFAULT FALSE",
         "ALTER TABLE vendors ADD COLUMN IF NOT EXISTS legacy_vendor_id VARCHAR(100)",
         "ALTER TABLE vendors ADD COLUMN IF NOT EXISTS registered_by_account_id VARCHAR(100)",
         "ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS legacy_item_no INTEGER",
@@ -484,7 +500,7 @@ def _account_from_row(row):
         "device_id": row.get("device_id") or "",
         "last_ip": row.get("last_ip") or "",
         "merchant_id": normalize_merchant_id(row.get("merchant_id")),
-        "admin_account": bool(row.get("admin_account")),
+        "admin_account": normalize_admin_account(row.get("admin_account")),
         "last_activity_ts": _iso(row.get("last_activity_ts")),
         "pin": row.get("pin") or "",
     }
@@ -563,6 +579,7 @@ def account_conflict_message(account_name, email, exclude_account_id=""):
 def create_account(account_id, account_name, email, password, merchant_id=None, admin_account=False):
     mid = normalize_merchant_id(merchant_id)
     ensure_merchant(mid)
+    admin_flag = normalize_admin_account(admin_account)
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -572,12 +589,16 @@ def create_account(account_id, account_name, email, password, merchant_id=None, 
                     session_status, device_id, last_ip, merchant_id, admin_account, pin, updated_at
                 ) VALUES (%s,%s,%s,%s,'',%s,%s,'','',%s,%s,'',CURRENT_TIMESTAMP)
                 """,
-                (account_id, account_name, email, password, account_name, "logged_out", mid, bool(admin_account)),
+                (account_id, account_name, email, password, account_name, "logged_out", mid, admin_flag),
             )
-            if admin_account:
+            if admin_flag:
                 cur.execute(
                     "UPDATE conlecta_account SET admin_account=FALSE, updated_at=CURRENT_TIMESTAMP WHERE merchant_id=%s AND account_id<>%s",
-                    (mid, account_id),
+                    (mid, str(account_id or "")),
+                )
+                cur.execute(
+                    "UPDATE conlecta_account SET admin_account=TRUE, updated_at=CURRENT_TIMESTAMP WHERE account_id=%s",
+                    (str(account_id or ""),),
                 )
         conn.commit()
 
@@ -625,7 +646,7 @@ def upsert_account(acc):
                     str(acc.get("device_id") or "").strip(),
                     str(acc.get("last_ip") or "").strip(),
                     mid,
-                    bool(acc.get("admin_account")),
+                    normalize_admin_account(acc.get("admin_account")),
                     _ts(acc.get("last_activity_ts")),
                     str(acc.get("pin") or "").strip(),
                 ),
@@ -642,7 +663,9 @@ def update_account(account_id, account_name=None, email=None, password=None, mer
     name = str(account_name if account_name is not None else acc.get("name", "")).strip()
     mail = str(email if email is not None else acc.get("email", "")).strip()
     pwd = str(password if password is not None and str(password).strip() else acc.get("password", "")).strip()
-    admin = bool(acc.get("admin_account") if admin_account is None else admin_account)
+    admin = normalize_admin_account(
+        acc.get("admin_account") if admin_account is None else admin_account,
+    )
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -657,7 +680,11 @@ def update_account(account_id, account_name=None, email=None, password=None, mer
             if admin:
                 cur.execute(
                     "UPDATE conlecta_account SET admin_account=FALSE, updated_at=CURRENT_TIMESTAMP WHERE merchant_id=%s AND account_id<>%s",
-                    (mid, account_id),
+                    (mid, str(account_id or "")),
+                )
+                cur.execute(
+                    "UPDATE conlecta_account SET admin_account=TRUE, updated_at=CURRENT_TIMESTAMP WHERE account_id=%s",
+                    (str(account_id or ""),),
                 )
         conn.commit()
     return True

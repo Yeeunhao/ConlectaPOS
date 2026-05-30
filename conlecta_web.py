@@ -70,6 +70,7 @@ from conlecta_oauth import (
     load_google_credentials,
     load_sheets_credentials,
     token_file_candidates,
+    warm_up_google_tokens,
 )
 
 SPREADSHEET_ID = "1wVrAETyYaK4Nj-qfZofT6Ki9eToeiVpmaKY3qu1bzlQ"
@@ -410,6 +411,27 @@ def normalize_merchant_id(value):
 
 def _is_admin_flag(value):
     return str(value or "").strip().lower() in {"1", "yes", "true", "admin", "owner", "y"}
+
+
+def _normalize_admin_account(value, default=False):
+    if conlecta_db:
+        return conlecta_db.normalize_admin_account(value, default=default)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"", "0", "false", "no", "n", "off"}:
+        return False
+    return _is_admin_flag(value)
+
+
+def _coerce_admin_account(value, default=None):
+    if value is None and default is None:
+        return None
+    if value is None:
+        return _normalize_admin_account(default, default=False)
+    return _normalize_admin_account(value, default=False)
 
 
 def _session_business_day(now=None):
@@ -1596,7 +1618,7 @@ def _parse_account_row(row, row_index):
         "device_id": row[7].strip() if len(row) > 7 else "",
         "last_ip": row[8].strip() if len(row) > 8 else "",
         "merchant_id": normalize_merchant_id(row[9] if len(row) > 9 else DEFAULT_MERCHANT_ID),
-        "admin_account": _is_admin_flag(row[10] if len(row) > 10 else ""),
+        "admin_account": _normalize_admin_account(row[10] if len(row) > 10 else ""),
         "last_activity_ts": row[11].strip() if len(row) > 11 else "",
         "pin": row[12].strip() if len(row) > 12 else "",
     }
@@ -1802,7 +1824,7 @@ def validate_stored_auth(state, refresh_seen=False, activity_ts=None):
     auth["username"] = auth.get("username") or acc.get("username", "")
     auth["email"] = auth.get("email") or acc.get("email", "")
     auth["merchant_id"] = normalize_merchant_id(auth.get("merchant_id") or acc.get("merchant_id"))
-    auth["admin_account"] = bool(acc.get("admin_account"))
+    auth["admin_account"] = _normalize_admin_account(acc.get("admin_account"))
     account_activity = _auth_timestamp(acc.get("last_activity_ts"))
     if account_activity:
         auth["last_activity_ts"] = account_activity
@@ -2071,7 +2093,7 @@ def _accounts_for_merchant(merchant_id=None):
 
 def _merchant_admin_account(merchant_id=None):
     accounts = _accounts_for_merchant(merchant_id)
-    flagged = [acc for acc in accounts if acc.get("admin_account")]
+    flagged = [acc for acc in accounts if _normalize_admin_account(acc.get("admin_account"))]
     return flagged[0] if flagged else (accounts[0] if accounts else None)
 
 
@@ -2095,7 +2117,7 @@ def _clear_other_merchant_admins(ws, merchant_id, keep_account_id=""):
                 continue
             if acc["id"] == keep:
                 continue
-            if normalize_merchant_id(acc.get("merchant_id")) == mid and acc.get("admin_account"):
+            if normalize_merchant_id(acc.get("merchant_id")) == mid and _normalize_admin_account(acc.get("admin_account")):
                 ws.update_cell(row_index, 11, "")
     except Exception as exc:
         log.warning("clear merchant admin flags failed for %s: %s", mid, exc)
@@ -2145,6 +2167,7 @@ def _log_line_matches_session(line, auth=None, device_id=""):
 
 def create_account_record(account_name, email, password, merchant_id=None, admin_account=False):
     mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    admin_account = _normalize_admin_account(admin_account)
     account_name = str(account_name or "").strip()
     email = str(email or "").strip()
     password = str(password or "").strip()
@@ -2186,7 +2209,7 @@ def update_account_record(account_id, account_name=None, email=None, password=No
     acc = _find_account_by_id(account_id)
     if not acc:
         return False, "Account tidak ditemukan."
-    admin_flag = acc.get("admin_account") if admin_account is None else bool(admin_account)
+    admin_flag = acc.get("admin_account") if admin_account is None else _normalize_admin_account(admin_account)
     row = [
         acc["id"],
         str(account_name if account_name is not None else acc["name"]).strip(),
@@ -2604,7 +2627,7 @@ def _complete_login(acc, state=None, client_device_id=None):
         "role": "system_admin" if is_system_admin else "cashier",
         "merchant_id": merchant_id,
         "merchant_name": merchant.get("name") or DEFAULT_MERCHANT_NAME,
-        "admin_account": bool(acc.get("admin_account")),
+        "admin_account": _normalize_admin_account(acc.get("admin_account")),
         "login_ts": datetime.now().isoformat(timespec="seconds"),
         "log_start_ts": now_ts,
         "last_activity_ts": now_ts,
@@ -2994,7 +3017,7 @@ def load_vendors(force=False, merchant_id=None):
 
 
 def is_merchant_admin_auth(auth):
-    return bool(auth and auth.get("admin_account"))
+    return _normalize_admin_account((auth or {}).get("admin_account"))
 
 
 def save_vendor(name, merchant_id=None, registered_by_account_id=None):
@@ -5409,7 +5432,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                     auth["role"] = "system_admin" if _is_system_admin_account(acc) else (auth.get("role") or "cashier")
                     auth["email"] = auth.get("email") or acc.get("email", "")
                     auth["merchant_id"] = normalize_merchant_id(auth.get("merchant_id") or acc.get("merchant_id"))
-                    auth["admin_account"] = bool(acc.get("admin_account"))
+                    auth["admin_account"] = _normalize_admin_account(acc.get("admin_account"))
                 elif not auth.get("role"):
                     auth["role"] = "cashier"
                 if not auth.get("merchant_id"):
@@ -5723,7 +5746,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(exc, 403)
             ok, msg = create_account_record(
                 data.get("name"), data.get("email"), data.get("password"),
-                data.get("merchant_id"), bool(data.get("admin_account")),
+                data.get("merchant_id"), _coerce_admin_account(data.get("admin_account"), default=False),
             )
             if not ok:
                 return self.send_error_json(msg, 400)
@@ -5736,7 +5759,8 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(exc, 403)
             ok, msg = update_account_record(
                 data.get("account_id"), data.get("name"), data.get("email"),
-                data.get("password"), data.get("merchant_id"), bool(data.get("admin_account")),
+                data.get("password"), data.get("merchant_id"),
+                _coerce_admin_account(data.get("admin_account")) if "admin_account" in data else None,
             )
             if not ok:
                 return self.send_error_json(msg, 400)
@@ -6091,6 +6115,13 @@ def run(host="127.0.0.1", port=8765):
             "PDF export disabled on this VPS. Install with: "
             "pip install -r requirements.txt  (then restart the server)"
         )
+    if _email_deps_ready():
+        def _warm_oauth_tokens():
+            try:
+                warm_up_google_tokens()
+            except Exception as exc:
+                log.warning("Google OAuth warm-up failed: %s", exc)
+        threading.Thread(target=_warm_oauth_tokens, daemon=True, name="oauth-warmup").start()
     server = ThreadingHTTPServer((host, port), ConlectaWebHandler)
     log.info("Conlecta web app running at http://%s:%s", host, port)
     try:

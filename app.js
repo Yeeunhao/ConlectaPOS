@@ -60,6 +60,7 @@ const CONLECTA_IDENTITY_LOGO = "/assets/ConlectaPosLogo.png";
 const OTP_TTL_MS = 60_000;
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const SESSION_HEARTBEAT_MS = 60 * 1000;
+const STOCK_POLL_MS = 10 * 1000;
 const PAYMENT_NOTICE_MS = 5000;
 const PAYMENT_ACK_STORAGE_KEY = "conlecta_ack_payment_modals";
 const CASHIER_NOTICE_STORAGE_KEY = "conlecta_cashier_payment_notice";
@@ -87,6 +88,8 @@ let qrDisplayWindow = null;
 let otpTimer = null;
 let sessionTimer = null;
 let heartbeatTimer = null;
+let stockPollTimer = null;
+let stockPollInFlight = false;
 let dailySessionTimer = null;
 let dismissCooldownTimer = null;
 let otpVerifying = false;
@@ -438,6 +441,12 @@ function isSystemAdmin() {
 
 function isMerchantAdmin() {
   return Boolean(state.auth?.admin_account);
+}
+
+function authRoleLabel() {
+  if (isSystemAdmin()) return "Admin";
+  if (isMerchantAdmin()) return "Merchant Admin";
+  return "Kasir";
 }
 
 function applyRolePermissions() {
@@ -795,16 +804,18 @@ function renderAuth() {
   $("#app").classList.toggle("system-admin-mode", systemMode);
   $(".brand").dataset.page = systemMode ? "system-admin" : "cashier";
   $("#user-pill").textContent = state.auth
-    ? `${systemMode ? "Admin" : "Kasir"}: ${state.auth.name || state.auth.username || "Cashier"}`
+    ? `${authRoleLabel()}: ${state.auth.name || state.auth.username || "Cashier"}`
     : "Kasir: -";
   $("#cashier-name").textContent = `Kasir: ${state.auth?.name || "Cashier"}`;
   if (locked) {
     applyAuthTheme();
     stopSessionTimer();
     stopHeartbeat();
+    stopStockPolling();
   } else {
     scheduleSessionTimer();
     startHeartbeat();
+    startStockPolling();
   }
   if (systemMode) {
     const activePage = $(".page.active")?.id || "";
@@ -1252,6 +1263,12 @@ function stopHeartbeat() {
   heartbeatTimer = null;
 }
 
+function stopStockPolling() {
+  if (stockPollTimer) clearInterval(stockPollTimer);
+  stockPollTimer = null;
+  stockPollInFlight = false;
+}
+
 function heartbeatPayload() {
   return {
     active_qr: Boolean(state.activeQr),
@@ -1267,6 +1284,33 @@ function startHeartbeat() {
   heartbeatTimer = setInterval(() => {
     sendSessionHeartbeat().catch(() => null);
   }, SESSION_HEARTBEAT_MS);
+}
+
+async function pollStockFromServer() {
+  if (!state.auth || isSystemAdmin() || stockPollInFlight) return;
+  stockPollInFlight = true;
+  try {
+    const result = await api("/api/stock", { loading: false });
+    const nextProducts = Array.isArray(result.products) ? result.products : [];
+    state.products = nextProducts;
+    reconcileCartWithStock();
+    renderStock();
+    renderCatalog();
+    renderCart();
+    updateTotals();
+    publishDisplayState();
+  } catch {
+    // Background stock sync should not interrupt the cashier flow.
+  } finally {
+    stockPollInFlight = false;
+  }
+}
+
+function startStockPolling() {
+  if (!state.auth || isSystemAdmin() || stockPollTimer) return;
+  stockPollTimer = setInterval(() => {
+    pollStockFromServer().catch(() => null);
+  }, STOCK_POLL_MS);
 }
 
 function applyLoggedOutState(message = "") {
@@ -1289,6 +1333,7 @@ function applyLoggedOutState(message = "") {
   stopOtpTimer();
   stopSessionTimer();
   stopHeartbeat();
+  stopStockPolling();
   closeModal(true);
   resetAuthForms({ clearCredentials: true });
   setRoute("/login", true);
@@ -1315,6 +1360,7 @@ async function sendSessionHeartbeat(useBeacon = false) {
     applyLoggedOutState("Session expired. Silakan login ulang.");
   } else if (result.auth) {
     state.auth = result.auth;
+    applyRolePermissions();
     const activityMs = authActivityMs(result.auth);
     if (activityMs) {
       lastActivityTs = activityMs;
@@ -1618,6 +1664,7 @@ async function logout() {
   stopOtpTimer();
   stopSessionTimer();
   stopHeartbeat();
+  stopStockPolling();
   closeModal();
   resetAuthForms({ clearCredentials: true });
   if ($("#log-admin-password")) $("#log-admin-password").value = "";
@@ -3854,6 +3901,7 @@ function renderSystemAdmin() {
       <label class="field"><span>New Password</span><input data-account-field="password" type="password" placeholder="Keep current"></label>
       <label class="field"><span>Merchant</span><select data-account-field="merchant_id">${merchantOptions(account.merchant_id)}</select></label>
       <label class="check-row inline-check"><input data-account-field="admin_account" type="checkbox" ${account.admin_account ? "checked" : ""}><span>Merchant Admin</span></label>
+      <span class="system-account-role ${account.admin_account ? "is-admin" : "is-cashier"}">${account.admin_account ? "Admin" : "Cashier"}</span>
       <button class="btn ghost" type="button" data-action="save-system-account">Save</button>
     </div>
   `).join("") : `<div class="empty-state">No account for this merchant</div>`;
@@ -3927,6 +3975,7 @@ async function saveSystemAccount(target) {
     showToast("Username/account name atau email sudah dipakai", "error");
     return;
   }
+  const isAdmin = Boolean(value("admin_account")?.checked);
   const result = await api("/api/system-admin/account/update", {
     method: "POST",
     body: {
@@ -3935,12 +3984,12 @@ async function saveSystemAccount(target) {
       email: nextEmail,
       password: value("password").value,
       merchant_id: value("merchant_id").value,
-      admin_account: value("admin_account").checked,
+      admin_account: isAdmin,
     },
   });
   state.systemAdmin = result.system_admin || state.systemAdmin;
   renderSystemAdmin();
-  showToast(result.message || "Account updated");
+  showToast(result.message || `Account updated (${isAdmin ? "Merchant Admin" : "Cashier"})`);
 }
 
 async function saveSystemVersion() {

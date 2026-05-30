@@ -1,154 +1,163 @@
 # =========================================================
-# gmail_token_generator.py
+# TokenGenerator.py
 #
-# Generate Google OAuth token.json
-# Auto refresh capable
+# Generate Google OAuth token.json + oauth_token.json
+# Auto refresh capable. Use --manual on headless VPS.
 # =========================================================
 
-import os
+import argparse
 import json
-from datetime import timezone
+import os
+import sys
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
 from conlecta_oauth import (
-    BASE_DIR,
     CLIENT_SECRET_FILE,
+    COMBINED_SCOPES,
+    GMAIL_SCOPES,
     GMAIL_TOKEN_FILE,
+    OAUTH_CREDS_FILE,
     OAUTH_TOKEN_FILE,
     SHEETS_SCOPES,
-    GMAIL_SCOPES,
+    credentials_file_candidates,
 )
 
-SCOPES = list(dict.fromkeys(GMAIL_SCOPES + SHEETS_SCOPES))
+SCOPES = COMBINED_SCOPES
 
-# =========================================================
-# MAIN
-# =========================================================
-def main():
 
-    print("=========================================")
-    print(" GOOGLE TOKEN GENERATOR")
-    print("=========================================\n")
+def _resolve_client_secret():
+    candidates = credentials_file_candidates()
+    if candidates:
+        return candidates[0]
+    return CLIENT_SECRET_FILE or OAUTH_CREDS_FILE
 
-    # -----------------------------------------------------
-    # Check client secret
-    # -----------------------------------------------------
-    client_secret = CLIENT_SECRET_FILE
-    if not os.path.exists(client_secret):
-        print(f"ERROR: {client_secret} not found")
-        return
 
-    token_path = GMAIL_TOKEN_FILE
-    oauth_token_path = OAUTH_TOKEN_FILE
+def _run_oauth_flow(client_secret, manual=False):
+    flow = InstalledAppFlow.from_client_secrets_file(client_secret, SCOPES)
+    if manual:
+        auth_url, _ = flow.authorization_url(
+            access_type="offline",
+            prompt="consent",
+            include_granted_scopes="true",
+        )
+        print("\nOpen this URL in a browser (any machine):\n")
+        print(auth_url)
+        print("\nAfter approving, paste the full redirect URL or authorization code here.\n")
+        raw = input("Authorization code or redirect URL: ").strip()
+        if "code=" in raw:
+            raw = raw.split("code=", 1)[1]
+            raw = raw.split("&", 1)[0]
+        flow.fetch_token(code=raw)
+        return flow.credentials
 
-    if os.path.exists(token_path):
-        try:
-            os.remove(token_path)
-            print(f"[INFO] Old {token_path} deleted")
-        except Exception as e:
-            print(f"[WARNING] Failed delete old token: {e}")
-
-    print("\n[INFO] Starting Google OAuth Login...\n")
-
-    # -----------------------------------------------------
-    # OAuth Flow
-    # -----------------------------------------------------
-    flow = InstalledAppFlow.from_client_secrets_file(
-        client_secret,
-        SCOPES
-    )
-
-    # Force refresh token generation
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",
-        include_granted_scopes="true"
+        include_granted_scopes="true",
     )
-
     print("If browser not auto open, open this URL manually:\n")
     print(auth_url)
     print("\nWaiting for login...\n")
-
-    creds = flow.run_local_server(
+    return flow.run_local_server(
         port=0,
         access_type="offline",
-        prompt="consent"
+        prompt="consent",
     )
 
-    # -----------------------------------------------------
-    # Auto refresh if expired
-    # -----------------------------------------------------
-    try:
-        if creds.expired and creds.refresh_token:
-            print("[INFO] Refreshing token...")
-            creds.refresh(Request())
-    except Exception as e:
-        print(f"[WARNING] Refresh failed: {e}")
 
-    # -----------------------------------------------------
-    # Validate refresh token
-    # -----------------------------------------------------
-    if not creds.refresh_token:
-        print("\n=========================================")
-        print("WARNING: NO REFRESH TOKEN RECEIVED")
-        print("=========================================")
-        print("Possible causes:")
-        print("- OAuth app still testing")
-        print("- Existing Google permission cached")
-        print("- Need revoke old access")
-        print("\nFix:")
-        print("1. Open:")
-        print("https://myaccount.google.com/permissions")
-        print("2. Remove app access")
-        print("3. Run script again")
-        print("=========================================\n")
-
-    # -----------------------------------------------------
-    # Build token data
-    # -----------------------------------------------------
+def _save_tokens(creds):
     token_data = {
         "token": creds.token,
         "refresh_token": creds.refresh_token,
         "token_uri": creds.token_uri,
         "client_id": creds.client_id,
         "client_secret": creds.client_secret,
-        "scopes": list(creds.scopes),
-        "universe_domain": getattr(
-            creds,
-            "universe_domain",
-            "googleapis.com"
-        ),
-        "account": ""
+        "scopes": list(creds.scopes or SCOPES),
+        "universe_domain": getattr(creds, "universe_domain", "googleapis.com"),
+        "account": "",
     }
+    if getattr(creds, "expiry", None):
+        expiry = creds.expiry
+        if expiry.tzinfo is None:
+            token_data["expiry"] = expiry.isoformat() + "Z"
+        else:
+            token_data["expiry"] = expiry.astimezone().isoformat().replace("+00:00", "Z")
 
-    # -----------------------------------------------------
-    # Save token
-    # -----------------------------------------------------
-    with open(token_path, "w", encoding="utf-8") as f:
-        json.dump(token_data, f, indent=4)
+    for path in (GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(token_data, f, indent=4)
+        print(f"Saved {path}")
 
-    with open(oauth_token_path, "w", encoding="utf-8") as f:
-        json.dump(token_data, f, indent=4)
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate Google OAuth tokens for Conlecta")
+    parser.add_argument(
+        "--manual",
+        action="store_true",
+        help="Headless mode: print URL and paste authorization code (for VPS)",
+    )
+    args = parser.parse_args()
+
+    print("=========================================")
+    print(" GOOGLE TOKEN GENERATOR")
+    print("=========================================\n")
+    print("Scopes:")
+    for scope in SCOPES:
+        print(f"  - {scope}")
+    print()
+
+    client_secret = _resolve_client_secret()
+    if not os.path.exists(client_secret):
+        print(f"ERROR: OAuth client file not found.")
+        print(f"Expected one of: {OAUTH_CREDS_FILE}, {CLIENT_SECRET_FILE}")
+        return 1
+
+    print(f"Using client secrets: {client_secret}\n")
+
+    for path in (GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE):
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+                print(f"[INFO] Old {path} deleted")
+            except Exception as exc:
+                print(f"[WARNING] Failed delete old token {path}: {exc}")
+
+    print("\n[INFO] Starting Google OAuth Login...\n")
+    creds = _run_oauth_flow(client_secret, manual=args.manual)
+
+    try:
+        if creds.expired and creds.refresh_token:
+            print("[INFO] Refreshing token...")
+            creds.refresh(Request())
+    except Exception as exc:
+        print(f"[WARNING] Refresh failed: {exc}")
+
+    if not creds.refresh_token:
+        print("\n=========================================")
+        print("WARNING: NO REFRESH TOKEN RECEIVED")
+        print("=========================================")
+        print("Fix:")
+        print("1. Open https://myaccount.google.com/permissions")
+        print("2. Remove Conlecta / Google Cloud app access")
+        print("3. Run this script again with --manual on VPS")
+        print("=========================================\n")
+        return 1
+
+    _save_tokens(creds)
 
     print("\n=========================================")
     print("SUCCESS!")
-    print(f"Saved {token_path}")
-    print(f"Saved {oauth_token_path}")
     print("=========================================\n")
-
-    print("Refresh Token Exists:",
-          "YES" if creds.refresh_token else "NO")
-
+    print("Refresh Token Exists:", "YES" if creds.refresh_token else "NO")
     print("\nIMPORTANT:")
     print("- Keep token.json private")
-    print("- Do not regenerate too often")
-    print("- Publish OAuth app to Production")
-    print("- Refresh token can die if revoked")
+    print("- Publish OAuth app to Production (Testing tokens expire ~7 days)")
+    print("- Server auto-refreshes access tokens ~15 min before expiry")
+    print("- If you see invalid_grant, revoke app access and run this again")
+    return 0
 
-# =========================================================
-# RUN
-# =========================================================
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -333,6 +333,7 @@ button {
   letter-spacing: 0;
   background: linear-gradient(180deg, #fff6d8 0%, #f3c2d4 42%, #c9c3ff 74%, #bff5ff 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   color: transparent;
   filter: drop-shadow(0 14px 28px rgba(155, 124, 255, 0.24));
 }
@@ -2592,6 +2593,26 @@ body[data-theme="midnight_teal"] {
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.035);
+}
+
+.system-account-role {
+  justify-self: start;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.system-account-role.is-admin {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.system-account-role.is-cashier {
+  color: #64748b;
+  background: rgba(100, 116, 139, 0.12);
 }
 
 .system-version-grid .wide {

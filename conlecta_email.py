@@ -24,6 +24,7 @@ from conlecta_oauth import (
     BASE_DIR as _BASE_DIR,
     GMAIL_SCOPES,
     GMAIL_TOKEN_FILE,
+    GoogleTokenError,
     OAUTH_TOKEN_FILE,
     load_gmail_credentials,
 )
@@ -55,15 +56,24 @@ def _load_gmail_credentials() -> Credentials | None:
 
 def google_auth() -> Credentials:
 
-    creds = _load_gmail_credentials()
+    creds, detail = load_gmail_credentials()
 
     if creds:
         return creds
 
+    detail_text = str(detail or "").strip()
+    if detail_text and (
+        "TokenGenerator" in detail_text
+        or "invalid_grant" in detail_text.lower()
+        or "revoked" in detail_text.lower()
+    ):
+        raise GoogleTokenError(detail_text)
+
     raise FileNotFoundError(
         "token.json / oauth_token.json tidak ditemukan "
         "atau tidak valid untuk Gmail (scope gmail.send).\n"
-        "Jalankan TokenGenerator.py untuk OAuth gabungan, "
+        "Jalankan TokenGenerator.py untuk OAuth gabungan "
+        "(python TokenGenerator.py --manual di VPS), "
         "atau pastikan oauth_token.json memiliki scope gmail.send."
     )
 
@@ -607,8 +617,12 @@ def send_receipt_email(record, customer_email, on_success=None, on_error=None, t
             if on_success:
                 on_success("Email sent")
 
+        except GoogleTokenError as e:
+            log.error("send_receipt_email: %s", e)
+            if on_error:
+                on_error(str(e))
         except Exception as e:
-            log.error(f"send_receipt_email: {e}")
+            log.error("send_receipt_email: %s", e)
             if on_error:
                 on_error(str(e))
 
