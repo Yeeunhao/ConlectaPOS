@@ -15,6 +15,7 @@ try:
 except Exception:
     pass
 import random
+import secrets
 import re
 import sys
 import threading
@@ -2174,11 +2175,13 @@ def create_account_record(account_name, email, password, merchant_id=None, admin
     account_name = str(account_name or "").strip()
     email = str(email or "").strip()
     password = str(password or "").strip()
-    if not account_name or not email or not password:
-        return False, "Account name, email, dan password wajib diisi."
+    if not account_name or not email:
+        return False, "Account name dan email wajib diisi."
     if "@" not in email or "." not in email.split("@")[-1]:
         return False, "Format email belum valid."
-    if len(password) < 6:
+    if not password:
+        password = secrets.token_urlsafe(16)
+    elif len(password) < 6:
         return False, "Password minimal 6 karakter."
     conflict = _account_conflict_message(account_name, email)
     if conflict:
@@ -5437,7 +5440,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.serve_file(os.path.join(WEB_DIR, "qr-display.html"))
             if path.startswith("/assets/"):
                 return self.serve_file(safe_path(BASE_DIR, path))
-            if path in ("/styles.css", "/app.js", "/qr-display.js", "/qris-frame.js", "/qris-frame-admin.js", "/theme-pack.css", "/theme-engine.js"):
+            if path in ("/styles.css", "/app.js", "/qr-display.js", "/qris-frame.js", "/qris-frame-admin.js", "/image-crop.js", "/theme-pack.css", "/theme-engine.js"):
                 return self.serve_file(os.path.join(WEB_DIR, path.lstrip("/")))
             return self.send_error(404, "Not found")
         except Exception as exc:
@@ -5465,7 +5468,11 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _api_path(self, path):
+        return (path or "").rstrip("/") or "/"
+
     def handle_api_get(self, path, query):
+        path = self._api_path(path)
         if path == "/api/brand-image":
             mid = normalize_merchant_id((query.get("merchant_id") or [""])[0])
             if not mid:
@@ -5722,6 +5729,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         return self.send_error_json("Unknown API route", 404)
 
     def handle_api_post(self, path, data):
+        path = self._api_path(path)
         if path == "/api/auth/login":
             try:
                 pending = begin_login(data.get("login"), data.get("password"))
@@ -5970,7 +5978,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             identity_changed = (
                 str(incoming.get("shop_name", current.get("shop_name", ""))).strip() != str(current.get("shop_name", "")).strip()
             )
-            if identity_changed:
+            if identity_changed and not is_merchant_admin_auth(auth):
                 ok, msg = verify_admin_password(data.get("admin_password") or incoming.get("admin_password"), mid)
                 if not ok:
                     return self.send_error_json(msg, 403)
@@ -5990,9 +5998,10 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             state = load_state()
             mid, auth = self.request_merchant_id(state)
 
-            ok, msg = verify_admin_password(data.get("admin_password"), mid)
-            if not ok:
-                return self.send_error_json(msg, 403)
+            if not is_merchant_admin_auth(auth):
+                ok, msg = verify_admin_password(data.get("admin_password"), mid)
+                if not ok:
+                    return self.send_error_json(msg, 403)
 
             return self.send_json({
                 "ok": True,

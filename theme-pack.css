@@ -298,6 +298,161 @@ body[data-theme="cobalt_night"] {
 }
 
 /* ------------------------------------------------------------
+   sunset_amber :: warm ember glass
+   ------------------------------------------------------------ */
+body[data-theme="sunset_amber"] {
+  --bg: #120804;
+  --bg2: #241006;
+  --surface: #3a1808;
+  --surface2: #4a1e0a;
+  --surface3: #5c240c;
+  --line: rgba(251, 146, 60, 0.34);
+  --line2: rgba(253, 186, 116, 0.28);
+  --text: #fff7ed;
+  --text2: #fed7aa;
+  --text3: #fdba74;
+  --purple: #fb923c;
+  --purple2: #fdba74;
+  --cyan: #fde68a;
+  --gold: #fef08a;
+  --green: #86efac;
+  --red: #fb7185;
+  --tp-iris-1: rgba(251, 146, 60, 0.68);
+  --tp-iris-2: rgba(251, 191, 36, 0.62);
+  --tp-iris-3: rgba(253, 224, 71, 0.56);
+  --tp-iris-4: rgba(255, 247, 237, 0.58);
+  --tp-glass-bg: rgba(36, 16, 6, 0.18);
+  --tp-glass-border: rgba(253, 186, 116, 0.34);
+  --tp-glass-inner: rgba(255, 255, 255, 0.06);
+  --tp-glass-blur: 28px;
+  --tp-pearl: #fff7ed;
+}
+
+/* ------------------------------------------------------------
+   neon_tokyo :: cyber magenta / cyan glass
+   ------------------------------------------------------------ */
+body[data-theme="neon_tokyo"] {
+  --bg: #070014;
+  --bg2: #120028;
+  --surface: #1f0044;
+  --surface2: #2a005a;
+  --surface3: #36006e;
+  --line: rgba(255, 43, 214, 0.34);
+  --line2: rgba(0, 245, 255, 0.28);
+  --text: #ffe8ff;
+  --text2: #f5d0fe;
+  --text3: #67e8f9;
+  --purple: #ff2bd6;
+  --purple2: #00f5ff;
+  --cyan: #ffe066;
+  --gold: #fde047;
+  --green: #86efac;
+  --red: #fb7185;
+  --tp-iris-1: rgba(255, 43, 214, 0.66);
+  --tp-iris-2: rgba(0, 245, 255, 0.58);
+  --tp-iris-3: rgba(191, 95, 255, 0.52);
+  --tp-iris-4: rgba(255, 224, 102, 0.55);
+  --tp-glass-bg: rgba(18, 0, 40, 0.18);
+  --tp-glass-border: rgba(0, 245, 255, 0.32);
+  --tp-glass-inner: rgba(255, 255, 255, 0.06);
+  --tp-glass-blur: 30px;
+  --tp-pearl: #ffe8ff;
+}
+
+/* ------------------------------------------------------------
+   sakura_drift :: soft pink glass
+   ------------------------------------------------------------ */
+body[data-theme="sakura_drift"] {
+  --bg: #140810;
+  --bg2: #28101c;
+  --surface: #401828;
+  --surface2: #521e34;
+  --surface3: #642440;
+  --line: rgba(251, 113, 133, 0.34);
+  --line2: rgba(253, 164, 175, 0.28);
+  --text: #fff1f2;
+  --text2: #fecdd3;
+  --text3: #fda4af;
+  --purple: #fb7185;
+  --purple2: #fda4af;
+  --cyan: #ffe4e6;
+  --gold: #fde68a;
+  --green: #86efac;
+  --red: #f43f5e;
+  --tp-iris-1: rgba(253, 164, 175, 0.66);
+  --tp-iris-2: rgba(251, 113, 133, 0.6);
+  --tp-iris-3: rgba(254, 205, 211, 0.54);
+  --tp-iris-4: rgba(255, 241, 242, 0.56);
+  --tp-glass-bg: rgba(64, 24, 40, 0.17);
+  --tp-glass-border: rgba(253, 164, 175, 0.34);
+  --tp-glass-inner: rgba(255, 255, 255, 0.06);
+  --tp-glass-blur: 28px;
+  --tp-pearl: #fff1f2;
+}
+
+/* ------------------------------------------------------------
+   arctic_frost :: icy blue glass
+   ------------------------------------------------------------ */
+body[data-theme="arctic_frost"] {
+  --bg: #071018;
+  --bg2: #0c1a28;
+  --surface: #123048;
+  --surface2: #184060;
+  --surface3: #1e5078;
+  --line: rgba(147, 197, 253, 0.34);
+  --line2: rgba(224, 242, 254, 0.28);
+  --text: #f8fafc;
+  --text2: #dbeafe;
+  --text3: #93c5fd;
+  --purple: #60a5fa;
+  --purple2: #bfdbfe;
+  --cyan: #e0f2fe;
+  --gold: #fde68a;
+  --green: #86efac;
+  --red: #fb7185;
+  --tp-iris-1: rgba(224, 242, 254, 0.62);
+  --tp-iris-2: rgba(147, 197, 253, 0.56);
+  --tp-iris-3: rgba(255, 255, 255, 0.48);
+  --tp-iris-4: rgba(219, 234, 254, 0.52);
+  --tp-glass-bg: rgba(8, 28, 48, 0.16);
+  --tp-glass-border: rgba(224, 242, 254, 0.3);
+  --tp-glass-inner: rgba(255, 255, 255, 0.08);
+  --tp-glass-blur: 30px;
+  --tp-pearl: #f8fafc;
+}
+
+/* ------------------------------------------------------------
+   copper_dusk :: bronze copper glass
+   ------------------------------------------------------------ */
+body[data-theme="copper_dusk"] {
+  --bg: #100806;
+  --bg2: #201008;
+  --surface: #341808;
+  --surface2: #442010;
+  --surface3: #542818;
+  --line: rgba(217, 119, 6, 0.34);
+  --line2: rgba(251, 191, 36, 0.28);
+  --text: #fffbeb;
+  --text2: #fde68a;
+  --text3: #fbbf24;
+  --purple: #d97706;
+  --purple2: #fbbf24;
+  --cyan: #fef3c7;
+  --gold: #fcd34d;
+  --green: #86efac;
+  --red: #fb7185;
+  --tp-iris-1: rgba(217, 119, 6, 0.66);
+  --tp-iris-2: rgba(245, 158, 11, 0.6);
+  --tp-iris-3: rgba(252, 211, 77, 0.54);
+  --tp-iris-4: rgba(255, 251, 235, 0.56);
+  --tp-glass-bg: rgba(32, 16, 8, 0.18);
+  --tp-glass-border: rgba(251, 191, 36, 0.32);
+  --tp-glass-inner: rgba(255, 255, 255, 0.06);
+  --tp-glass-blur: 28px;
+  --tp-pearl: #fffbeb;
+}
+
+/* ------------------------------------------------------------
    deep_space / warm_terminal / midnight_teal glass tokens
    ------------------------------------------------------------ */
 body[data-theme="deep_space"] {
@@ -1687,6 +1842,11 @@ body[data-theme="obsidian_glass"].qr-display-body,
 body[data-theme="bubblegum_pop"].qr-display-body,
 body[data-theme="forest_emerald"].qr-display-body,
 body[data-theme="cobalt_night"].qr-display-body,
+body[data-theme="sunset_amber"].qr-display-body,
+body[data-theme="neon_tokyo"].qr-display-body,
+body[data-theme="sakura_drift"].qr-display-body,
+body[data-theme="arctic_frost"].qr-display-body,
+body[data-theme="copper_dusk"].qr-display-body,
 body[data-theme="aurora_glass"].qr-display-body,
 body[data-theme="midnight_velvet"].qr-display-body,
 body[data-theme="pearl_mist"].qr-display-body,
@@ -2547,11 +2707,21 @@ body[data-theme="midnight_velvet"] .cashier-hero .hero-total strong.change {
   body[data-theme="bubblegum_pop"] .cashier-hero .hero-total strong:not(.change):not(.due),
   body[data-theme="forest_emerald"] .cashier-hero .hero-total strong:not(.change):not(.due),
   body[data-theme="cobalt_night"] .cashier-hero .hero-total strong:not(.change):not(.due),
+  body[data-theme="sunset_amber"] .cashier-hero .hero-total strong:not(.change):not(.due),
+  body[data-theme="neon_tokyo"] .cashier-hero .hero-total strong:not(.change):not(.due),
+  body[data-theme="sakura_drift"] .cashier-hero .hero-total strong:not(.change):not(.due),
+  body[data-theme="arctic_frost"] .cashier-hero .hero-total strong:not(.change):not(.due),
+  body[data-theme="copper_dusk"] .cashier-hero .hero-total strong:not(.change):not(.due),
   body[data-theme="ocean_azure"] .checkout-total strong,
   body[data-theme="obsidian_glass"] .checkout-total strong,
   body[data-theme="bubblegum_pop"] .checkout-total strong,
   body[data-theme="forest_emerald"] .checkout-total strong,
-  body[data-theme="cobalt_night"] .checkout-total strong {
+  body[data-theme="cobalt_night"] .checkout-total strong,
+  body[data-theme="sunset_amber"] .checkout-total strong,
+  body[data-theme="neon_tokyo"] .checkout-total strong,
+  body[data-theme="sakura_drift"] .checkout-total strong,
+  body[data-theme="arctic_frost"] .checkout-total strong,
+  body[data-theme="copper_dusk"] .checkout-total strong {
     background: linear-gradient(135deg, var(--tp-iris-1), var(--tp-iris-2), var(--tp-iris-4));
     -webkit-background-clip: text;
     background-clip: text;

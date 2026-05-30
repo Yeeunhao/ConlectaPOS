@@ -712,20 +712,27 @@ button {
   display: none !important;
 }
 
-body.is-merchant-admin .merchant-admin-only.nav-btn,
-body.is-merchant-admin .merchant-admin-only.tab {
+body.is-merchant-admin .merchant-admin-only.nav-btn {
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
 }
 
+body.is-merchant-admin .merchant-admin-only.tab {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: flex-start;
+}
+
 body.is-merchant-admin .settings-tabs .merchant-admin-only.tab {
   display: flex !important;
   align-items: center;
+  justify-content: flex-start;
   width: 100%;
   font-size: 14px;
   line-height: 1.2;
   font-weight: 900;
+  text-align: left;
 }
 
 body.can-crud-stock .can-crud-stock-only.nav-btn,
@@ -3973,3 +3980,65 @@ body[data-theme="midnight_teal"] {
 .qris-frame-editor-preview {
   width: 100%;
 }
+
+.image-crop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(4, 8, 18, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.image-crop-modal {
+  width: min(560px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+}
+
+.image-crop-note {
+  margin: 0 0 12px;
+}
+
+.image-crop-stage {
+  position: relative;
+  width: min(480px, 100%);
+  margin: 0 auto 16px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line2);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.image-crop-stage img {
+  width: 100%;
+  height: auto;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.image-crop-box {
+  position: absolute;
+  border: 2px dashed rgba(103, 232, 249, 0.95);
+  background: rgba(103, 232, 249, 0.12);
+  box-sizing: border-box;
+  touch-action: none;
+  cursor: move;
+}
+
+.image-crop-box span[data-handle] {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #67e8f9;
+  border: 2px solid #fff;
+}
+
+.image-crop-box span[data-handle="nw"] { left: -7px; top: -7px; cursor: nwse-resize; }
+.image-crop-box span[data-handle="ne"] { right: -7px; top: -7px; cursor: nesw-resize; }
+.image-crop-box span[data-handle="sw"] { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.image-crop-box span[data-handle="se"] { right: -7px; bottom: -7px; cursor: nwse-resize; }

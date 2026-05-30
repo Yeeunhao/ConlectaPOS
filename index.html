@@ -8,7 +8,7 @@
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css?v=7">
-  <link rel="stylesheet" href="/theme-pack.css?v=9">
+  <link rel="stylesheet" href="/theme-pack.css?v=10">
 </head>
 <body data-theme="crystal_bloom">
   <div class="app-bg"></div>
@@ -767,33 +767,14 @@
 
         <div class="settings-grid">
           <nav class="settings-tabs" aria-label="Settings sections">
-            <button class="tab active" type="button" data-settings-tab="shop">Shop</button>
-            <button class="tab" type="button" data-settings-tab="qris">QRIS</button>
+            <button class="tab active" type="button" data-settings-tab="qris">QRIS</button>
             <button class="tab merchant-admin-only" type="button" data-settings-tab="admin">Admin Setting</button>
             <button class="tab" type="button" data-settings-tab="display">Display</button>
             <button class="tab" type="button" data-settings-tab="email">Email</button>
           </nav>
 
           <div class="panel settings-panel">
-            <section class="settings-section active" id="settings-shop">
-              <h2>Shop Info</h2>
-              <label class="field"><span>Shop Name</span><input id="set-shop-name" type="text"></label>
-              <label class="field"><span>Address</span><input id="set-shop-address" type="text"></label>
-              <label class="field"><span>Postcode</span><input id="set-shop-postcode" type="text"></label>
-              <label class="field"><span>Default Customer Prefix</span><input id="set-customer-prefix" type="text"></label>
-              <label class="field"><span>Admin Password for Store Name / Logo</span><input id="set-admin-password" type="password"></label>
-              <div class="brand-upload">
-                <img id="brand-preview" src="/assets/ConlectaPosLogo.png" alt="">
-                <div>
-                  <strong>Brand header logo</strong>
-                  <p class="muted">Dipakai di topbar dan QR display. Login/PIN/OTP tetap memakai ConlectaPosLogo sebagai Conlecta Identity.</p>
-                  <input id="brand-logo-file" type="file" accept="image/*" hidden>
-                  <button class="btn ghost" type="button" data-action="pick-brand-logo">Upload Logo</button>
-                </div>
-              </div>
-            </section>
-
-            <section class="settings-section" id="settings-qris">
+            <section class="settings-section active" id="settings-qris">
               <h2>QRIS Environment</h2>
               <p class="muted">QRIS diproses lewat server pembayaran.</p>
               <div class="info-list">
@@ -807,7 +788,24 @@
 
             <section class="settings-section" id="settings-admin">
               <h2>Admin Setting</h2>
-              <p class="muted">Kelola permission admin dan account untuk merchant ini.</p>
+              <p class="muted">Kelola shop info, permission admin, dan account untuk merchant ini.</p>
+              <h3>Shop Info</h3>
+              <label class="field"><span>Shop Name</span><input id="set-shop-name" type="text"></label>
+              <label class="field"><span>Address</span><input id="set-shop-address" type="text"></label>
+              <label class="field"><span>Postcode</span><input id="set-shop-postcode" type="text"></label>
+              <label class="field"><span>Default Customer Prefix</span><input id="set-customer-prefix" type="text"></label>
+              <div class="brand-upload">
+                <img id="brand-preview" src="/assets/ConlectaPosLogo.png" alt="">
+                <div>
+                  <strong>Brand header logo</strong>
+                  <p class="muted">Square crop. Dipakai di topbar dan QR display. Login/PIN/OTP tetap memakai ConlectaPosLogo sebagai Conlecta Identity.</p>
+                  <input id="brand-logo-file" type="file" accept="image/*" hidden>
+                  <button class="btn ghost" type="button" data-action="pick-brand-logo">Upload Logo</button>
+                </div>
+              </div>
+              <div class="button-row">
+                <button class="btn primary" type="button" data-action="save-admin-shop">Save Shop Info</button>
+              </div>
               <div class="info-list merchant-info">
                 <div><span>Merchant</span><strong id="admin-merchant-name">Conlecta</strong></div>
                 <div><span>Merchant ID</span><strong id="admin-merchant-id">conlecta</strong></div>
@@ -836,11 +834,10 @@
                 <div class="admin-account-list" id="admin-account-list"></div>
               </div>
               <h3>Add Account</h3>
+              <p class="muted">Account baru akan login dengan email + PIN. Password sistem dibuat otomatis.</p>
               <div class="register-grid" id="admin-account-create-form">
                 <label class="field"><span>Account Name</span><input id="admin-reg-name" type="text"></label>
                 <label class="field"><span>Email</span><input id="admin-reg-email" type="email"></label>
-                <label class="field"><span>Password</span><input id="admin-reg-password" type="password"></label>
-                <label class="field"><span>Confirm Password</span><input id="admin-reg-confirm" type="password"></label>
                 <button class="btn primary" type="button" data-action="register-admin-account">Add Account</button>
               </div>
               <p class="auth-status" id="admin-register-status"></p>
@@ -857,6 +854,11 @@
                   <option value="bubblegum_pop">Bubblegum Pop</option>
                   <option value="forest_emerald">Forest Emerald</option>
                   <option value="cobalt_night">Cobalt Night</option>
+                  <option value="sunset_amber">Sunset Amber</option>
+                  <option value="neon_tokyo">Neon Tokyo</option>
+                  <option value="sakura_drift">Sakura Drift</option>
+                  <option value="arctic_frost">Arctic Frost</option>
+                  <option value="copper_dusk">Copper Dusk</option>
                   <option value="pearl_mist">Pearl Mist</option>
                   <option value="aurora_glass">Aurora Glass</option>
                   <option value="midnight_velvet">Midnight Velvet</option>
@@ -1053,9 +1055,10 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/theme-engine.js?v=9"></script>
+  <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=7"></script>
-  <script src="/app.js?v=10"></script>
+  <script src="/image-crop.js?v=1"></script>
+  <script src="/app.js?v=11"></script>
   <script src="/qris-frame-admin.js?v=7"></script>
 </body>
 </html>

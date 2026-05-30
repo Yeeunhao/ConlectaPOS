@@ -3409,11 +3409,10 @@ async function exportHistoryPdf() {
 
 function renderSettings() {
   const s = state.settings || {};
-  $("#set-shop-name").value = s.shop_name || "";
-  $("#set-shop-address").value = s.shop_address || "";
-  $("#set-shop-postcode").value = s.shop_postcode || "";
-  $("#set-customer-prefix").value = s.default_customer_prefix || "Conlecta Customer";
-  if ($("#set-admin-password")) $("#set-admin-password").value = "";
+  if ($("#set-shop-name")) $("#set-shop-name").value = s.shop_name || "";
+  if ($("#set-shop-address")) $("#set-shop-address").value = s.shop_address || "";
+  if ($("#set-shop-postcode")) $("#set-shop-postcode").value = s.shop_postcode || "";
+  if ($("#set-customer-prefix")) $("#set-customer-prefix").value = s.default_customer_prefix || "Conlecta Customer";
   $("#set-active-theme").value = deviceThemeId() || s.active_theme || DEFAULT_THEME;
   const marquee = s.marquee_msgs || [];
   $$(".marquee-input").forEach((input, index) => { input.value = marquee[index] || ""; });
@@ -3422,16 +3421,18 @@ function renderSettings() {
   renderVideoAssets();
   renderEmailTemplate();
   renderAdminSettings();
+  if (isMerchantAdmin()) {
+    setSettingsTab("admin");
+  }
 }
 
 function collectSettings() {
   return {
-    shop_name: $("#set-shop-name").value.trim(),
-    shop_address: $("#set-shop-address").value.trim(),
-    shop_postcode: $("#set-shop-postcode").value.trim(),
-    default_customer_prefix: $("#set-customer-prefix").value.trim(),
+    shop_name: $("#set-shop-name")?.value.trim() || "",
+    shop_address: $("#set-shop-address")?.value.trim() || "",
+    shop_postcode: $("#set-shop-postcode")?.value.trim() || "",
+    default_customer_prefix: $("#set-customer-prefix")?.value.trim() || "",
     active_theme: $("#set-active-theme").value,
-    admin_password: $("#set-admin-password")?.value || "",
     marquee_msgs: $$(".marquee-input").map((input) => input.value.trim()).filter(Boolean),
     payment_image_paths: state.settings.payment_image_paths || [],
     payment_image_path: state.settings.payment_image_path || "",
@@ -3500,12 +3501,11 @@ function toggleVideo(url) {
 async function uploadPaymentImages(files) {
   const selected = Array.from(files || []);
   if (!selected.length) return;
-  const encoded = await Promise.all(selected.map((file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ filename: file.name, data_url: String(reader.result || "") });
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  })));
+  const encoded = [];
+  for (const file of selected) {
+    const dataUrl = await cropImageFile(file, "payment", "Payment display image");
+    encoded.push({ filename: file.name, data_url: dataUrl });
+  }
   const result = await api("/api/payment-images", { method: "POST", body: { files: encoded } });
   state.settings = result.settings;
   renderPaymentPreview();
@@ -3593,13 +3593,32 @@ async function saveSettings() {
   const settings = collectSettings();
   const result = await api("/api/settings", {
     method: "POST",
-    body: { settings, admin_password: settings.admin_password },
+    body: { settings },
   });
   state.settings = result.settings;
-  if ($("#set-admin-password")) $("#set-admin-password").value = "";
   applyBrand();
   publishDisplayState();
   showToast("Settings saved");
+}
+
+async function saveAdminShopInfo() {
+  if (!assertMerchantAdmin("mengubah shop info")) return;
+  const result = await api("/api/settings", {
+    method: "POST",
+    body: {
+      settings: {
+        shop_name: $("#set-shop-name")?.value.trim() || "",
+        shop_address: $("#set-shop-address")?.value.trim() || "",
+        shop_postcode: $("#set-shop-postcode")?.value.trim() || "",
+        default_customer_prefix: $("#set-customer-prefix")?.value.trim() || "",
+      },
+    },
+  });
+  state.settings = result.settings;
+  applyBrand();
+  publishDisplayState();
+  renderAdminSettings();
+  showToast("Shop info saved");
 }
 
 function setSettingsTab(tab) {
@@ -3612,10 +3631,15 @@ function setSettingsTab(tab) {
 
 function renderAdminSettings() {
   const s = state.settings || {};
+  if ($("#set-shop-name")) $("#set-shop-name").value = s.shop_name || "";
+  if ($("#set-shop-address")) $("#set-shop-address").value = s.shop_address || "";
+  if ($("#set-shop-postcode")) $("#set-shop-postcode").value = s.shop_postcode || "";
+  if ($("#set-customer-prefix")) $("#set-customer-prefix").value = s.default_customer_prefix || "Conlecta Customer";
   if ($("#admin-merchant-name")) $("#admin-merchant-name").textContent = s.merchant_name || s.shop_name || "Conlecta";
   if ($("#admin-merchant-id")) $("#admin-merchant-id").textContent = s.merchant_id || "conlecta";
   if ($("#admin-allow-stock")) $("#admin-allow-stock").checked = adminAllowStockCrud();
   if ($("#admin-allow-analytics")) $("#admin-allow-analytics").checked = adminAllowAnalytics();
+  applyBrand();
   renderMerchantAccountList();
 }
 
@@ -3711,44 +3735,36 @@ async function toggleMerchantAccountAdmin(accountId, adminAccount) {
 
 async function registerAdminAccount() {
   if (!assertMerchantAdmin("menambah account")) return;
-  const password = $("#admin-reg-password")?.value || "";
-  const confirm = $("#admin-reg-confirm")?.value || "";
-  if (password !== confirm) {
-    if ($("#admin-register-status")) $("#admin-register-status").textContent = "Password confirmation tidak sama.";
-    return;
-  }
   if ($("#admin-register-status")) $("#admin-register-status").textContent = "Menyimpan account...";
   const result = await api("/api/account/register", {
     method: "POST",
     body: {
       name: $("#admin-reg-name")?.value.trim(),
       email: $("#admin-reg-email")?.value.trim(),
-      password,
     },
   });
   state.merchantAccounts = Array.isArray(result.accounts) ? result.accounts : state.merchantAccounts;
   if ($("#admin-register-status")) $("#admin-register-status").textContent = result.message || "Account berhasil dibuat.";
   if ($("#admin-reg-name")) $("#admin-reg-name").value = "";
   if ($("#admin-reg-email")) $("#admin-reg-email").value = "";
-  if ($("#admin-reg-password")) $("#admin-reg-password").value = "";
-  if ($("#admin-reg-confirm")) $("#admin-reg-confirm").value = "";
   renderMerchantAccountList();
+}
+
+async function cropImageFile(file, preset, title) {
+  const cropper = window.ConlectaImageCrop;
+  if (!cropper?.open) {
+    return readFileAsDataUrl(file);
+  }
+  const result = await cropper.open({ file, preset, title });
+  return result.dataUrl;
 }
 
 async function uploadBrandLogo(file) {
   if (!file) return;
-  const dataUrl = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-  const result = await api("/api/brand-logo", {
-    method: "POST",
-    body: { filename: file.name, data_url: dataUrl, admin_password: $("#set-admin-password")?.value || "" },
-  });
+  const dataUrl = await cropImageFile(file, "brand", "Brand header logo");
+  const body = { filename: file.name, data_url: dataUrl };
+  const result = await api("/api/brand-logo", { method: "POST", body });
   state.settings = result.settings;
-  if ($("#set-admin-password")) $("#set-admin-password").value = "";
   applyBrand();
   publishDisplayState();
   showToast("Logo updated");
@@ -4513,6 +4529,8 @@ async function handleAction(action, target) {
       await saveSystemTransaction();
     } else if (action === "save-settings") {
       await saveSettings();
+    } else if (action === "save-admin-shop") {
+      await saveAdminShopInfo();
     } else if (action === "save-admin-settings") {
       await saveAdminSettings();
     } else if (action === "reload-admin-accounts") {
@@ -4706,16 +4724,17 @@ function bindEvents() {
     event.target.value = formatPlainNumber(parseMoney(event.target.value));
   });
   $("#stock-form").addEventListener("submit", saveStockForm);
-  $("#stock-image").addEventListener("change", (event) => {
+  $("#stock-image").addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      state.stockImageB64 = result.includes(",") ? result.split(",")[1] : result;
+    try {
+      const dataUrl = await cropImageFile(file, "catalog", "Catalog product image");
+      state.stockImageB64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
       renderImagePreview();
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      if (err.message !== "Crop cancelled.") showToast(err.message, "error");
+    }
   });
   document.addEventListener("input", (event) => {
     const tipInput = event.target.closest("[data-tip-field]");
