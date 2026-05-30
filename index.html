@@ -787,29 +787,30 @@
             </section>
 
             <section class="settings-section" id="settings-admin">
-              <h2>Admin Setting</h2>
-              <p class="muted">Kelola shop info, permission admin, dan account untuk merchant ini.</p>
-              <h3>Shop Info</h3>
-              <label class="field"><span>Shop Name</span><input id="set-shop-name" type="text"></label>
-              <label class="field"><span>Address</span><input id="set-shop-address" type="text"></label>
-              <label class="field"><span>Postcode</span><input id="set-shop-postcode" type="text"></label>
-              <label class="field"><span>Default Customer Prefix</span><input id="set-customer-prefix" type="text"></label>
-              <div class="brand-upload">
-                <img id="brand-preview" src="/assets/ConlectaPosLogo.png" alt="">
+              <div class="panel-head">
                 <div>
-                  <strong>Brand header logo</strong>
-                  <p class="muted">Square crop. Dipakai di topbar dan QR display. Login/PIN/OTP tetap memakai ConlectaPosLogo sebagai Conlecta Identity.</p>
-                  <input id="brand-logo-file" type="file" accept="image/*" hidden>
-                  <button class="btn ghost" type="button" data-action="pick-brand-logo">Upload Logo</button>
+                  <p class="eyebrow">Admin Setting</p>
+                  <h2 id="admin-merchant-title">Merchant Setting</h2>
                 </div>
+                <button class="btn primary" type="button" data-action="save-admin-settings">Save Merchant</button>
               </div>
-              <div class="button-row">
-                <button class="btn primary" type="button" data-action="save-admin-shop">Save Shop Info</button>
+
+              <div class="system-detail-grid merchant-admin-detail">
+                <div class="brand-upload">
+                  <img id="admin-merchant-logo-preview" src="/assets/ConlectaPosLogo.png" alt="">
+                  <div>
+                    <strong>Merchant Logo</strong>
+                    <p class="muted">Used for POS header and QR Display. Login/PIN/OTP remains locked to Conlecta Identity.</p>
+                    <input id="admin-merchant-logo-file" type="file" accept="image/*" hidden>
+                    <button class="btn ghost" type="button" data-action="pick-admin-merchant-logo">Upload Logo</button>
+                  </div>
+                </div>
+                <label class="field"><span>Merchant ID</span><input id="admin-merchant-id" type="text" readonly></label>
+                <label class="field"><span>Merchant Name</span><input id="admin-merchant-name" type="text" placeholder="Merchant name"></label>
+                <label class="field"><span>Address</span><input id="admin-shop-address" type="text"></label>
+                <label class="field"><span>Postcode</span><input id="admin-shop-postcode" type="text"></label>
               </div>
-              <div class="info-list merchant-info">
-                <div><span>Merchant</span><strong id="admin-merchant-name">Conlecta</strong></div>
-                <div><span>Merchant ID</span><strong id="admin-merchant-id">conlecta</strong></div>
-              </div>
+
               <div class="admin-permission-grid">
                 <label class="check-row inline-check">
                   <input id="admin-allow-stock" type="checkbox">
@@ -820,26 +821,22 @@
                   <span>Allow analytics menu</span>
                 </label>
               </div>
-              <div class="button-row">
-                <button class="btn primary" type="button" data-action="save-admin-settings">Save Permissions</button>
-              </div>
-              <div class="admin-account-frame panel">
-                <div class="panel-head">
-                  <div>
-                    <p class="eyebrow">Merchant Accounts</p>
-                    <h3 id="admin-account-count">0 accounts</h3>
-                  </div>
-                  <button class="btn ghost" type="button" data-action="reload-admin-accounts">Refresh</button>
+
+              <div class="system-section-title">
+                <div>
+                  <p class="eyebrow">Accounts</p>
+                  <h3>Create Account</h3>
                 </div>
-                <div class="admin-account-list" id="admin-account-list"></div>
               </div>
-              <h3>Add Account</h3>
-              <p class="muted">Account baru akan login dengan email + PIN. Password sistem dibuat otomatis.</p>
-              <div class="register-grid" id="admin-account-create-form">
+              <div class="system-account-create">
                 <label class="field"><span>Account Name</span><input id="admin-reg-name" type="text"></label>
                 <label class="field"><span>Email</span><input id="admin-reg-email" type="email"></label>
-                <button class="btn primary" type="button" data-action="register-admin-account">Add Account</button>
+                <label class="field"><span>Password</span><input id="admin-reg-password" type="password"></label>
+                <label class="check-row inline-check"><input id="admin-reg-admin" type="checkbox"><span>Merchant Admin</span></label>
+                <button class="btn primary" type="button" data-action="register-admin-account">Create Account</button>
               </div>
+
+              <div class="system-account-list" id="admin-account-list"></div>
               <p class="auth-status" id="admin-register-status"></p>
             </section>
 
@@ -886,7 +883,7 @@
               <div class="asset-box">
                 <div>
                   <strong>Video playlist</strong>
-                  <p class="muted">Diputar di sisi kiri QR Display saat standby.</p>
+                  <p class="muted">Per account playlist. Diputar bergantian di QR Display saat standby. Urutan atas = main lebih dulu.</p>
                 </div>
                 <input id="video-upload-file" type="file" accept="video/mp4,video/webm,video/quicktime" hidden>
                 <div class="button-row">
@@ -1058,7 +1055,7 @@
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=7"></script>
   <script src="/image-crop.js?v=1"></script>
-  <script src="/app.js?v=11"></script>
+  <script src="/app.js?v=13"></script>
   <script src="/qris-frame-admin.js?v=7"></script>
 </body>
 </html>

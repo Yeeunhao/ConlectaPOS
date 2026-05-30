@@ -49,6 +49,8 @@ const state = {
   systemMerchantLogoDataUrl: "",
   systemMerchantLogoFilename: "",
   systemAdminTab: "merchants",
+  adminMerchantLogoDataUrl: "",
+  adminMerchantLogoFilename: "",
   systemTxnMerchantId: "",
   systemTransactions: [],
   systemTxnProducts: [],
@@ -782,6 +784,8 @@ function applyBrand() {
   $$(".conlecta-identity-logo").forEach((el) => { el.src = CONLECTA_IDENTITY_LOGO; });
   const preview = $("#brand-preview");
   if (preview) applyBrandLogo(preview, s);
+  const adminPreview = $("#admin-merchant-logo-preview");
+  if (adminPreview && !state.adminMerchantLogoDataUrl) applyBrandLogo(adminPreview, s);
 }
 
 function routePath() {
@@ -2237,7 +2241,7 @@ function displaySnapshot() {
   });
 }
 
-function publishDisplayState() {
+function publishDisplayState(opts = {}) {
   if (displayEventExpired(state.displayEvent)) state.displayEvent = null;
   state.activeQr = sanitizeActiveQr(state.activeQr);
   const preview = displaySnapshot();
@@ -2250,6 +2254,7 @@ function publishDisplayState() {
     cashierNotice: cashierNoticeRecord ? cashierNoticePayload(cashierNoticeRecord, true) : null,
     version: state.version,
     account_id: state.auth?.id || "",
+    videoPlayNow: opts.videoPlayNow || "",
   };
 
   const merchantId = state.settings?.merchant_id || state.auth?.merchant_id || "";
@@ -3409,10 +3414,6 @@ async function exportHistoryPdf() {
 
 function renderSettings() {
   const s = state.settings || {};
-  if ($("#set-shop-name")) $("#set-shop-name").value = s.shop_name || "";
-  if ($("#set-shop-address")) $("#set-shop-address").value = s.shop_address || "";
-  if ($("#set-shop-postcode")) $("#set-shop-postcode").value = s.shop_postcode || "";
-  if ($("#set-customer-prefix")) $("#set-customer-prefix").value = s.default_customer_prefix || "Conlecta Customer";
   $("#set-active-theme").value = deviceThemeId() || s.active_theme || DEFAULT_THEME;
   const marquee = s.marquee_msgs || [];
   $$(".marquee-input").forEach((input, index) => { input.value = marquee[index] || ""; });
@@ -3428,10 +3429,6 @@ function renderSettings() {
 
 function collectSettings() {
   return {
-    shop_name: $("#set-shop-name")?.value.trim() || "",
-    shop_address: $("#set-shop-address")?.value.trim() || "",
-    shop_postcode: $("#set-shop-postcode")?.value.trim() || "",
-    default_customer_prefix: $("#set-customer-prefix")?.value.trim() || "",
     active_theme: $("#set-active-theme").value,
     marquee_msgs: $$(".marquee-input").map((input) => input.value.trim()).filter(Boolean),
     payment_image_paths: state.settings.payment_image_paths || [],
@@ -3452,29 +3449,77 @@ function renderPaymentPreview() {
 function renderVideoAssets() {
   const list = $("#video-asset-list");
   if (!list) return;
-  const selected = new Set((state.settings.video_playlist_urls || state.settings.video_playlist || []).map(String));
+  const playlist = videoPlaylistEntries();
+  const playlistKeys = new Set(playlist.map((entry) => videoEntryKey(entry)));
   const videos = state.assets?.videos || [];
-  if (!videos.length) {
-    list.innerHTML = `<div class="empty-state">Belum ada video standby</div>`;
-    return;
+  const byKey = new Map(videos.map((video) => [videoEntryKey(video.url || video.path), video]));
+
+  const rows = [];
+  playlist.forEach((entry, index) => {
+    const key = videoEntryKey(entry);
+    const video = byKey.get(key) || { name: entry.split("/").pop() || "Video", url: entry, path: entry, size_mb: "" };
+    rows.push(renderVideoPlaylistRow(video, { inPlaylist: true, index, total: playlist.length }));
+  });
+
+  videos.forEach((video) => {
+    const key = videoEntryKey(video.url || video.path);
+    if (playlistKeys.has(key)) return;
+    rows.push(renderVideoPlaylistRow(video, { inPlaylist: false, index: -1, total: 0 }));
+  });
+
+  list.innerHTML = rows.length
+    ? rows.join("")
+    : `<div class="empty-state">Belum ada video standby</div>`;
+}
+
+function videoEntryKey(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  try {
+    const url = new URL(text, window.location.origin);
+    return decodeURIComponent(url.pathname).toLowerCase();
+  } catch {
+    return text.split("?")[0].toLowerCase();
   }
-  list.innerHTML = videos.map((video) => {
-    const active = selected.has(video.url) || selected.has(video.path);
-    return `
-      <div class="asset-row">
-        <span>${escapeHtml(video.name)}</span>
-        <small>${escapeHtml(video.size_mb || 0)} MB</small>
-        <button class="btn ghost" type="button" data-action="toggle-video" data-url="${escapeAttr(video.url)}">${active ? "Added" : "Add"}</button>
-        <button class="btn danger-soft" type="button" data-action="remove-video" data-url="${escapeAttr(video.url)}" data-path="${escapeAttr(video.path || "")}">Remove</button>
-      </div>
-    `;
-  }).join("");
+}
+
+function renderVideoPlaylistRow(video, meta) {
+  const url = video.url || video.path || "";
+  const path = video.path || url;
+  const orderLabel = meta.inPlaylist ? `#${meta.index + 1}` : "—";
+  const orderControls = meta.inPlaylist ? `
+    <button class="btn ghost" type="button" data-action="move-video-up" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}" ${meta.index <= 0 ? "disabled" : ""}>Up</button>
+    <button class="btn ghost" type="button" data-action="move-video-down" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}" ${meta.index >= meta.total - 1 ? "disabled" : ""}>Down</button>
+    <button class="btn primary" type="button" data-action="play-video-now" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}">Play Now</button>
+    <button class="btn danger-soft" type="button" data-action="remove-video" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}">Remove</button>
+  ` : `
+    <button class="btn ghost" type="button" data-action="toggle-video" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}">Add</button>
+    <button class="btn danger-soft" type="button" data-action="remove-video" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}">Delete</button>
+  `;
+  return `
+    <div class="asset-row video-playlist-row">
+      <span class="video-order">${orderLabel}</span>
+      <span>${escapeHtml(video.name || "Video")}</span>
+      <small>${escapeHtml(video.size_mb || 0)} MB</small>
+      ${orderControls}
+    </div>
+  `;
 }
 
 function videoPlaylistEntries() {
-  return Array.from(new Set(
-    (state.settings.video_playlist_urls || state.settings.video_playlist || []).map(String).filter(Boolean),
-  ));
+  const urls = Array.isArray(state.settings?.video_playlist_urls)
+    ? state.settings.video_playlist_urls.map(String).filter(Boolean)
+    : [];
+  if (urls.length) return urls;
+  return Array.isArray(state.settings?.video_playlist)
+    ? state.settings.video_playlist.map(String).filter(Boolean)
+    : [];
+}
+
+function applyVideoPlaylistState(entries) {
+  const list = Array.isArray(entries) ? entries.map(String).filter(Boolean) : [];
+  state.settings.video_playlist = list.slice();
+  state.settings.video_playlist_urls = list.slice();
 }
 
 async function persistVideoPlaylist(entries = videoPlaylistEntries()) {
@@ -3483,19 +3528,57 @@ async function persistVideoPlaylist(entries = videoPlaylistEntries()) {
     body: { playlist: entries },
   });
   if (result.settings) state.settings = result.settings;
+  if (result.playlist) applyVideoPlaylistState(result.settings?.video_playlist_urls || result.playlist);
   if (result.assets) state.assets = result.assets;
   return result;
 }
 
-function toggleVideo(url) {
-  const list = new Set(videoPlaylistEntries());
-  if (list.has(url)) list.delete(url);
-  else list.add(url);
-  state.settings.video_playlist = Array.from(list);
-  state.settings.video_playlist_urls = Array.from(list);
+function toggleVideo(target) {
+  const url = target?.dataset?.url || target;
+  const path = target?.dataset?.path || url;
+  const key = videoEntryKey(url || path);
+  const list = videoPlaylistEntries();
+  if (list.some((entry) => videoEntryKey(entry) === key)) return;
+  const next = list.concat([path || url]).filter(Boolean);
+  applyVideoPlaylistState(next);
   renderVideoAssets();
   publishDisplayState();
-  persistVideoPlaylist(Array.from(list)).catch((err) => showToast(err.message, "error"));
+  persistVideoPlaylist(next).catch((err) => showToast(err.message, "error"));
+}
+
+function moveVideoInPlaylist(url, path, direction) {
+  const key = videoEntryKey(url || path);
+  const list = videoPlaylistEntries();
+  const index = list.findIndex((entry) => videoEntryKey(entry) === key);
+  if (index < 0) return;
+  const swapWith = direction === "up" ? index - 1 : index + 1;
+  if (swapWith < 0 || swapWith >= list.length) return;
+  const next = list.slice();
+  [next[index], next[swapWith]] = [next[swapWith], next[index]];
+  applyVideoPlaylistState(next);
+  renderVideoAssets();
+  publishDisplayState();
+  persistVideoPlaylist(next).catch((err) => showToast(err.message, "error"));
+}
+
+async function playVideoNow(target) {
+  const url = target?.dataset?.url || target;
+  const path = target?.dataset?.path || url;
+  const key = videoEntryKey(url || path);
+  const list = videoPlaylistEntries();
+  const index = list.findIndex((entry) => videoEntryKey(entry) === key);
+  let next;
+  if (index >= 0) {
+    next = [list[index], ...list.filter((_, i) => i !== index)];
+  } else {
+    next = [path || url, ...list];
+  }
+  applyVideoPlaylistState(next);
+  renderVideoAssets();
+  const result = await persistVideoPlaylist(next);
+  const playTarget = result.settings?.video_playlist_urls?.[0] || next[0] || url || path;
+  publishDisplayState({ videoPlayNow: playTarget });
+  showToast("Video diputar di QR Display");
 }
 
 async function uploadPaymentImages(files) {
@@ -3523,12 +3606,12 @@ async function uploadVideo(file) {
   });
   const result = await api("/api/video-upload", { method: "POST", body: { filename: file.name, data_url: dataUrl } });
   state.assets = result.assets || state.assets;
-  if (result.settings) state.settings = result.settings;
-  else {
-    const playlist = new Set(state.settings.video_playlist || []);
-    if (result.video?.path) playlist.add(result.video.path);
-    else if (result.video?.url) playlist.add(result.video.url);
-    state.settings.video_playlist = Array.from(playlist);
+  if (result.settings) {
+    state.settings = result.settings;
+    applyVideoPlaylistState(result.settings.video_playlist_urls || result.settings.video_playlist || []);
+  } else if (result.video?.path || result.video?.url) {
+    const next = videoPlaylistEntries().concat([result.video.path || result.video.url]);
+    applyVideoPlaylistState(next);
   }
   renderVideoAssets();
   publishDisplayState();
@@ -3601,24 +3684,19 @@ async function saveSettings() {
   showToast("Settings saved");
 }
 
-async function saveAdminShopInfo() {
-  if (!assertMerchantAdmin("mengubah shop info")) return;
-  const result = await api("/api/settings", {
-    method: "POST",
-    body: {
-      settings: {
-        shop_name: $("#set-shop-name")?.value.trim() || "",
-        shop_address: $("#set-shop-address")?.value.trim() || "",
-        shop_postcode: $("#set-shop-postcode")?.value.trim() || "",
-        default_customer_prefix: $("#set-customer-prefix")?.value.trim() || "",
-      },
-    },
+function merchantAdminAccountConflict(name, email, excludeId = "") {
+  const wantedName = String(name || "").trim().toLowerCase();
+  const wantedEmail = String(email || "").trim().toLowerCase();
+  const exclude = String(excludeId || "");
+  return (state.merchantAccounts || []).find((account) => {
+    if (exclude && String(account.id || "") === exclude) return false;
+    const existingNames = [
+      String(account.name || "").trim().toLowerCase(),
+      String(account.username || "").trim().toLowerCase(),
+    ].filter(Boolean);
+    const existingEmail = String(account.email || "").trim().toLowerCase();
+    return existingNames.includes(wantedName) || (wantedEmail && existingEmail === wantedEmail);
   });
-  state.settings = result.settings;
-  applyBrand();
-  publishDisplayState();
-  renderAdminSettings();
-  showToast("Shop info saved");
 }
 
 function setSettingsTab(tab) {
@@ -3631,15 +3709,18 @@ function setSettingsTab(tab) {
 
 function renderAdminSettings() {
   const s = state.settings || {};
-  if ($("#set-shop-name")) $("#set-shop-name").value = s.shop_name || "";
-  if ($("#set-shop-address")) $("#set-shop-address").value = s.shop_address || "";
-  if ($("#set-shop-postcode")) $("#set-shop-postcode").value = s.shop_postcode || "";
-  if ($("#set-customer-prefix")) $("#set-customer-prefix").value = s.default_customer_prefix || "Conlecta Customer";
-  if ($("#admin-merchant-name")) $("#admin-merchant-name").textContent = s.merchant_name || s.shop_name || "Conlecta";
-  if ($("#admin-merchant-id")) $("#admin-merchant-id").textContent = s.merchant_id || "conlecta";
+  const merchantName = s.merchant_name || s.shop_name || "Conlecta";
+  const merchantId = s.merchant_id || "conlecta";
+  if ($("#admin-merchant-title")) $("#admin-merchant-title").textContent = merchantName;
+  if ($("#admin-merchant-name")) $("#admin-merchant-name").value = merchantName;
+  if ($("#admin-merchant-id")) $("#admin-merchant-id").value = merchantId;
+  if ($("#admin-shop-address")) $("#admin-shop-address").value = s.shop_address || "";
+  if ($("#admin-shop-postcode")) $("#admin-shop-postcode").value = s.shop_postcode || "";
+  if ($("#admin-merchant-logo-preview")) {
+    $("#admin-merchant-logo-preview").src = state.adminMerchantLogoDataUrl || brandLogoUrl(s);
+  }
   if ($("#admin-allow-stock")) $("#admin-allow-stock").checked = adminAllowStockCrud();
   if ($("#admin-allow-analytics")) $("#admin-allow-analytics").checked = adminAllowAnalytics();
-  applyBrand();
   renderMerchantAccountList();
 }
 
@@ -3647,31 +3728,20 @@ function renderMerchantAccountList() {
   const list = $("#admin-account-list");
   if (!list) return;
   const accounts = Array.isArray(state.merchantAccounts) ? state.merchantAccounts : [];
-  if ($("#admin-account-count")) {
-    $("#admin-account-count").textContent = `${accounts.length} account${accounts.length === 1 ? "" : "s"}`;
-  }
   if (!accounts.length) {
-    list.innerHTML = `<div class="empty-state">Belum ada account untuk merchant ini.</div>`;
+    list.innerHTML = `<div class="empty-state">No account for this merchant</div>`;
     return;
   }
-  list.innerHTML = accounts.map((account) => {
-    const self = String(account.id) === String(state.auth?.id || "");
-    return `
-      <div class="admin-account-row">
-        <div>
-          <strong>${escapeHtml(account.name || account.username || "Account")}</strong>
-          <small>${escapeHtml(account.id || "")}${self ? " · you" : ""}</small>
-        </div>
-        <div>
-          <span>${escapeHtml(account.email || "-")}</span>
-        </div>
-        <label class="check-row inline-check">
-          <input type="checkbox" data-action="toggle-merchant-admin" data-account-id="${escapeAttr(account.id)}" ${account.admin_account ? "checked" : ""}>
-          <span>Merchant Admin</span>
-        </label>
-      </div>
-    `;
-  }).join("");
+  list.innerHTML = accounts.map((account) => `
+    <div class="system-account-row" data-admin-account-id="${escapeAttr(account.id)}">
+      <label class="field"><span>Name</span><input data-admin-account-field="name" value="${escapeAttr(account.name || "")}"></label>
+      <label class="field"><span>Email</span><input data-admin-account-field="email" type="email" value="${escapeAttr(account.email || "")}"></label>
+      <label class="field"><span>New Password</span><input data-admin-account-field="password" type="password" placeholder="Keep current"></label>
+      <label class="check-row inline-check"><input data-admin-account-field="admin_account" type="checkbox" ${account.admin_account ? "checked" : ""}><span>Merchant Admin</span></label>
+      <span class="system-account-role ${account.admin_account ? "is-admin" : "is-cashier"}">${account.admin_account ? "Admin" : "Cashier"}</span>
+      <button class="btn ghost" type="button" data-action="save-admin-account">Save</button>
+    </div>
+  `).join("");
 }
 
 async function loadMerchantAdminData() {
@@ -3702,52 +3772,96 @@ async function loadMerchantAdminData() {
 
 async function saveAdminSettings() {
   if (!assertMerchantAdmin("mengubah Admin Setting")) return;
+  const merchantName = $("#admin-merchant-name")?.value.trim() || "";
+  if (!merchantName) {
+    showToast("Merchant name wajib diisi", "error");
+    return;
+  }
   const result = await api("/api/merchant-admin/settings", {
     method: "POST",
     body: {
+      merchant_name: merchantName,
+      shop_address: $("#admin-shop-address")?.value.trim() || "",
+      shop_postcode: $("#admin-shop-postcode")?.value.trim() || "",
       admin_allow_stock_crud: Boolean($("#admin-allow-stock")?.checked),
       admin_allow_analytics: Boolean($("#admin-allow-analytics")?.checked),
+      logo_data_url: state.adminMerchantLogoDataUrl || "",
+      logo_filename: state.adminMerchantLogoFilename || "",
     },
   });
   if (result.settings) state.settings = result.settings;
-  applyRolePermissions();
-  renderAdminSettings();
-  showToast("Admin permissions saved");
-}
-
-async function toggleMerchantAccountAdmin(accountId, adminAccount) {
-  if (!assertMerchantAdmin("mengubah role admin")) return;
-  const result = await api("/api/merchant-admin/account/toggle-admin", {
-    method: "POST",
-    body: {
-      account_id: accountId,
-      admin_account: Boolean(adminAccount),
-    },
-  });
-  state.merchantAccounts = Array.isArray(result.accounts) ? result.accounts : [];
-  if (String(accountId) === String(state.auth?.id || "")) {
-    state.auth = { ...(state.auth || {}), admin_account: Boolean(adminAccount) };
-    applyRolePermissions();
+  if (result.merchant_name) {
+    state.settings = {
+      ...(state.settings || {}),
+      merchant_name: result.merchant_name,
+      shop_name: result.merchant_name,
+    };
   }
-  renderMerchantAccountList();
-  showToast(result.message || "Admin role updated");
+  state.adminMerchantLogoDataUrl = "";
+  state.adminMerchantLogoFilename = "";
+  applyRolePermissions();
+  applyBrand();
+  publishDisplayState();
+  renderAdminSettings();
+  showToast("Merchant saved");
 }
 
 async function registerAdminAccount() {
   if (!assertMerchantAdmin("menambah account")) return;
+  const body = {
+    name: $("#admin-reg-name")?.value.trim(),
+    email: $("#admin-reg-email")?.value.trim(),
+    password: $("#admin-reg-password")?.value || "",
+    admin_account: Boolean($("#admin-reg-admin")?.checked),
+  };
+  if (!body.name || !body.email || !body.password) {
+    if ($("#admin-register-status")) $("#admin-register-status").textContent = "Name, email, dan password wajib diisi.";
+    return;
+  }
+  if (merchantAdminAccountConflict(body.name, body.email)) {
+    if ($("#admin-register-status")) $("#admin-register-status").textContent = "Username/account name atau email sudah dipakai.";
+    return;
+  }
   if ($("#admin-register-status")) $("#admin-register-status").textContent = "Menyimpan account...";
-  const result = await api("/api/account/register", {
-    method: "POST",
-    body: {
-      name: $("#admin-reg-name")?.value.trim(),
-      email: $("#admin-reg-email")?.value.trim(),
-    },
-  });
+  const result = await api("/api/account/register", { method: "POST", body });
   state.merchantAccounts = Array.isArray(result.accounts) ? result.accounts : state.merchantAccounts;
   if ($("#admin-register-status")) $("#admin-register-status").textContent = result.message || "Account berhasil dibuat.";
   if ($("#admin-reg-name")) $("#admin-reg-name").value = "";
   if ($("#admin-reg-email")) $("#admin-reg-email").value = "";
+  if ($("#admin-reg-password")) $("#admin-reg-password").value = "";
+  if ($("#admin-reg-admin")) $("#admin-reg-admin").checked = false;
   renderMerchantAccountList();
+}
+
+async function saveMerchantAdminAccount(target) {
+  if (!assertMerchantAdmin("mengubah account")) return;
+  const row = target.closest("[data-admin-account-id]");
+  if (!row) return;
+  const value = (field) => row.querySelector(`[data-admin-account-field="${field}"]`);
+  const nextName = value("name")?.value.trim() || "";
+  const nextEmail = value("email")?.value.trim() || "";
+  if (merchantAdminAccountConflict(nextName, nextEmail, row.dataset.adminAccountId)) {
+    showToast("Username/account name atau email sudah dipakai", "error");
+    return;
+  }
+  const isAdmin = Boolean(value("admin_account")?.checked);
+  const result = await api("/api/merchant-admin/account/update", {
+    method: "POST",
+    body: {
+      account_id: row.dataset.adminAccountId,
+      name: nextName,
+      email: nextEmail,
+      password: value("password")?.value || "",
+      admin_account: isAdmin,
+    },
+  });
+  state.merchantAccounts = Array.isArray(result.accounts) ? result.accounts : state.merchantAccounts;
+  if (String(row.dataset.adminAccountId) === String(state.auth?.id || "")) {
+    state.auth = { ...(state.auth || {}), admin_account: isAdmin };
+    applyRolePermissions();
+  }
+  renderMerchantAccountList();
+  showToast(result.message || `Account updated (${isAdmin ? "Merchant Admin" : "Cashier"})`);
 }
 
 async function cropImageFile(file, preset, title) {
@@ -3759,15 +3873,12 @@ async function cropImageFile(file, preset, title) {
   return result.dataUrl;
 }
 
-async function uploadBrandLogo(file) {
+async function uploadAdminMerchantLogo(file) {
   if (!file) return;
-  const dataUrl = await cropImageFile(file, "brand", "Brand header logo");
-  const body = { filename: file.name, data_url: dataUrl };
-  const result = await api("/api/brand-logo", { method: "POST", body });
-  state.settings = result.settings;
-  applyBrand();
-  publishDisplayState();
-  showToast("Logo updated");
+  const dataUrl = await cropImageFile(file, "brand", "Merchant logo");
+  state.adminMerchantLogoDataUrl = dataUrl;
+  state.adminMerchantLogoFilename = file.name;
+  if ($("#admin-merchant-logo-preview")) $("#admin-merchant-logo-preview").src = dataUrl;
 }
 
 async function checkQrisEnv() {
@@ -4529,28 +4640,16 @@ async function handleAction(action, target) {
       await saveSystemTransaction();
     } else if (action === "save-settings") {
       await saveSettings();
-    } else if (action === "save-admin-shop") {
-      await saveAdminShopInfo();
     } else if (action === "save-admin-settings") {
       await saveAdminSettings();
-    } else if (action === "reload-admin-accounts") {
-      await loadMerchantAdminData();
-      showToast("Accounts refreshed");
+    } else if (action === "save-admin-account") {
+      await saveMerchantAdminAccount(target);
     } else if (action === "register-admin-account") {
       await registerAdminAccount();
-    } else if (action === "toggle-merchant-admin") {
-      const accountId = target.dataset.accountId || "";
-      const nextValue = Boolean(target.checked);
-      try {
-        await toggleMerchantAccountAdmin(accountId, nextValue);
-      } catch (err) {
-        target.checked = !nextValue;
-        throw err;
-      }
     } else if (action === "check-qris-env") {
       await checkQrisEnv();
-    } else if (action === "pick-brand-logo") {
-      $("#brand-logo-file").click();
+    } else if (action === "pick-admin-merchant-logo") {
+      $("#admin-merchant-logo-file").click();
     } else if (action === "pick-payment-images") {
       $("#payment-image-files").click();
     } else if (action === "use-sample-payment-images") {
@@ -4590,7 +4689,13 @@ async function handleAction(action, target) {
       renderVideoAssets();
       showToast("Assets scanned");
     } else if (action === "toggle-video") {
-      toggleVideo(target.dataset.url);
+      toggleVideo(target);
+    } else if (action === "move-video-up") {
+      moveVideoInPlaylist(target.dataset.url, target.dataset.path, "up");
+    } else if (action === "move-video-down") {
+      moveVideoInPlaylist(target.dataset.url, target.dataset.path, "down");
+    } else if (action === "play-video-now") {
+      await playVideoNow(target);
     } else if (action === "remove-video") {
       await removeVideo(target);
     } else if (action === "load-email-template") {
@@ -4816,8 +4921,10 @@ function bindEvents() {
       updateSystemTxnComputed();
     }
   });
-  $("#brand-logo-file").addEventListener("change", (event) => {
-    uploadBrandLogo(event.target.files?.[0]).catch((err) => showToast(err.message, "error"));
+  $("#admin-merchant-logo-file")?.addEventListener("change", (event) => {
+    uploadAdminMerchantLogo(event.target.files?.[0]).catch((err) => {
+      if (err.message !== "Crop cancelled.") showToast(err.message, "error");
+    });
     event.target.value = "";
   });
   $("#system-merchant-logo-file")?.addEventListener("change", async (event) => {

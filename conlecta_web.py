@@ -525,6 +525,37 @@ def get_device_settings(state, device_id, account_id=None):
         themes = current.get("themes_by_account")
         if isinstance(themes, dict) and themes.get(aid):
             current["active_theme"] = themes[aid]
+        current["video_playlist"] = _resolve_account_video_playlist(current, aid)
+    return current
+
+
+def _resolve_account_video_playlist(device_settings, account_id=""):
+    device_settings = dict(device_settings or {})
+    aid = str(account_id or "").strip()
+    by_account = device_settings.get("video_playlists_by_account")
+    if isinstance(by_account, dict) and aid and aid in by_account:
+        return list(by_account.get(aid) or [])
+    legacy = list(device_settings.get("video_playlist") or [])
+    legacy_aid = str(device_settings.get("account_id") or "").strip()
+    if legacy and (not aid or not legacy_aid or legacy_aid == aid):
+        return legacy
+    return []
+
+
+def _store_account_video_playlist(current, account_id, playlist):
+    current = dict(current or {})
+    aid = str(account_id or "").strip()
+    playlist = list(playlist or [])
+    if aid:
+        by_account = current.get("video_playlists_by_account")
+        if not isinstance(by_account, dict):
+            by_account = {}
+        by_account[aid] = playlist
+        current["video_playlists_by_account"] = by_account
+        if str(current.get("account_id") or "") == aid:
+            current.pop("video_playlist", None)
+    else:
+        current["video_playlist"] = playlist
     return current
 
 
@@ -589,16 +620,20 @@ def normalize_video_playlist(entries):
     return paths
 
 
-def save_device_video_playlist(state, device_id, entries, merchant_id=None):
+def save_device_video_playlist(state, device_id, entries, merchant_id=None, account_id=None):
     if not device_id:
         raise ValueError("Device ID tidak valid untuk video playlist.")
     playlist = normalize_video_playlist(entries)
-    set_device_settings(
-        state,
-        device_id,
-        {"video_playlist": playlist},
-        merchant_id=merchant_id,
-    )
+    root = _device_settings_root(state)
+    current = dict(root.get(device_id) or {})
+    aid = str(account_id or "").strip()
+    current = _store_account_video_playlist(current, aid, playlist)
+    if merchant_id is not None:
+        current["merchant_id"] = normalize_merchant_id(merchant_id)
+    if aid:
+        current["account_id"] = aid
+    current["updated_ts"] = time.time()
+    root[device_id] = current
     save_state(state)
     return playlist
 
@@ -2279,14 +2314,46 @@ def save_merchant_admin_settings(data, merchant_id=None):
         settings["admin_allow_stock_crud"] = bool(data.get("admin_allow_stock_crud"))
     if "admin_allow_analytics" in data:
         settings["admin_allow_analytics"] = bool(data.get("admin_allow_analytics"))
+    merchant_name = str(data.get("merchant_name") or data.get("shop_name") or "").strip()
+    if merchant_name:
+        settings["shop_name"] = merchant_name
+    if "shop_address" in data:
+        settings["shop_address"] = str(data.get("shop_address") or "").strip()
+    if "shop_postcode" in data:
+        settings["shop_postcode"] = str(data.get("shop_postcode") or "").strip()
+    logo_path = str(settings.get("brand_logo_path") or "").strip()
+    if data.get("logo_data_url"):
+        logo_path = _save_merchant_logo_data(mid, data.get("logo_data_url"), data.get("logo_filename"))
+        settings["brand_logo_path"] = logo_path
+    if merchant_name or logo_path:
+        upsert_merchant(mid, merchant_name or settings.get("shop_name") or DEFAULT_MERCHANT_NAME, logo_path)
     saved = save_settings(settings, mid)
     log.info(
-        "Merchant admin settings saved: merchant=%s stock_crud=%s analytics=%s",
+        "Merchant admin settings saved: merchant=%s name=%s stock_crud=%s analytics=%s",
         mid,
+        saved.get("shop_name"),
         saved.get("admin_allow_stock_crud"),
         saved.get("admin_allow_analytics"),
     )
     return saved
+
+
+def merchant_admin_update_account(account_id, data, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    acc = _find_account_by_id(account_id)
+    if not acc:
+        return False, "Account tidak ditemukan."
+    if normalize_merchant_id(acc.get("merchant_id")) != mid:
+        return False, "Account bukan milik merchant ini."
+    admin_flag = acc.get("admin_account") if "admin_account" not in data else data.get("admin_account")
+    return update_account_record(
+        account_id,
+        account_name=data.get("name"),
+        email=data.get("email"),
+        password=data.get("password"),
+        merchant_id=mid,
+        admin_account=admin_flag,
+    )
 
 
 def toggle_merchant_account_admin(account_id, admin_account, merchant_id=None):
@@ -5090,18 +5157,46 @@ def video_playlist_urls(settings=None):
     return urls
 
 
-def scan_asset_payload(device_id=None):
+def scan_asset_payload(device_id=None, account_id=None):
     video_files = []
     patterns = [os.path.join(VIDEO_FOLDER, "*.mp4")]
     device_key = str(device_id or "").strip()
-    if device_key:
+    account_key = str(account_id or "").strip()
+    if device_key and account_key:
+        account_dir = os.path.join(VIDEO_FOLDER, device_key, account_key)
+        legacy_dir = os.path.join(VIDEO_FOLDER, device_key)
+        patterns = []
+        if os.path.isdir(account_dir):
+            patterns.extend([
+                os.path.join(account_dir, "*.mp4"),
+                os.path.join(account_dir, "*.mov"),
+                os.path.join(account_dir, "*.mkv"),
+                os.path.join(account_dir, "*.avi"),
+                os.path.join(account_dir, "*.webm"),
+            ])
+        if os.path.isdir(legacy_dir):
+            patterns.append(os.path.join(legacy_dir, f"{device_key}_*.mp4"))
+            patterns.append(os.path.join(legacy_dir, "*.mp4"))
+    elif device_key:
         device_dir = os.path.join(VIDEO_FOLDER, device_key)
         if os.path.isdir(device_dir):
             patterns = [os.path.join(device_dir, "*.mp4")]
+            for sub in glob.glob(os.path.join(device_dir, "*")):
+                if os.path.isdir(sub):
+                    patterns.extend([
+                        os.path.join(sub, "*.mp4"),
+                        os.path.join(sub, "*.mov"),
+                        os.path.join(sub, "*.mkv"),
+                        os.path.join(sub, "*.avi"),
+                        os.path.join(sub, "*.webm"),
+                    ])
     else:
         for device_dir in glob.glob(os.path.join(VIDEO_FOLDER, "*")):
             if os.path.isdir(device_dir):
                 patterns.append(os.path.join(device_dir, "*.mp4"))
+                for sub in glob.glob(os.path.join(device_dir, "*")):
+                    if os.path.isdir(sub):
+                        patterns.append(os.path.join(sub, "*.mp4"))
     seen = set()
     for pattern in patterns:
         for path in sorted(glob.glob(pattern)):
@@ -5166,21 +5261,28 @@ def save_payment_images(data, merchant_id=None, device_id=None, state=None):
     return settings_payload(merged, mid)
 
 
-def save_video_upload(data, device_id=None, state=None):
+def save_video_upload(data, device_id=None, account_id=None, state=None):
     state = state or load_state()
     if not device_id:
         raise ValueError("Device ID tidak valid untuk upload video.")
+    account_key = str(account_id or "").strip() or "_legacy"
     filename = os.path.basename(str(data.get("filename") or "video.mp4"))
     ext = os.path.splitext(filename)[1].lower()
     if ext not in (".mp4", ".mov", ".mkv", ".avi", ".webm"):
         ext = ".mp4"
-    safe_name = f"{device_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
-    device_dir = os.path.join(VIDEO_FOLDER, device_id)
+    safe_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}"
+    device_dir = os.path.join(VIDEO_FOLDER, device_id, account_key)
     os.makedirs(device_dir, exist_ok=True)
     dst = os.path.join(device_dir, safe_name)
     with open(dst, "wb") as f:
         f.write(_decode_data_file(data.get("data_url")))
-    return {"name": os.path.basename(dst), "url": public_asset_url(dst), "path": dst, "device_id": device_id}
+    return {
+        "name": os.path.basename(dst),
+        "url": public_asset_url(dst),
+        "path": dst,
+        "device_id": device_id,
+        "account_id": account_key,
+    }
 
 
 def _video_path_from_value(value):
@@ -5204,18 +5306,30 @@ def _video_path_from_value(value):
     return full
 
 
-def _video_belongs_to_device(path, device_id=""):
+def _video_belongs_to_device(path, device_id="", account_id=""):
     if not path or not device_id:
         return False
+    full = os.path.abspath(path)
     device_root = os.path.abspath(os.path.join(VIDEO_FOLDER, device_id))
     try:
-        common = os.path.commonpath([os.path.normcase(os.path.abspath(path)), os.path.normcase(device_root)])
+        common = os.path.commonpath([os.path.normcase(full), os.path.normcase(device_root)])
     except Exception:
         return False
-    return common == os.path.normcase(device_root) or f"/{device_id}/" in str(path).replace("\\", "/") or os.path.basename(path).startswith(f"{device_id}_")
+    if common != os.path.normcase(device_root):
+        return False
+    aid = str(account_id or "").strip()
+    if aid:
+        account_root = os.path.abspath(os.path.join(device_root, aid))
+        try:
+            account_common = os.path.commonpath([os.path.normcase(full), os.path.normcase(account_root)])
+            if account_common == os.path.normcase(account_root):
+                return True
+        except Exception:
+            pass
+    return f"/{device_id}/" in str(path).replace("\\", "/") or os.path.basename(path).startswith(f"{device_id}_")
 
 
-def remove_video_asset(data, merchant_id=None, device_id=None, state=None):
+def remove_video_asset(data, merchant_id=None, device_id=None, account_id=None, state=None):
     state = state or load_state()
     mid = normalize_merchant_id(merchant_id or current_merchant_id())
     if not device_id:
@@ -5223,10 +5337,10 @@ def remove_video_asset(data, merchant_id=None, device_id=None, state=None):
     target = _video_path_from_value(data.get("path") or data.get("url"))
     if not target:
         raise ValueError("Video tidak valid.")
-    if not _video_belongs_to_device(target, device_id):
-        raise ValueError("Video ini bukan milik device saat ini.")
+    if not _video_belongs_to_device(target, device_id, account_id):
+        raise ValueError("Video ini bukan milik account/device saat ini.")
     target_url = public_asset_url(target)
-    device_settings = get_device_settings(state, device_id)
+    device_settings = get_device_settings(state, device_id, account_id)
     playlist = []
     for value in device_settings.get("video_playlist", []) or []:
         value_path = _video_path_from_value(value)
@@ -5236,12 +5350,21 @@ def remove_video_asset(data, merchant_id=None, device_id=None, state=None):
         if target_url and value_url == target_url:
             continue
         playlist.append(value)
-    save_device_video_playlist(state, device_id, playlist, merchant_id=mid)
+    save_device_video_playlist(state, device_id, playlist, merchant_id=mid, account_id=account_id)
     if os.path.isfile(target):
         os.remove(target)
-    merged = merge_settings_with_device(load_settings(mid), get_device_settings(state, device_id))
-    log.info("Video removed from device settings: merchant=%s device=%s file=%s", mid, device_id, os.path.basename(target))
-    return {"settings": settings_payload(merged, mid, get_device_settings(state, device_id)), "assets": scan_asset_payload(device_id)}
+    merged = merge_settings_with_device(load_settings(mid), get_device_settings(state, device_id, account_id))
+    log.info(
+        "Video removed from device settings: merchant=%s device=%s account=%s file=%s",
+        mid,
+        device_id,
+        account_id or "-",
+        os.path.basename(target),
+    )
+    return {
+        "settings": settings_payload(merged, mid, get_device_settings(state, device_id, account_id)),
+        "assets": scan_asset_payload(device_id, account_id),
+    }
 
 
 def settings_payload(settings=None, merchant_id=None, device_settings=None):
@@ -5590,7 +5713,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "session_reset_at": bucket.get("session_reset_at"),
                 "version": load_version_info(),
                 "logs": [],
-                "assets": scan_asset_payload(did or None),
+                "assets": scan_asset_payload(did or None, (auth or {}).get("id")),
             })
         if path == "/api/stock":
             state = load_state()
@@ -5628,7 +5751,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             device_settings = get_device_settings(state, did, (auth or {}).get("id")) if did else {}
             return self.send_json({
                 "ok": True,
-                "assets": scan_asset_payload(did or None),
+                "assets": scan_asset_payload(did or None, (auth or {}).get("id")),
                 "settings": settings_payload(merchant_id=mid, device_settings=device_settings),
             })
         if path == "/api/email-templates":
@@ -5842,7 +5965,13 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 self.request_merchant_admin(state)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
-            ok, msg = create_account_record(data.get("name"), data.get("email"), data.get("password"), mid)
+            ok, msg = create_account_record(
+                data.get("name"),
+                data.get("email"),
+                data.get("password"),
+                mid,
+                admin_account=data.get("admin_account"),
+            )
             if not ok:
                 return self.send_error_json(msg, 400)
             return self.send_json({
@@ -5862,8 +5991,25 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json({
                 "ok": True,
                 "settings": settings_payload(saved, mid),
+                "merchant_id": mid,
+                "merchant_name": merchant_payload(mid).get("name") or saved.get("shop_name") or DEFAULT_MERCHANT_NAME,
                 "admin_allow_stock_crud": admin_allow_stock_crud(saved),
                 "admin_allow_analytics": admin_allow_analytics(saved),
+            })
+        if path == "/api/merchant-admin/account/update":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            ok, msg = merchant_admin_update_account(data.get("account_id"), data, mid)
+            if not ok:
+                return self.send_error_json(msg, 400)
+            return self.send_json({
+                "ok": True,
+                "message": msg,
+                "accounts": merchant_admin_accounts_payload(mid),
             })
         if path == "/api/merchant-admin/account/toggle-admin":
             state = load_state()
@@ -6020,14 +6166,19 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             did = self.device_id()
             if not did:
                 return self.send_error_json("Device ID tidak valid.", 400)
-            saved = save_video_upload(data, did, state)
-            device_settings = get_device_settings(state, did)
+            saved = save_video_upload(data, did, auth.get("id"), state)
+            device_settings = get_device_settings(state, did, auth.get("id"))
             playlist = list(device_settings.get("video_playlist") or [])
             if saved.get("path") and saved["path"] not in playlist:
                 playlist.append(saved["path"])
-            save_device_video_playlist(state, did, playlist, merchant_id=mid)
+            save_device_video_playlist(state, did, playlist, merchant_id=mid, account_id=auth.get("id"))
             merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, auth.get("id")))
-            return self.send_json({"ok": True, "video": saved, "assets": scan_asset_payload(did), "settings": merged})
+            return self.send_json({
+                "ok": True,
+                "video": saved,
+                "assets": scan_asset_payload(did, auth.get("id")),
+                "settings": merged,
+            })
         if path == "/api/video-playlist":
             state = load_state()
             mid, auth = self.request_merchant_id(state)
@@ -6037,13 +6188,13 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             entries = data.get("playlist")
             if entries is None:
                 entries = data.get("video_playlist") or []
-            playlist = save_device_video_playlist(state, did, entries, merchant_id=mid)
+            playlist = save_device_video_playlist(state, did, entries, merchant_id=mid, account_id=auth.get("id"))
             merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, auth.get("id")))
             return self.send_json({
                 "ok": True,
                 "playlist": playlist,
                 "settings": merged,
-                "assets": scan_asset_payload(did),
+                "assets": scan_asset_payload(did, auth.get("id")),
             })
         if path == "/api/video/remove":
             state = load_state()
@@ -6052,7 +6203,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             if not did:
                 return self.send_error_json("Device ID tidak valid.", 400)
             try:
-                removed = remove_video_asset(data, mid, did, state)
+                removed = remove_video_asset(data, mid, did, auth.get("id"), state)
             except Exception as exc:
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **removed})

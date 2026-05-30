@@ -27,6 +27,9 @@ OAUTH_CREDS_FILE = _path_from_env("CONLECTA_OAUTH_CREDS_FILE", "oauth_credential
 OAUTH_TOKEN_FILE = _path_from_env("CONLECTA_OAUTH_TOKEN_FILE", "oauth_token.json")
 GMAIL_TOKEN_FILE = _path_from_env("CONLECTA_GMAIL_TOKEN_FILE", "token.json")
 CLIENT_SECRET_FILE = _path_from_env("CONLECTA_CLIENT_SECRET_FILE", "client_secret.json")
+ENV_FILE = _path_from_env("CONLECTA_ENV_FILE", ".env")
+GMAIL_TOKEN_ENV_KEY = "CONLECTA_GMAIL_TOKEN_JSON"
+OAUTH_TOKEN_ENV_KEY = "CONLECTA_OAUTH_TOKEN_JSON"
 
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 SHEETS_SCOPES = [
@@ -193,9 +196,91 @@ def _repair_credentials(creds, token_path):
         return creds
 
 
+def _token_env_key_for_path(path):
+    target_abs = os.path.normcase(os.path.abspath(path))
+    if target_abs == os.path.normcase(os.path.abspath(GMAIL_TOKEN_FILE)):
+        return GMAIL_TOKEN_ENV_KEY
+    if target_abs == os.path.normcase(os.path.abspath(OAUTH_TOKEN_FILE)):
+        return OAUTH_TOKEN_ENV_KEY
+    return ""
+
+
+def _read_token_json_from_env(env_key):
+    raw = str(os.environ.get(env_key) or "").strip()
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except Exception as exc:
+        log.warning("Google token env %s is not valid JSON: %s", env_key, exc)
+        return {}
+
+
+def _upsert_env_file(path, updates):
+    lines = []
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                lines = f.read().splitlines()
+        except Exception:
+            lines = []
+    written = set()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in line:
+            new_lines.append(line)
+            continue
+        key, _, _ = line.partition("=")
+        key = key.strip()
+        if key in updates:
+            new_lines.append(f"{key}={json.dumps(updates[key], ensure_ascii=False)}")
+            written.add(key)
+        else:
+            new_lines.append(line)
+    for key, value in updates.items():
+        if key not in written:
+            new_lines.append(f"{key}={json.dumps(value, ensure_ascii=False)}")
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(new_lines).rstrip() + "\n")
+
+
+def write_token_env(token_data, env_file=None):
+    """Persist OAuth token JSON to .env for VPS deploy/clone without copying token files."""
+    payload = json.dumps(token_data, ensure_ascii=False)
+    updates = {
+        GMAIL_TOKEN_ENV_KEY: token_data,
+        OAUTH_TOKEN_ENV_KEY: token_data,
+    }
+    target = env_file or ENV_FILE
+    _upsert_env_file(target, updates)
+    os.environ[GMAIL_TOKEN_ENV_KEY] = payload
+    os.environ[OAUTH_TOKEN_ENV_KEY] = payload
+    log.info("Google OAuth tokens written to env file %s", target)
+
+
+def sync_token_env_from_credentials(creds, path):
+    env_key = _token_env_key_for_path(path)
+    if not env_key or not creds:
+        return
+    try:
+        data = json.loads(creds.to_json())
+    except Exception:
+        data = _read_token_json(path)
+        if not data:
+            return
+    _upsert_env_file(ENV_FILE, {env_key: data})
+    os.environ[env_key] = json.dumps(data, ensure_ascii=False)
+
+
 def _persist_credentials(creds, path):
     with open(path, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
+    try:
+        sync_token_env_from_credentials(creds, path)
+    except Exception as exc:
+        log.warning("Google token env sync failed for %s: %s", path, exc)
 
 
 def _scopes_for_token_path(path):
@@ -279,6 +364,24 @@ def _refresh_credentials(creds, path):
 
 
 def _load_credentials_from_path(path, required_scopes):
+    env_key = _token_env_key_for_path(path)
+    if env_key:
+        env_data = _read_token_json_from_env(env_key)
+        if env_data:
+            try:
+                from google.oauth2.credentials import Credentials
+                creds = Credentials.from_authorized_user_info(env_data)
+                creds = _repair_credentials(creds, path)
+                if _credentials_has_scopes(creds, required_scopes, path):
+                    creds, refresh_error = _refresh_credentials(creds, path)
+                    if refresh_error and _is_invalid_grant(refresh_error):
+                        return None, refresh_error
+                    if creds and creds.valid:
+                        log.info("Google credentials loaded from env %s", env_key)
+                        return creds, None
+            except Exception as exc:
+                log.warning("Google token env load failed (%s): %s", env_key, exc)
+
     if not os.path.isfile(path):
         log.debug("Google token file missing: %s", path)
         return None, None

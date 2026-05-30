@@ -22,6 +22,7 @@ from conlecta_oauth import (
     OAUTH_TOKEN_FILE,
     SHEETS_SCOPES,
     credentials_file_candidates,
+    write_token_env,
 )
 
 SCOPES = COMBINED_SCOPES
@@ -90,6 +91,12 @@ def _save_tokens(creds):
             json.dump(token_data, f, indent=4)
         print(f"Saved {path}")
 
+    try:
+        write_token_env(token_data)
+        print(f"Saved OAuth tokens to environment file (.env)")
+    except Exception as exc:
+        print(f"[WARNING] Failed to write OAuth tokens to .env: {exc}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Google OAuth tokens for Conlecta")
@@ -152,7 +159,9 @@ def main():
     print("=========================================\n")
     print("Refresh Token Exists:", "YES" if creds.refresh_token else "NO")
     print("\nIMPORTANT:")
-    print("- Keep token.json private")
+    print("- Keep token.json / .env private")
+    print("- VPS clone: copy .env (or set CONLECTA_GMAIL_TOKEN_JSON + CONLECTA_OAUTH_TOKEN_JSON)")
+    print("- Server loads tokens from env first, then token.json files")
     print("- Publish OAuth app to Production (Testing tokens expire ~7 days)")
     print("- Server auto-refreshes access tokens ~15 min before expiry")
     print("- If you see invalid_grant, revoke app access and run this again")

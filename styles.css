@@ -1549,8 +1549,41 @@ textarea:focus {
   margin: 18px 0;
 }
 
-.admin-account-frame {
-  margin: 22px 0;
+.video-playlist-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto auto;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.video-playlist-row .video-order {
+  font-weight: 800;
+  color: var(--purple2);
+  text-align: center;
+}
+
+.video-playlist-row .btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .video-playlist-row {
+    grid-template-columns: 36px 1fr;
+  }
+
+  .video-playlist-row small,
+  .video-playlist-row .btn {
+    grid-column: 2;
+  }
+}
+
+.merchant-admin-detail input[readonly] {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+#settings-admin .system-account-list {
+  margin-top: 14px;
 }
 
 .admin-account-list {
