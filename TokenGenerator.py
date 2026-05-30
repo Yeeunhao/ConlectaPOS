@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+import webbrowser
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -69,46 +70,100 @@ def _flow_client_config(client_config):
     }
 
 
-def _run_oauth_flow(client_config, manual=False):
+def _load_oauth_client_block(secret_path=""):
+    if secret_path and os.path.isfile(secret_path):
+        try:
+            with open(secret_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("installed") or data.get("web") or {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _resolve_redirect_uri(secret_path=""):
+    block = _load_oauth_client_block(secret_path)
+    uris = [str(u).strip() for u in (block.get("redirect_uris") or []) if str(u).strip()]
+    if uris:
+        return uris[0]
+    return "http://localhost"
+
+
+def _is_headless_environment():
+    if str(os.environ.get("CONLECTA_OAUTH_FORCE_MANUAL") or "").strip() == "1":
+        return True
+    if sys.platform in ("win32", "darwin"):
+        return False
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        return False
+    return True
+
+
+def _create_flow(client_config):
     secret_path = resolve_client_secrets_path()
     source = str(client_config.get("source") or "")
     if not secret_path and source and os.path.isfile(source):
         secret_path = source
-
     if secret_path and os.path.isfile(secret_path):
         flow = InstalledAppFlow.from_client_secrets_file(secret_path, SCOPES)
     else:
         flow = InstalledAppFlow.from_client_config(_flow_client_config(client_config), SCOPES)
+    redirect_uri = _resolve_redirect_uri(secret_path)
+    flow.redirect_uri = redirect_uri
+    return flow, redirect_uri
 
-    if manual:
-        auth_url, _ = flow.authorization_url(
-            access_type="offline",
-            prompt="consent",
-            include_granted_scopes="true",
-        )
-        print("\nOpen this URL in a browser (any machine):\n")
-        print(auth_url)
-        print("\nAfter approving, paste the full redirect URL or authorization code here.\n")
-        raw = input("Authorization code or redirect URL: ").strip()
-        if "code=" in raw:
-            raw = raw.split("code=", 1)[1]
-            raw = raw.split("&", 1)[0]
-        flow.fetch_token(code=raw)
-        return flow.credentials
 
+def _parse_authorization_response(raw):
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    if "code=" in text:
+        code = text.split("code=", 1)[1]
+        return code.split("&", 1)[0].strip()
+    return text
+
+
+def _run_manual_oauth(flow, redirect_uri):
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",
         include_granted_scopes="true",
     )
-    print("If browser not auto open, open this URL manually:\n")
+    print("\nOpen this URL in a browser on ANY device (laptop/phone):\n")
     print(auth_url)
-    print("\nWaiting for login...\n")
-    return flow.run_local_server(
-        port=0,
-        access_type="offline",
-        prompt="consent",
-    )
+    print(f"\nRedirect URI: {redirect_uri}")
+    print("\nAfter you approve access:")
+    print("- Browser may show 'This site can't be reached' — that is OK.")
+    print("- Copy the FULL address bar URL (http://localhost/?code=...)")
+    print("- Or copy only the code= value and paste below.\n")
+    raw = input("Redirect URL or authorization code: ").strip()
+    code = _parse_authorization_response(raw)
+    if not code:
+        raise ValueError("No authorization code received.")
+    flow.fetch_token(code=code)
+    return flow.credentials
+
+
+def _run_oauth_flow(client_config, manual=False):
+    flow, redirect_uri = _create_flow(client_config)
+    use_manual = manual or _is_headless_environment()
+
+    if use_manual:
+        if not manual and _is_headless_environment():
+            print("[INFO] VPS/headless server detected — using manual OAuth (paste code).\n")
+        return _run_manual_oauth(flow, redirect_uri)
+
+    try:
+        return flow.run_local_server(
+            port=0,
+            open_browser=True,
+            access_type="offline",
+            prompt="consent",
+        )
+    except (webbrowser.Error, OSError) as exc:
+        print(f"[INFO] Browser unavailable ({exc}) — switching to manual OAuth.\n")
+        flow, redirect_uri = _create_flow(client_config)
+        return _run_manual_oauth(flow, redirect_uri)
 
 
 def _save_tokens(creds):
@@ -196,9 +251,8 @@ def run_refresh(force=False):
         secret_path = resolve_client_secrets_path()
         if secret_path:
             print("First-time setup on this VM:")
-            print(f"  python3 TokenGenerator.py --generate")
-            print("Headless VPS:")
-            print(f"  python3 TokenGenerator.py --generate --manual")
+            print("  python3 TokenGenerator.py --generate")
+            print("  (VPS auto-switches to paste-code mode; no local browser needed)")
         return 1
 
     print("\n=========================================")
