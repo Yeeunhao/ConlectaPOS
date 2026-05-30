@@ -72,6 +72,7 @@ from conlecta_oauth import (
     load_sheets_credentials,
     token_file_candidates,
     warm_up_google_tokens,
+    start_google_token_refresh_loop,
 )
 
 SPREADSHEET_ID = "1wVrAETyYaK4Nj-qfZofT6Ki9eToeiVpmaKY3qu1bzlQ"
@@ -6425,6 +6426,7 @@ def run(host="127.0.0.1", port=8765):
         def _warm_oauth_tokens():
             try:
                 warm_up_google_tokens()
+                start_google_token_refresh_loop()
             except Exception as exc:
                 log.warning("Google OAuth warm-up failed: %s", exc)
         threading.Thread(target=_warm_oauth_tokens, daemon=True, name="oauth-warmup").start()

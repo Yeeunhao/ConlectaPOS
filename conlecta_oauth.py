@@ -4,6 +4,7 @@ import json
 import os
 import logging
 import shutil
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -30,6 +31,9 @@ CLIENT_SECRET_FILE = _path_from_env("CONLECTA_CLIENT_SECRET_FILE", "client_secre
 ENV_FILE = _path_from_env("CONLECTA_ENV_FILE", ".env")
 GMAIL_TOKEN_ENV_KEY = "CONLECTA_GMAIL_TOKEN_JSON"
 OAUTH_TOKEN_ENV_KEY = "CONLECTA_OAUTH_TOKEN_JSON"
+OAUTH_CREDS_ENV_KEY = "CONLECTA_OAUTH_CREDS_JSON"
+OAUTH_CLIENT_ID_ENV = "CONLECTA_OAUTH_CLIENT_ID"
+OAUTH_CLIENT_SECRET_ENV = "CONLECTA_OAUTH_CLIENT_SECRET"
 
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 SHEETS_SCOPES = [
@@ -39,6 +43,24 @@ SHEETS_SCOPES = [
 COMBINED_SCOPES = list(dict.fromkeys(GMAIL_SCOPES + SHEETS_SCOPES))
 
 REFRESH_SKEW_SECONDS = int(os.environ.get("CONLECTA_OAUTH_REFRESH_SKEW_SECONDS") or 900)
+REFRESH_LOOP_SECONDS = int(os.environ.get("CONLECTA_OAUTH_REFRESH_LOOP_SECONDS") or 600)
+
+_ENV_LOADED = False
+
+
+def ensure_env_loaded():
+    """Load .env into os.environ (VPS deploy uses env vars instead of token/oauth files)."""
+    global _ENV_LOADED
+    if _ENV_LOADED:
+        return
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        _ENV_LOADED = True
+        return
+    if os.path.isfile(ENV_FILE):
+        load_dotenv(ENV_FILE)
+    _ENV_LOADED = True
 
 
 def token_file_candidates():
@@ -140,23 +162,77 @@ def _is_invalid_grant(exc):
     return "invalid_grant" in text or "token has been expired or revoked" in text
 
 
+def _client_config_from_block(block, source=""):
+    block = block or {}
+    client_id = str(block.get("client_id") or "").strip()
+    client_secret = str(block.get("client_secret") or "").strip()
+    if not client_id or not client_secret:
+        return {}
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "token_uri": str(block.get("token_uri") or "https://oauth2.googleapis.com/token").strip(),
+        "source": source,
+    }
+
+
+def _load_client_config_from_env():
+    ensure_env_loaded()
+    raw = str(os.environ.get(OAUTH_CREDS_ENV_KEY) or "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+            block = data.get("installed") or data.get("web") or data
+            cfg = _client_config_from_block(block, f"env:{OAUTH_CREDS_ENV_KEY}")
+            if cfg:
+                return cfg
+        except Exception as exc:
+            log.warning("Google client config env %s is not valid JSON: %s", OAUTH_CREDS_ENV_KEY, exc)
+    client_id = str(os.environ.get(OAUTH_CLIENT_ID_ENV) or "").strip()
+    client_secret = str(os.environ.get(OAUTH_CLIENT_SECRET_ENV) or "").strip()
+    if client_id and client_secret:
+        return {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "source": f"env:{OAUTH_CLIENT_ID_ENV}",
+        }
+    return {}
+
+
+def _load_client_config_from_tokens():
+    for env_key in (OAUTH_TOKEN_ENV_KEY, GMAIL_TOKEN_ENV_KEY):
+        cfg = _client_config_from_block(_read_token_json_from_env(env_key), f"env:{env_key}")
+        if cfg:
+            return cfg
+    for path in token_file_candidates():
+        cfg = _client_config_from_block(_read_token_json(path), path)
+        if cfg:
+            return cfg
+    return {}
+
+
 def _load_installed_client_config():
+    ensure_env_loaded()
     for path in credentials_file_candidates():
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             block = data.get("installed") or data.get("web") or {}
-            client_id = str(block.get("client_id") or "").strip()
-            client_secret = str(block.get("client_secret") or "").strip()
-            if client_id and client_secret:
-                return {
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "token_uri": str(block.get("token_uri") or "https://oauth2.googleapis.com/token").strip(),
-                }
+            cfg = _client_config_from_block(block, path)
+            if cfg:
+                return cfg
         except Exception as exc:
             log.warning("Google client config unreadable %s: %s", path, exc)
-    return {}
+    cfg = _load_client_config_from_env()
+    if cfg:
+        return cfg
+    return _load_client_config_from_tokens()
+
+
+def load_client_config():
+    """OAuth client id/secret from local json file, .env, or existing token payload."""
+    return dict(_load_installed_client_config() or {})
 
 
 def _repair_credentials(creds, token_path):
@@ -275,10 +351,11 @@ def sync_token_env_from_credentials(creds, path):
 
 
 def _persist_credentials(creds, path):
+    token_data = json.loads(creds.to_json())
     with open(path, "w", encoding="utf-8") as f:
         f.write(creds.to_json())
     try:
-        sync_token_env_from_credentials(creds, path)
+        write_token_env(token_data)
     except Exception as exc:
         log.warning("Google token env sync failed for %s: %s", path, exc)
 
@@ -363,7 +440,66 @@ def _refresh_credentials(creds, path):
         return creds, str(exc)
 
 
+def find_existing_token_data():
+    """Return (token_dict, source_label) from .env first, then token files."""
+    ensure_env_loaded()
+    for env_key in (OAUTH_TOKEN_ENV_KEY, GMAIL_TOKEN_ENV_KEY):
+        data = _read_token_json_from_env(env_key)
+        if data.get("refresh_token") or data.get("token"):
+            return data, f"env:{env_key}"
+    for path in token_file_candidates():
+        data = _read_token_json(path)
+        if data.get("refresh_token") or data.get("token"):
+            return data, path
+    return {}, ""
+
+
+def refresh_and_persist_tokens(force=False):
+    """
+    Load OAuth token from .env or token.json, refresh, write token files + .env.
+    Does not require oauth_credentials.json when token already contains client_id/secret.
+    """
+    ensure_env_loaded()
+    token_data, source = find_existing_token_data()
+    if not token_data:
+        return None, (
+            "No OAuth token found. Set CONLECTA_GMAIL_TOKEN_JSON in .env "
+            f"or create {GMAIL_TOKEN_FILE} on the server."
+        )
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+    except Exception as exc:
+        return None, f"Google auth libraries unavailable: {exc}"
+
+    creds = Credentials.from_authorized_user_info(token_data)
+    creds = _repair_credentials(creds, GMAIL_TOKEN_FILE)
+    if not getattr(creds, "refresh_token", None):
+        return None, f"Token from {source} has no refresh_token. Run TokenGenerator.py --generate --manual."
+
+    if force or _needs_refresh(creds, GMAIL_TOKEN_FILE):
+        try:
+            creds.refresh(Request())
+        except Exception as exc:
+            if _is_invalid_grant(exc):
+                return None, (
+                    f"Refresh token revoked/expired ({source}). "
+                    "Revoke app access at https://myaccount.google.com/permissions "
+                    "then run TokenGenerator.py --generate --manual."
+                )
+            return None, f"Token refresh failed ({source}): {exc}"
+
+    for path in token_file_candidates():
+        _persist_credentials(creds, path)
+    try:
+        write_token_env(json.loads(creds.to_json()))
+    except Exception as exc:
+        log.warning("Google token env write failed: %s", exc)
+    return creds, None
+
+
 def _load_credentials_from_path(path, required_scopes):
+    ensure_env_loaded()
     env_key = _token_env_key_for_path(path)
     if env_key:
         env_data = _read_token_json_from_env(env_key)
@@ -446,7 +582,26 @@ def load_google_credentials(scopes):
 
 def warm_up_google_tokens():
     """Proactively refresh token files (call on server startup)."""
+    ensure_env_loaded()
     results = {}
+    refreshed, refresh_err = refresh_and_persist_tokens(force=False)
+    if refreshed:
+        results["combined"] = {
+            "ok": True,
+            "path": "env+files",
+            "error": "",
+            "expiry": str(getattr(refreshed, "expiry", "") or ""),
+            "has_refresh_token": bool(getattr(refreshed, "refresh_token", None)),
+        }
+        log.info(
+            "Google token warm-up OK (combined, expiry=%s, refresh_token=%s)",
+            getattr(refreshed, "expiry", ""),
+            "yes" if getattr(refreshed, "refresh_token", None) else "no",
+        )
+    elif refresh_err:
+        results["combined"] = {"ok": False, "path": "env+files", "error": refresh_err}
+        log.warning("Google token warm-up failed (combined): %s", refresh_err)
+
     for label, loader, path in (
         ("gmail", load_gmail_credentials, GMAIL_TOKEN_FILE),
         ("sheets", load_sheets_credentials, OAUTH_TOKEN_FILE),
@@ -456,19 +611,71 @@ def warm_up_google_tokens():
             "ok": bool(creds and creds.valid),
             "path": path,
             "error": err if not creds else "",
+            "has_refresh_token": bool(getattr(creds, "refresh_token", None)) if creds else False,
         }
         if creds and creds.valid:
             log.info("Google token warm-up OK (%s)", label)
-        elif err:
+        elif err and not refreshed:
             log.warning("Google token warm-up failed (%s): %s", label, err)
-        else:
+        elif not creds and not refreshed:
             log.warning("Google token warm-up failed (%s): no valid token", label)
     return results
 
 
+_REFRESH_LOOP_STARTED = False
+
+
+def start_google_token_refresh_loop():
+    """
+    Background loop: when access token nears expiry, use refresh_token and
+    write the new access token back to .env + token.json automatically.
+    """
+    global _REFRESH_LOOP_STARTED
+    if _REFRESH_LOOP_STARTED:
+        return
+    _REFRESH_LOOP_STARTED = True
+
+    def _loop():
+        while True:
+            time.sleep(REFRESH_LOOP_SECONDS)
+            try:
+                ensure_env_loaded()
+                creds, err = refresh_and_persist_tokens(force=False)
+                if creds:
+                    log.info(
+                        "Google OAuth auto-refresh OK (expiry=%s)",
+                        getattr(creds, "expiry", ""),
+                    )
+                elif err:
+                    log.warning("Google OAuth auto-refresh skipped: %s", err)
+            except Exception as exc:
+                log.warning("Google OAuth auto-refresh failed: %s", exc)
+
+    threading.Thread(target=_loop, daemon=True, name="oauth-refresh-loop").start()
+    log.info(
+        "Google OAuth auto-refresh loop started (every %ss, renew ~%ss before expiry)",
+        REFRESH_LOOP_SECONDS,
+        REFRESH_SKEW_SECONDS,
+    )
+
+
 def google_token_status():
     """Non-destructive status for logs / health checks."""
-    status = {"files": [], "ready": {"gmail": False, "sheets": False}}
+    ensure_env_loaded()
+    status = {
+        "files": [],
+        "env": {},
+        "ready": {"gmail": False, "sheets": False},
+        "auto_refresh_loop_seconds": REFRESH_LOOP_SECONDS,
+        "refresh_skew_seconds": REFRESH_SKEW_SECONDS,
+    }
+    for env_key in (GMAIL_TOKEN_ENV_KEY, OAUTH_TOKEN_ENV_KEY):
+        data = _read_token_json_from_env(env_key)
+        status["env"][env_key] = {
+            "present": bool(data),
+            "has_refresh_token": bool(data.get("refresh_token")),
+            "expiry": data.get("expiry") or "",
+        }
     for path in token_file_candidates():
         entry = {
             "path": path,
