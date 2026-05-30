@@ -695,6 +695,37 @@ button {
   display: none;
 }
 
+.merchant-admin-only {
+  display: none !important;
+}
+
+body.is-merchant-admin .merchant-admin-only.nav-btn,
+body.is-merchant-admin .merchant-admin-only.btn,
+body.is-merchant-admin .merchant-admin-only.seg,
+body.is-merchant-admin .merchant-admin-only.button-row {
+  display: inline-flex;
+}
+
+body.is-merchant-admin .merchant-admin-only.button-row {
+  display: flex;
+}
+
+body.is-cashier-only .stock-readonly-note {
+  display: block;
+  margin-top: 12px;
+}
+
+.stock-readonly-note {
+  display: none;
+}
+
+body.is-cashier-only #stock-form input,
+body.is-cashier-only #stock-form select,
+body.is-cashier-only #stock-form label.image-picker {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
 .danger,
 .danger-soft {
   border-color: rgba(248, 113, 113, 0.36);

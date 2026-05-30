@@ -2993,14 +2993,18 @@ def load_vendors(force=False, merchant_id=None):
         return []
 
 
-def save_vendor(name, merchant_id=None):
+def is_merchant_admin_auth(auth):
+    return bool(auth and auth.get("admin_account"))
+
+
+def save_vendor(name, merchant_id=None, registered_by_account_id=None):
     mid = normalize_merchant_id(merchant_id or current_merchant_id())
     name = str(name or "").strip()
     if not name:
         raise ValueError("Vendor name kosong.")
     if _db_ready():
         try:
-            vendor = conlecta_db.save_vendor(name, mid)
+            vendor = conlecta_db.save_vendor(name, mid, registered_by_account_id=registered_by_account_id)
             log.info("Vendor saved in db from web: %s merchant=%s %s", vendor.get("id"), mid, name)
             return vendor
         except Exception as exc:
@@ -3195,19 +3199,25 @@ def normalize_items(items, payment_method, cash_received=0, change=0):
         gross = _int_money(item.get("gross")) or unit_price * qty
         disc_pct = max(0, min(100, _int_money(item.get("disc_pct"))))
         disc_fixed = max(0, _int_money(item.get("disc_fixed")))
+        tip_fixed = max(0, _int_money(item.get("tip_fixed")))
         computed_pct_discount = round(gross * disc_pct / 100) if disc_pct else 0
         computed_discount = min(gross, computed_pct_discount + disc_fixed)
         line_discount = _int_money(item.get("line_discount")) or computed_discount
         line_discount = max(0, min(gross, line_discount))
         if free:
             line_discount = gross
-            subtotal = 0
+            subtotal = tip_fixed
             price = 0
         else:
             subtotal = _int_money(item.get("subtotal"))
+            base = max(0, gross - line_discount)
             if subtotal <= 0 and gross:
-                subtotal = max(0, gross - line_discount)
-            if gross and subtotal <= 0 and line_discount >= gross:
+                subtotal = base + tip_fixed
+            elif tip_fixed <= 0 and subtotal > base:
+                tip_fixed = max(0, subtotal - base)
+            else:
+                subtotal = base + tip_fixed
+            if gross and subtotal <= 0 and line_discount >= gross and not tip_fixed:
                 free = True
                 price = 0
         clean.append({
@@ -3227,6 +3237,7 @@ def normalize_items(items, payment_method, cash_received=0, change=0):
             "free": free,
             "disc_pct": disc_pct,
             "disc_fixed": disc_fixed,
+            "tip_fixed": tip_fixed,
             "line_discount": line_discount,
             "payment_method": payment_method,
             "cash_received": cash_received,
@@ -4036,17 +4047,29 @@ def discount_breakdown(record):
 
 def item_discount_breakdown(item):
     qty = _int_money(item.get("qty"))
-    subtotal = _int_money(item.get("subtotal"))
     gross = _int_money(item.get("gross")) or _int_money(item.get("unit_price") or item.get("amount")) * qty
-    line_discount = _int_money(item.get("line_discount")) or max(0, gross - subtotal)
+    tip_fixed = max(0, _int_money(item.get("tip_fixed")))
+    line_discount = _int_money(item.get("line_discount"))
+    subtotal = _int_money(item.get("subtotal"))
     if item.get("free"):
-        line_discount = gross
-        subtotal = 0
+        if not line_discount:
+            line_discount = gross
+        base = 0
+    else:
+        if not line_discount and gross:
+            line_discount = max(0, gross - max(0, subtotal - tip_fixed))
+        base = max(0, gross - line_discount)
+    if not subtotal:
+        subtotal = base + tip_fixed
+    elif tip_fixed <= 0 and subtotal > base:
+        tip_fixed = max(0, subtotal - base)
+    after_line = subtotal
     return {
         "qty": qty,
         "gross": gross,
         "line_discount": line_discount,
-        "after_line": max(0, subtotal),
+        "tip_fixed": tip_fixed,
+        "after_line": after_line,
     }
 
 
@@ -4116,6 +4139,7 @@ def vendor_invoice_payload(vendor_id="", vendor_name="", date_from="", date_to="
             )
             vendor_cost = capital * row_bd["qty"]
             profit = row_bd["subtotal"] - vendor_cost
+            tip_fixed = max(0, _int_money(item.get("tip_fixed")))
             row = {
                 "txn": rec.get("txn_id", "-"),
                 "date": rec.get("updated_at_display") or rec.get("updated_at", "-"),
@@ -4128,6 +4152,7 @@ def vendor_invoice_payload(vendor_id="", vendor_name="", date_from="", date_to="
                 "cost": vendor_cost,
                 "gross": row_bd["gross"],
                 "discount": row_bd["discount"],
+                "tip_fixed": tip_fixed,
                 "subtotal": row_bd["subtotal"],
                 "profit": profit,
             }
@@ -4438,12 +4463,17 @@ def make_pdf(record, merchant=False):
         unit_price = _int_money(item.get("unit_price") or item.get("amount") or 0)
         item_gross = _int_money(item.get("gross")) or (unit_price * qty)
         item_subtotal = _int_money(item.get("subtotal"))
-        item_disc = _int_money(item.get("line_discount")) or max(0, item_gross - item_subtotal)
+        tip_fixed = max(0, _int_money(item.get("tip_fixed")))
+        item_disc = _int_money(item.get("line_discount"))
+        if not item_disc and item_gross:
+            item_disc = max(0, item_gross - max(0, item_subtotal - tip_fixed))
         if item.get("free"):
             name += " <font color='#d97706'>[FREE]</font>"
         price_display = format_rupiah(unit_price) if unit_price else format_rupiah(item_subtotal)
-        if item_disc and item_gross:
+        if item_disc and item_gross and not item.get("free"):
             price_display = f"<strike><font color='#9ca3af'>{format_rupiah(unit_price)}</font></strike>"
+        if merchant and tip_fixed:
+            price_display += f"<br/><font color='#059669' size='7'>+ tip {format_rupiah(tip_fixed)}</font>"
         item_data.append([
             Paragraph(str(idx), s_center),
             Paragraph(f"<b>{name}</b>", s_body),
@@ -4765,6 +4795,11 @@ def make_vendor_invoice_pdf(payload):
     for row in rows_data:
         profit = row.get("profit", 0)
         profit_color = "#059669" if profit >= 0 else "#dc2626"
+        tip_fixed = max(0, _int_money(row.get("tip_fixed")))
+        base_sales = max(0, _int_money(row.get("subtotal")) - tip_fixed)
+        sales_display = format_rupiah(base_sales)
+        if tip_fixed:
+            sales_display += f"<br/><font color='#059669' size='7'>+ tip {format_rupiah(tip_fixed)}</font>"
         table_rows.append([
             Paragraph(_pdf_escape(row.get("txn", "")), s_cell),
             Paragraph(_pdf_escape(row.get("date", "")), s_cell),
@@ -4772,7 +4807,7 @@ def make_vendor_invoice_pdf(payload):
             Paragraph(str(row.get("qty", 0)), s_cell_c),
             Paragraph(format_rupiah(row.get("capital", 0)), s_cell_r),
             Paragraph(format_rupiah(row.get("cost", 0)), s_cell_r),
-            Paragraph(format_rupiah(row.get("subtotal", 0)), s_cell_r),
+            Paragraph(sales_display, s_cell_r),
             Paragraph(f"<font color='{profit_color}'><b>{format_rupiah(profit)}</b></font>", s_cell_r),
         ])
     if len(table_rows) == 1:
@@ -5199,6 +5234,12 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
     def request_merchant_id(self, state=None):
         auth = self.request_auth(state, required=True)
         return normalize_merchant_id(auth.get("merchant_id")), auth
+
+    def request_merchant_admin(self, state=None):
+        auth = self.request_auth(state, required=True)
+        if not is_merchant_admin_auth(auth):
+            raise PermissionError("Akses merchant admin diperlukan.")
+        return auth
 
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
@@ -5729,11 +5770,27 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **payload})
         if path == "/api/vendor/save":
-            vendor = save_vendor(data.get("name"))
-            return self.send_json({"ok": True, "vendor": vendor, "vendors": load_vendors()})
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            vendor = save_vendor(
+                data.get("name"),
+                merchant_id=mid,
+                registered_by_account_id=auth.get("id"),
+            )
+            return self.send_json({"ok": True, "vendor": vendor, "vendors": load_vendors(merchant_id=mid)})
         if path == "/api/vendor/delete":
-            delete_vendor(data.get("vendor_id"))
-            return self.send_json({"ok": True, "vendors": load_vendors()})
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            delete_vendor(data.get("vendor_id"), merchant_id=mid)
+            return self.send_json({"ok": True, "vendors": load_vendors(merchant_id=mid)})
         if path == "/api/settings":
             state = load_state()
             mid, auth = self.request_merchant_id(state)
@@ -5825,24 +5882,11 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json({"ok": True, "saved": saved, "templates": load_email_templates()})
         if path == "/api/stock/save":
             state = load_state()
-
-            auth = self.get_device_auth(state)
-
-            if auth:
-                state["auth"] = auth
-                auth = validate_stored_auth(state)
-                state["auth"] = None
-
-            if not auth:
-                return self.send_error_json(
-                    "Session login tidak valid. Silakan login ulang.",
-                    401
-                )
-
-            mid = normalize_merchant_id(auth.get("merchant_id"))
-
-            state = load_state()
-            mid, auth = self.request_merchant_id(state)
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
 
             products = save_stock(
                 data.get("products", []),

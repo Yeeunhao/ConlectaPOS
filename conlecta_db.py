@@ -347,11 +347,13 @@ def ensure_schema():
         "ALTER TABLE conlecta_account ADD COLUMN IF NOT EXISTS last_activity_ts TIMESTAMP",
         "ALTER TABLE conlecta_account ADD COLUMN IF NOT EXISTS pin VARCHAR(20)",
         "ALTER TABLE vendors ADD COLUMN IF NOT EXISTS legacy_vendor_id VARCHAR(100)",
+        "ALTER TABLE vendors ADD COLUMN IF NOT EXISTS registered_by_account_id VARCHAR(100)",
         "ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS legacy_item_no INTEGER",
         "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS customer_email VARCHAR(255)",
         "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS discount_raw TEXT",
         "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS gross_amount NUMERIC(18,2) DEFAULT 0",
         "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS source_line_no INTEGER",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(18,2) DEFAULT 0",
         "CREATE INDEX IF NOT EXISTS idx_vendors_merchant ON vendors(merchant_id)",
         "CREATE INDEX IF NOT EXISTS idx_vendors_legacy ON vendors(merchant_id, legacy_vendor_id)",
         "CREATE INDEX IF NOT EXISTS idx_stock_items_merchant ON stock_items(merchant_id)",
@@ -726,7 +728,10 @@ def load_vendors(merchant_id=None):
     with connect(row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT vendor_id, vendor_name, legacy_vendor_id, merchant_id FROM vendors WHERE merchant_id=%s ORDER BY vendor_name",
+                """
+                SELECT vendor_id, vendor_name, legacy_vendor_id, merchant_id, registered_by_account_id
+                FROM vendors WHERE merchant_id=%s ORDER BY vendor_name
+                """,
                 (mid,),
             )
             return [
@@ -735,19 +740,20 @@ def load_vendors(merchant_id=None):
                     "name": row["vendor_name"],
                     "merchant_id": row["merchant_id"],
                     "legacy_id": row.get("legacy_vendor_id") or "",
+                    "registered_by": str(row.get("registered_by_account_id") or ""),
                 }
                 for row in cur.fetchall()
             ]
 
 
-def save_vendor(name, merchant_id=None, legacy_vendor_id=None):
+def save_vendor(name, merchant_id=None, legacy_vendor_id=None, registered_by_account_id=None):
     mid = normalize_merchant_id(merchant_id)
     ensure_merchant(mid)
     vendor_name = str(name or "").strip()
     with connect(row_factory=dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT vendor_id, vendor_name, merchant_id FROM vendors WHERE merchant_id=%s AND lower(vendor_name)=lower(%s) LIMIT 1",
+                "SELECT vendor_id, vendor_name, merchant_id, registered_by_account_id FROM vendors WHERE merchant_id=%s AND lower(vendor_name)=lower(%s) LIMIT 1",
                 (mid, vendor_name),
             )
             row = cur.fetchone()
@@ -755,14 +761,28 @@ def save_vendor(name, merchant_id=None, legacy_vendor_id=None):
                 if legacy_vendor_id:
                     cur.execute("UPDATE vendors SET legacy_vendor_id=%s, updated_at=CURRENT_TIMESTAMP WHERE vendor_id=%s", (str(legacy_vendor_id), row["vendor_id"]))
                     conn.commit()
-                return {"id": str(row["vendor_id"]), "name": row["vendor_name"], "merchant_id": row["merchant_id"]}
+                return {
+                    "id": str(row["vendor_id"]),
+                    "name": row["vendor_name"],
+                    "merchant_id": row["merchant_id"],
+                    "registered_by": str(registered_by_account_id or row.get("registered_by_account_id") or ""),
+                }
             cur.execute(
-                "INSERT INTO vendors (vendor_name, merchant_id, legacy_vendor_id) VALUES (%s,%s,%s) RETURNING vendor_id, vendor_name, merchant_id",
-                (vendor_name, mid, str(legacy_vendor_id or "") or None),
+                """
+                INSERT INTO vendors (vendor_name, merchant_id, legacy_vendor_id, registered_by_account_id)
+                VALUES (%s,%s,%s,%s)
+                RETURNING vendor_id, vendor_name, merchant_id, registered_by_account_id
+                """,
+                (vendor_name, mid, str(legacy_vendor_id or "") or None, str(registered_by_account_id or "") or None),
             )
             row = cur.fetchone()
         conn.commit()
-    return {"id": str(row["vendor_id"]), "name": row["vendor_name"], "merchant_id": row["merchant_id"]}
+    return {
+        "id": str(row["vendor_id"]),
+        "name": row["vendor_name"],
+        "merchant_id": row["merchant_id"],
+        "registered_by": str(row.get("registered_by_account_id") or ""),
+    }
 
 
 def delete_vendor(vendor_id, merchant_id=None):
@@ -965,10 +985,10 @@ def save_history(record, merchant_id=None):
                     """
                     INSERT INTO transaction_items (
                         transaction_id, qr_id, item_name, qty, unit_price, subtotal, free_flag,
-                        disc_percent, disc_amount, line_discount, payment_method, change_amount,
+                        disc_percent, disc_amount, line_discount, tip_amount, payment_method, change_amount,
                         cash_received, merchant_id, capital, profit, payment_fee, total_cost,
                         gross_amount, source_line_no
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """,
                     (
                         txn_id,
@@ -981,6 +1001,7 @@ def save_history(record, merchant_id=None):
                         _int_money(item.get("disc_pct")),
                         _int_money(item.get("disc_fixed")),
                         _int_money(item.get("line_discount")),
+                        _int_money(item.get("tip_fixed")),
                         str(record.get("payment_method") or item.get("payment_method") or ""),
                         _int_money(record.get("change") or item.get("change")),
                         _int_money(record.get("cash_received") or item.get("cash_received")),
@@ -1031,6 +1052,7 @@ def load_history(merchant_id=None):
                         "disc_pct": _money(row.get("disc_percent")),
                         "disc_fixed": _money(row.get("disc_amount")),
                         "line_discount": _money(row.get("line_discount")),
+                        "tip_fixed": _money(row.get("tip_amount")),
                         "payment_method": row.get("payment_method") or "",
                         "change": _money(row.get("change_amount")),
                         "cash_received": _money(row.get("cash_received")),

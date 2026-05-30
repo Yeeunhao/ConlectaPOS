@@ -649,7 +649,8 @@ function linePriceHtml(item) {
   const unit = Number(item.unit_price || item.amount || item.price || 0);
   const gross = Number(item.gross || unit * qty);
   const subtotal = Number(item.subtotal || 0);
-  const discount = Number(item.line_discount || Math.max(0, gross - subtotal));
+  const tip = Number(item.tip_fixed || 0);
+  const discount = Number(item.line_discount || Math.max(0, gross - Math.max(0, subtotal - tip)));
   if (discount && gross) {
     return `<span class="price-strike">${formatRp(gross)}</span> ${item.free ? "FREE" : formatRp(subtotal)}`;
   }

@@ -408,13 +408,14 @@ function clampNumber(value, min, max) {
 
 function cartRaw(name) {
   const raw = state.cart[name];
-  if (!raw) return { qty: 0, free: false, disc_pct: 0, disc_fixed: 0 };
-  if (typeof raw === "number") return { qty: raw, free: false, disc_pct: 0, disc_fixed: 0 };
+  if (!raw) return { qty: 0, free: false, disc_pct: 0, disc_fixed: 0, tip_fixed: 0 };
+  if (typeof raw === "number") return { qty: raw, free: false, disc_pct: 0, disc_fixed: 0, tip_fixed: 0 };
   return {
     qty: Number(raw.qty || 0),
     free: Boolean(raw.free),
     disc_pct: clampNumber(raw.disc_pct, 0, 100),
     disc_fixed: Math.max(0, Number(raw.disc_fixed || 0)),
+    tip_fixed: Math.max(0, Number(raw.tip_fixed || 0)),
   };
 }
 
@@ -433,6 +434,27 @@ function lineDiscount(gross, pct, fixed, free) {
 
 function isSystemAdmin() {
   return state.auth?.role === "system_admin";
+}
+
+function isMerchantAdmin() {
+  return Boolean(state.auth?.admin_account);
+}
+
+function applyRolePermissions() {
+  const loggedIn = Boolean(state.auth);
+  const systemMode = isSystemAdmin();
+  const admin = isMerchantAdmin();
+  document.body.classList.toggle("is-merchant-admin", loggedIn && admin && !systemMode);
+  document.body.classList.toggle("is-cashier-only", loggedIn && !admin && !systemMode);
+}
+
+function assertMerchantAdmin(action = "melakukan aksi ini") {
+  if (isSystemAdmin()) return false;
+  if (!isMerchantAdmin()) {
+    showToast(`Hanya merchant admin yang bisa ${action}.`, "error");
+    return false;
+  }
+  return true;
 }
 
 function readFileAsDataUrl(file) {
@@ -751,7 +773,9 @@ function applyRouteAfterBootstrap() {
     return;
   }
   const requestedPage = ROUTE_PAGE_MAP[path];
-  const page = requestedPage && !(path === "/system-admin" && !isSystemAdmin())
+  const page = requestedPage
+    && !(path === "/system-admin" && !isSystemAdmin())
+    && !(requestedPage === "analytics" && !isMerchantAdmin())
     ? requestedPage
     : defaultAuthedPage();
   showPage(page, { updateRoute: false });
@@ -764,6 +788,7 @@ function applyRouteAfterBootstrap() {
 function renderAuth() {
   const locked = !state.auth;
   document.body.classList.toggle("auth-visible", locked);
+  applyRolePermissions();
   const systemMode = isSystemAdmin();
   $("#auth-screen").classList.toggle("hidden", !locked);
   $("#app").classList.toggle("is-locked", locked);
@@ -1606,6 +1631,10 @@ async function logout() {
 function showPage(name, { sync = true, updateRoute = true } = {}) {
   if (!name) return;
   if (isSystemAdmin() && name !== "system-admin") name = "system-admin";
+  if (!isSystemAdmin() && !isMerchantAdmin() && name === "analytics") {
+    showToast("Analytics hanya untuk merchant admin.", "error");
+    name = "cashier";
+  }
   $$(".page").forEach((page) => page.classList.toggle("active", page.id === `page-${name}`));
   $$(".nav-btn[data-page]").forEach((btn) => btn.classList.toggle("active", btn.dataset.page === name));
   if (state.auth && updateRoute) setRoute(routeForPage(name));
@@ -1630,8 +1659,10 @@ function cartEntries() {
       const unit = Number(product.price || 0);
       const gross = unit * qty;
       const discount = lineDiscount(gross, raw.disc_pct, raw.disc_fixed, raw.free);
-      const subtotal = Math.max(0, gross - discount);
-      const isFree = raw.free || (gross > 0 && subtotal <= 0 && discount >= gross);
+      const tip = Math.max(0, Number(raw.tip_fixed || 0));
+      const base = Math.max(0, gross - discount);
+      const subtotal = raw.free ? tip : base + tip;
+      const isFree = raw.free || (gross > 0 && subtotal <= 0 && discount >= gross && !tip);
       return {
         name,
         item_name: name,
@@ -1647,6 +1678,7 @@ function cartEntries() {
         line_discount: discount,
         disc_pct: raw.disc_pct,
         disc_fixed: raw.disc_fixed,
+        tip_fixed: tip,
         subtotal,
         profit: subtotal - (productCapital(product) * qty),
         free: isFree,
@@ -1716,7 +1748,7 @@ function toggleFreeItem(name, checked) {
 }
 
 function isDiscountFieldFocused() {
-  return Boolean(document.activeElement?.matches?.("[data-discount-field]"));
+  return Boolean(document.activeElement?.matches?.("[data-discount-field], [data-tip-field]"));
 }
 
 function cartItemElement(name) {
@@ -1742,9 +1774,13 @@ function patchCartDiscountFields(name) {
   if (!row) return;
   const pctInput = row.querySelector('[data-discount-field="disc_pct"]');
   const fixedInput = row.querySelector('[data-discount-field="disc_fixed"]');
+  const tipInput = row.querySelector('[data-tip-field="tip_fixed"]');
   const freeCheckbox = row.querySelector('[data-action="toggle-free"]');
   if (pctInput) pctInput.disabled = Boolean(raw.disc_fixed);
   if (fixedInput) fixedInput.disabled = Boolean(raw.disc_pct);
+  if (tipInput && document.activeElement !== tipInput) {
+    tipInput.value = raw.tip_fixed ? formatPlainNumber(raw.tip_fixed) : "";
+  }
   if (freeCheckbox) freeCheckbox.checked = Boolean(raw.free);
 }
 
@@ -1772,6 +1808,23 @@ function setLineDiscount(name, field, value, { repaint = false } = {}) {
     else next.free = false;
   }
   setCartRaw(name, next);
+  if (repaint) {
+    renderCatalog();
+    renderCart();
+  } else {
+    patchCartItemLine(name);
+    patchCartDiscountFields(name);
+  }
+  updateTotals({ publishDisplay: false });
+}
+
+function setLineTip(name, value, { repaint = false } = {}) {
+  if (state.activeQr) {
+    showToast("Dismiss QR dulu sebelum ubah tip", "error");
+    return;
+  }
+  const tip = Math.max(0, Number(value || 0));
+  setCartRaw(name, { tip_fixed: tip });
   if (repaint) {
     renderCatalog();
     renderCart();
@@ -1862,6 +1915,10 @@ function renderCart() {
         <label class="cart-disc-chip">
           <span>Disc Rp</span>
           <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_fixed ? formatPlainNumber(item.disc_fixed) : ""}" data-discount-field="disc_fixed" data-name="${escapeAttr(item.name)}" ${item.disc_pct ? "disabled" : ""}>
+        </label>
+        <label class="cart-disc-chip">
+          <span>Tip Rp</span>
+          <input type="text" inputmode="numeric" placeholder="0" value="${item.tip_fixed ? formatPlainNumber(item.tip_fixed) : ""}" data-tip-field="tip_fixed" data-name="${escapeAttr(item.name)}">
         </label>
         <label class="cart-free-chip">
           <input type="checkbox" data-action="toggle-free" data-name="${escapeAttr(item.name)}" ${item.free ? "checked" : ""}>
@@ -2070,6 +2127,7 @@ function compactDisplayItem(item) {
     line_discount: item.line_discount,
     disc_pct: item.disc_pct,
     disc_fixed: item.disc_fixed,
+    tip_fixed: item.tip_fixed,
     subtotal: item.subtotal,
     free: item.free,
   };
@@ -2532,8 +2590,9 @@ function renderStock() {
 function renderVendorOptions() {
   const currentStockVendor = $("#stock-vendor")?.value || "";
   const currentInvoiceVendor = $("#invoice-vendor")?.value || "";
+  const vendors = (state.vendors || []).slice().sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "id"));
   const options = [`<option value="">(No Vendor)</option>`].concat(
-    (state.vendors || []).map((v) => `<option value="${escapeAttr(v.id)}">${escapeHtml(v.name)}</option>`),
+    vendors.map((v) => `<option value="${escapeAttr(String(v.id))}">${escapeHtml(v.name)}</option>`),
   ).join("");
   const stockVendor = $("#stock-vendor");
   const invoiceVendor = $("#invoice-vendor");
@@ -2601,6 +2660,7 @@ function resetStockForm() {
 
 async function saveStockForm(event) {
   event.preventDefault();
+  if (!assertMerchantAdmin("mengubah stock")) return;
   const name = $("#stock-name").value.trim();
   if (!name) {
     showToast("Nama item tidak boleh kosong", "error");
@@ -2627,6 +2687,7 @@ async function saveStockForm(event) {
 }
 
 async function deleteSelectedStock() {
+  if (!assertMerchantAdmin("menghapus stock")) return;
   const index = selectedStockIndex();
   if (index < 0) {
     showToast("Pilih item dulu", "error");
@@ -2646,7 +2707,8 @@ async function deleteSelectedStock() {
 }
 
 async function setStockTab(tab, { loading = true } = {}) {
-  const nextTab = ["items", "vendors", "invoice"].includes(tab) ? tab : "items";
+  let nextTab = ["items", "vendors", "invoice"].includes(tab) ? tab : "items";
+  if (!isMerchantAdmin()) nextTab = "items";
   state.stockTab = nextTab;
   $$(".stock-tabs .seg").forEach((btn) => btn.classList.toggle("active", btn.dataset.stockTab === nextTab));
   $$(".stock-section").forEach((section) => section.classList.toggle("active", section.id === `stock-section-${nextTab}`));
@@ -2655,19 +2717,26 @@ async function setStockTab(tab, { loading = true } = {}) {
 }
 
 async function addVendor() {
+  if (!assertMerchantAdmin("menambah vendor")) return;
   const name = $("#vendor-name").value.trim();
   if (!name) {
     showToast("Vendor name kosong", "error");
     return;
   }
   const result = await api("/api/vendor/save", { method: "POST", body: { name } });
-  state.vendors = result.vendors || state.vendors;
+  const nextVendors = Array.isArray(result.vendors) ? result.vendors : [];
+  state.vendors = nextVendors.length ? nextVendors : state.vendors;
+  if (result.vendor && !state.vendors.some((v) => String(v.id) === String(result.vendor.id))) {
+    state.vendors = [...state.vendors, result.vendor];
+  }
   $("#vendor-name").value = "";
+  if ($("#stock-vendor") && result.vendor?.id) $("#stock-vendor").value = String(result.vendor.id);
   renderStock();
   showToast("Vendor saved");
 }
 
 async function deleteVendor(vendorId) {
+  if (!assertMerchantAdmin("menghapus vendor")) return;
   const result = await api("/api/vendor/delete", { method: "POST", body: { vendor_id: vendorId } });
   state.vendors = result.vendors || [];
   state.products = state.products.map((item) => String(item.vendor_id || "") === String(vendorId) ? { ...item, vendor_id: "" } : item);
@@ -3221,7 +3290,8 @@ function openDetail(txnId) {
   $("#detail-items").innerHTML = (record.items || []).map((item) => {
     const gross = Number(item.gross || (item.unit_price || item.amount || item.price || 0) * (item.qty || 0));
     const subtotal = Number(item.subtotal || 0);
-    const discount = Number(item.line_discount || Math.max(0, gross - subtotal));
+    const tip = Number(item.tip_fixed || 0);
+    const discount = Number(item.line_discount || Math.max(0, gross - Math.max(0, subtotal - tip)));
     const price = discount && gross
       ? `<span class="price-strike">${formatRp(gross)}</span> ${item.free ? "FREE" : formatRp(subtotal)}`
       : `${item.qty} x ${formatRp(item.amount || item.price || item.unit_price || 0)}`;
@@ -4024,12 +4094,8 @@ async function refreshStockData({ loading = false } = {}) {
     api("/api/vendors", { loading: false }),
   ]);
   const nextProducts = Array.isArray(stockResult.products) ? stockResult.products : [];
-  if (nextProducts.length || !state.products.length) {
-    state.products = nextProducts;
-  } else {
-    showToast("Stock database kosong atau gagal dimuat, katalog lokal dipertahankan.", "error");
-  }
-  state.vendors = vendorResult.vendors || [];
+  state.products = nextProducts;
+  state.vendors = Array.isArray(vendorResult.vendors) ? vendorResult.vendors : [];
   reconcileCartWithStock();
   renderStock();
   renderCatalog();
@@ -4126,6 +4192,7 @@ async function reloadBootstrap() {
   bootstrapDeviceTheme();
   applyCashierQrisFrame();
   renderAuth();
+  applyRolePermissions();
   if (!hasBootstrapped) applyRouteAfterBootstrap();
   hasBootstrapped = true;
   publishDisplayState();
@@ -4485,6 +4552,11 @@ function bindEvents() {
     reader.readAsDataURL(file);
   });
   document.addEventListener("input", (event) => {
+    const tipInput = event.target.closest("[data-tip-field]");
+    if (tipInput) {
+      setLineTip(tipInput.dataset.name, parseMoney(tipInput.value), { repaint: false });
+      return;
+    }
     const discountInput = event.target.closest("[data-discount-field]");
     if (discountInput) {
       const field = discountInput.dataset.discountField;
@@ -4504,12 +4576,26 @@ function bindEvents() {
     }
   });
   document.addEventListener("focusout", (event) => {
+    const tipInput = event.target.closest?.("[data-tip-field]");
+    if (tipInput) {
+      const row = tipInput.closest(".cart-item");
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (row && active && row.contains(active) && active.matches?.("[data-discount-field], [data-tip-field]")) return;
+        const value = parseMoney(tipInput.value);
+        tipInput.value = value ? formatPlainNumber(value) : "";
+        renderCatalog();
+        renderCart();
+        updateTotals();
+      });
+      return;
+    }
     const discountInput = event.target.closest?.("[data-discount-field]");
     if (!discountInput) return;
     const row = discountInput.closest(".cart-item");
     requestAnimationFrame(() => {
       const active = document.activeElement;
-      if (row && active && row.contains(active) && active.matches?.("[data-discount-field]")) return;
+      if (row && active && row.contains(active) && active.matches?.("[data-discount-field], [data-tip-field]")) return;
       const field = discountInput.dataset.discountField;
       if (field === "disc_fixed") {
         const value = parseMoney(discountInput.value);

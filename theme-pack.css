@@ -1306,14 +1306,6 @@ body[data-theme="midnight_teal"].qr-display-body .display-stage {
     radial-gradient(circle at 80% 20%, rgba(153, 246, 228, 0.16), transparent 32%);
 }
 
-body[data-theme="crystal_bloom"] .tp-canvas { opacity: 0.88; }
-body[data-theme="pearl_mist"] .tp-canvas { mix-blend-mode: multiply; opacity: 0.84; }
-body[data-theme="aurora_glass"] .tp-canvas { opacity: 0.9; }
-body[data-theme="midnight_velvet"] .tp-canvas { opacity: 0.9; }
-body[data-theme="deep_space"] .tp-canvas { opacity: 0.86; }
-body[data-theme="warm_terminal"] .tp-canvas { opacity: 0.88; mix-blend-mode: screen; }
-body[data-theme="midnight_teal"] .tp-canvas { opacity: 0.9; }
-
 .stage-event-card.is-dismissed,
 .display-event-panel[data-notify-tone="dismiss"] {
   box-shadow: 0 0 70px rgba(255, 120, 120, 0.22), 0 0 0 1px rgba(255, 180, 180, 0.28) inset;
@@ -2081,7 +2073,11 @@ body {
    Performance + readability (canvas bg + lite mode)
    ============================================================ */
 body.conlecta-canvas-bg .app-bg {
-  opacity: 0.55;
+  display: none;
+}
+
+body.conlecta-canvas-bg .bg-scene .bg-gradient {
+  display: none;
 }
 
 body.conlecta-canvas-bg .bg-scene.is-reduced .crystal,
@@ -2091,8 +2087,8 @@ body.conlecta-canvas-bg .bg-scene.is-reduced .aurora-ring {
   display: none;
 }
 
-body.conlecta-canvas-bg .bg-scene.is-reduced .bg-gradient {
-  opacity: 0.28;
+body.conlecta-canvas-bg .tp-canvas {
+  opacity: 1;
 }
 
 body.conlecta-lite .panel,
