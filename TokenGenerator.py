@@ -2,9 +2,10 @@
 # TokenGenerator.py
 #
 # Google OAuth for Conlecta (VPS-friendly):
-#   python TokenGenerator.py              refresh/sync from .env or token.json
-#   python TokenGenerator.py --generate   new OAuth login (needs client creds)
-#   python TokenGenerator.py --generate --manual   headless VPS paste-code flow
+#   python3 TokenGenerator.py                    refresh/sync .env + token.json
+#   python3 TokenGenerator.py --generate         new login (client_secret.json + browser)
+#   python3 TokenGenerator.py --generate --manual   headless VPS paste-code flow
+#   python3 gmail_token_generator.py             same as --generate (legacy name)
 # =========================================================
 
 import argparse
@@ -27,12 +28,12 @@ from conlecta_oauth import (
     OAUTH_CREDS_FILE,
     OAUTH_TOKEN_ENV_KEY,
     OAUTH_TOKEN_FILE,
-    credentials_file_candidates,
     ensure_env_loaded,
     find_existing_token_data,
     diagnose_oauth_files,
     load_client_config,
     refresh_and_persist_tokens,
+    resolve_client_secrets_path,
     write_token_env,
 )
 
@@ -40,11 +41,12 @@ SCOPES = COMBINED_SCOPES
 
 
 def _client_config_help():
-    print("OAuth client config (server/.env only — never commit to git):")
-    print(f"  1) {OAUTH_CREDS_FILE} or {CLIENT_SECRET_FILE} on the VPS")
-    print(f"  2) {OAUTH_CREDS_ENV_KEY}={{\"installed\":{{...}}}} in {ENV_FILE}")
-    print(f"  3) {OAUTH_CLIENT_ID_ENV} + {OAUTH_CLIENT_SECRET_ENV} in {ENV_FILE}")
-    print("  4) client_id/client_secret already inside your token.json / .env token JSON")
+    print("OAuth client config (VM only — never commit to git):")
+    print(f"  1) {CLIENT_SECRET_FILE} on the VPS (recommended, same as gmail_token_generator.py)")
+    print(f"  2) {OAUTH_CREDS_FILE}")
+    print(f"  3) {OAUTH_CREDS_ENV_KEY} in {ENV_FILE}")
+    print(f"  4) {OAUTH_CLIENT_ID_ENV} + {OAUTH_CLIENT_SECRET_ENV} in {ENV_FILE}")
+    print("  5) client_id/client_secret inside existing token.json / .env token JSON")
     print()
 
 
@@ -68,7 +70,16 @@ def _flow_client_config(client_config):
 
 
 def _run_oauth_flow(client_config, manual=False):
-    flow = InstalledAppFlow.from_client_config(_flow_client_config(client_config), SCOPES)
+    secret_path = resolve_client_secrets_path()
+    source = str(client_config.get("source") or "")
+    if not secret_path and source and os.path.isfile(source):
+        secret_path = source
+
+    if secret_path and os.path.isfile(secret_path):
+        flow = InstalledAppFlow.from_client_secrets_file(secret_path, SCOPES)
+    else:
+        flow = InstalledAppFlow.from_client_config(_flow_client_config(client_config), SCOPES)
+
     if manual:
         auth_url, _ = flow.authorization_url(
             access_type="offline",
@@ -130,15 +141,31 @@ def _save_tokens(creds):
         print(f"[WARNING] Failed to write OAuth tokens to .env: {exc}")
 
 
+def _remove_old_tokens():
+    for path in (GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE):
+        if not os.path.exists(path):
+            continue
+        try:
+            os.remove(path)
+            print(f"[INFO] Old {path} deleted")
+        except Exception as exc:
+            print(f"[WARNING] Failed delete old token {path}: {exc}")
+
+
 def _print_token_sources():
     ensure_env_loaded()
     _, env_source = find_existing_token_data()
     file_hits = [path for path in (GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE) if os.path.isfile(path)]
+    secret_path = resolve_client_secrets_path()
     print("Token sources checked (priority: .env env vars, then files):")
     print(f"  - {GMAIL_TOKEN_ENV_KEY} / {OAUTH_TOKEN_ENV_KEY} in {ENV_FILE}")
     for path in (GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE):
         mark = "found" if path in file_hits else "missing"
         print(f"  - {path}: {mark}")
+    if secret_path:
+        print(f"  - OAuth client file: {secret_path}")
+    elif os.path.isfile(CLIENT_SECRET_FILE):
+        print(f"  - {CLIENT_SECRET_FILE}: present but invalid JSON")
     if env_source:
         print(f"\nActive token source: {env_source}")
     elif file_hits:
@@ -155,7 +182,7 @@ def _print_diagnostics():
     print("[WARN] OAuth setup issues detected:")
     for line in warnings:
         print(f"  - {line}")
-    print("  Broken oauth_credentials.json is ignored when .env has valid client id/secret or tokens.")
+    print(f"  Use valid {CLIENT_SECRET_FILE} on the VM, or client id/secret in .env.")
     print()
 
 
@@ -166,8 +193,12 @@ def run_refresh(force=False):
     if err:
         print(f"ERROR: {err}\n")
         _client_config_help()
-        print("To create a brand-new token (requires OAuth client config):")
-        print("  python TokenGenerator.py --generate --manual")
+        secret_path = resolve_client_secrets_path()
+        if secret_path:
+            print("First-time setup on this VM:")
+            print(f"  python3 TokenGenerator.py --generate")
+            print("Headless VPS:")
+            print(f"  python3 TokenGenerator.py --generate --manual")
         return 1
 
     print("\n=========================================")
@@ -177,31 +208,34 @@ def run_refresh(force=False):
     if getattr(creds, "expiry", None):
         print("Access token expiry:", creds.expiry, "(short-lived, auto-renewed)")
     print(f"\nSynced to {GMAIL_TOKEN_FILE}, {OAUTH_TOKEN_FILE}, and {ENV_FILE}")
-    print("While Conlecta is running, access tokens auto-refresh ~every 10 min when near expiry.")
-    print("You only need --generate --manual again if refresh_token is revoked (invalid_grant).")
+    print("While Conlecta runs, access tokens auto-refresh when near expiry.")
+    print("Re-run --generate only if refresh_token is revoked (invalid_grant).")
     return 0
 
 
-def run_generate(manual=False):
+def run_generate(manual=False, replace=False):
     _print_diagnostics()
+
+    secret_path = resolve_client_secrets_path()
     client_config = _resolve_client_config()
     if not client_config:
-        print("ERROR: OAuth client config not found.\n")
+        print(f"ERROR: OAuth client config not found (need valid {CLIENT_SECRET_FILE}).\n")
         _client_config_help()
-        print("For VPS: put client id/secret in .env (not in git), then run:")
-        print("  python3 TokenGenerator.py --generate --manual")
-        print("\nIf oauth_credentials.json on the server is broken/empty, delete it or fix the JSON.")
         return 1
 
-    source = client_config.get("source") or "configured client"
+    source = secret_path or client_config.get("source") or "configured client"
     print(f"Using OAuth client from: {source}\n")
 
-    print("\n[INFO] Starting Google OAuth Login...\n")
+    if replace:
+        _remove_old_tokens()
+
+    print("[INFO] Starting Google OAuth Login...\n")
     try:
         creds = _run_oauth_flow(client_config, manual=manual)
     except Exception as exc:
         print(f"\nERROR: OAuth login failed: {exc}")
-        print("Existing token.json / .env tokens were NOT deleted.")
+        if not replace:
+            print("Existing token.json / .env tokens were NOT deleted.")
         return 1
 
     try:
@@ -215,10 +249,13 @@ def run_generate(manual=False):
         print("\n=========================================")
         print("WARNING: NO REFRESH TOKEN RECEIVED")
         print("=========================================")
-        print("Fix:")
+        print("Possible causes:")
+        print("- OAuth app still in Testing mode")
+        print("- Old Google permission cached")
+        print("\nFix:")
         print("1. Open https://myaccount.google.com/permissions")
-        print("2. Remove Conlecta / Google Cloud app access")
-        print("3. Run this script again with --generate --manual")
+        print("2. Remove app access")
+        print("3. Run this script again")
         print("=========================================\n")
         return 1
 
@@ -226,52 +263,54 @@ def run_generate(manual=False):
 
     print("\n=========================================")
     print("SUCCESS!")
+    print("token.json created (+ oauth_token.json + .env sync)")
     print("=========================================")
     print("Refresh Token Exists:", "YES" if creds.refresh_token else "NO")
     print("\nIMPORTANT:")
-    print("- Keep token.json / .env private (VM only, not in git)")
-    print(f"- Clone repo on VPS, copy {ENV_FILE} with {GMAIL_TOKEN_ENV_KEY}")
-    print("- Or place token.json on the VPS manually")
-    print("- Server loads .env first, then token.json files")
+    print("- Keep token.json / .env private (VM only)")
     print("- Publish OAuth app to Production (Testing tokens expire ~7 days)")
-    print("- If you see invalid_grant, revoke app access and run --generate --manual")
+    print("- Conlecta auto-refreshes access tokens while the server runs")
     return 0
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Generate or refresh Google OAuth tokens for Conlecta")
     parser.add_argument(
         "--generate",
         action="store_true",
-        help="Run full Google login and create new tokens (requires OAuth client config)",
+        help="Run Google OAuth login (needs client_secret.json on VM, opens browser unless --manual)",
     )
     parser.add_argument(
         "--manual",
         action="store_true",
-        help="With --generate: headless VPS paste authorization code",
+        help="With --generate: headless VPS — print URL and paste authorization code",
+    )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="With --generate: delete old token.json before login (legacy gmail_token_generator behavior)",
     )
     parser.add_argument(
         "--force",
         action="store_true",
         help="Force refresh even if access token still valid",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     ensure_env_loaded()
 
     print("=========================================")
-    print(" GOOGLE TOKEN GENERATOR (refresh mode)")
+    print(" GOOGLE TOKEN GENERATOR")
     print("=========================================\n")
-    print("Default: refresh/sync tokens from .env or token.json")
-    print("New login: python3 TokenGenerator.py --generate --manual\n")
     print("Scopes:")
     for scope in SCOPES:
         print(f"  - {scope}")
     print()
 
     if args.generate:
-        return run_generate(manual=args.manual)
+        return run_generate(manual=args.manual, replace=args.replace)
 
+    print("Mode: refresh/sync (use --generate for new OAuth login)\n")
     return run_refresh(force=args.force)
 
 

@@ -72,7 +72,8 @@ def google_auth() -> Credentials:
     raise FileNotFoundError(
         f"{TOKEN_FILE} tidak ditemukan atau tidak valid untuk Gmail (scope gmail.send).\n"
         "Jalankan TokenGenerator.py untuk OAuth Gmail "
-        "(python TokenGenerator.py --manual di VPS), "
+        "(python3 gmail_token_generator.py di VPS dengan client_secret.json, "
+        "atau python3 TokenGenerator.py --generate --manual), "
         "atau pastikan token.json memiliki scope gmail.send."
     )
 

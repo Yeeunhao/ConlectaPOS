@@ -78,7 +78,8 @@ def token_file_candidates():
 def credentials_file_candidates():
     paths = []
     seen = set()
-    for path in (OAUTH_CREDS_FILE, CLIENT_SECRET_FILE):
+    # client_secret.json first (standard Conlecta VPS setup)
+    for path in (CLIENT_SECRET_FILE, OAUTH_CREDS_FILE):
         abspath = os.path.normcase(os.path.abspath(path))
         if abspath in seen:
             continue
@@ -239,6 +240,26 @@ def _load_installed_client_config():
 def load_client_config():
     """OAuth client id/secret from .env, token payload, or local json file."""
     return dict(_load_installed_client_config() or {})
+
+
+def resolve_client_secrets_path():
+    """Return path to client_secret.json / oauth_credentials.json if valid, else ""."""
+    ensure_env_loaded()
+    for path in credentials_file_candidates():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = f.read().strip()
+            if not raw:
+                continue
+            data = json.loads(raw)
+            block = data.get("installed") or data.get("web") or {}
+            if block.get("client_id") and block.get("client_secret"):
+                return path
+        except json.JSONDecodeError:
+            continue
+        except Exception:
+            continue
+    return ""
 
 
 def diagnose_oauth_files():
