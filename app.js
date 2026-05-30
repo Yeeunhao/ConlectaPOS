@@ -4831,7 +4831,7 @@ function bindEvents() {
   document.addEventListener("visibilitychange", () => {
     if (!state.auth) return;
     if (document.visibilityState === "visible") {
-      reloadBootstrap().catch(() => null);
+      sendSessionHeartbeat(false).catch(() => null);
     } else {
       sendSessionHeartbeat(true);
     }

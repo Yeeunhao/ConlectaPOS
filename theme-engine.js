@@ -666,10 +666,52 @@
     rafId = requestAnimationFrame(frame);
   }
 
+  let hiddenAt = 0;
+
+  function advanceSceneBy(ms) {
+    if (!ms || ms <= 0) return;
+    const scale = motionScale();
+    auroraT += ms;
+    pearls.forEach((strand) => {
+      strand.phase += strand.speed * ms;
+    });
+    sparkles.forEach((s) => {
+      s.t += s.tSpeed * ms;
+      s.y -= s.rise * ms * 0.06 * scale;
+      s.x += s.drift * ms * 0.06 * scale;
+      if (s.y < -12) s.y = height + rand(8, 40);
+      if (s.x < -12) s.x = width + rand(8, 24);
+      if (s.x > width + 12) s.x = -rand(8, 24);
+    });
+    crystals.forEach((c) => {
+      c.twinkleT += c.twinkleSpeed * ms * scale;
+      c.y -= c.rise * ms * 0.06 * scale;
+      c.x += c.drift * ms * 0.06 * scale;
+      if (c.y < -80) c.y = height + rand(20, 120);
+      if (c.x < -80) c.x = width + rand(20, 60);
+      if (c.x > width + 80) c.x = -rand(20, 60);
+    });
+    shootingStars.forEach((s) => {
+      s.life += ms;
+      s.x += s.vx * ms;
+      s.y += s.vy * ms;
+    });
+    shootingStars = shootingStars.filter((s) => s.life < s.maxLife);
+  }
+
+  function resumeAnimationClock() {
+    const now = performance.now();
+    if (hiddenAt > 0) {
+      advanceSceneBy(now - hiddenAt);
+      hiddenAt = 0;
+    }
+    lastTs = now;
+    lastFrameTs = now - TARGET_FRAME_MS;
+  }
+
   function start() {
     if (!ctx) return;
     if (rafId) return;
-    lastTs = 0;
     rafId = requestAnimationFrame(frame);
   }
 
@@ -835,12 +877,10 @@
     document.addEventListener("visibilitychange", () => {
       visible = !document.hidden;
       if (visible) {
-        lastTs = 0;
-        lastFrameTs = 0;
-        fpsFrameCount = 0;
-        fpsLastSample = 0;
+        resumeAnimationClock();
         start();
       } else {
+        hiddenAt = performance.now();
         stop();
       }
     });

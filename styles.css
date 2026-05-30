@@ -664,8 +664,13 @@ button {
 }
 
 .nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 42px;
   padding: 0 16px;
+  font-size: 14px;
+  line-height: 1.2;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -710,11 +715,17 @@ button {
 body.is-merchant-admin .merchant-admin-only.nav-btn,
 body.is-merchant-admin .merchant-admin-only.tab {
   display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
 }
 
 body.is-merchant-admin .settings-tabs .merchant-admin-only.tab {
   display: flex !important;
+  align-items: center;
   width: 100%;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 900;
 }
 
 body.can-crud-stock .can-crud-stock-only.nav-btn,
@@ -722,6 +733,8 @@ body.can-crud-stock .can-crud-stock-only.btn,
 body.can-crud-stock .can-crud-stock-only.seg,
 body.can-crud-stock .can-crud-stock-only.button-row {
   display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
 }
 
 body.can-crud-stock .can-crud-stock-only.button-row {
@@ -730,6 +743,13 @@ body.can-crud-stock .can-crud-stock-only.button-row {
 
 body.can-view-analytics .can-view-analytics-only.nav-btn {
   display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 700;
 }
 
 body.is-cashier-only .stock-readonly-note {
@@ -1015,8 +1035,13 @@ textarea:focus {
 }
 
 .seg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 38px;
   padding: 0 14px;
+  font-size: 14px;
+  line-height: 1.2;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -1966,6 +1991,18 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.settings-tabs .tab {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 900;
+  text-align: left;
 }
 
 .tab {
