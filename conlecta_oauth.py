@@ -214,6 +214,13 @@ def _load_client_config_from_tokens():
 
 def _load_installed_client_config():
     ensure_env_loaded()
+    # Prefer .env / existing tokens on VPS (oauth json files are often absent or placeholders).
+    cfg = _load_client_config_from_env()
+    if cfg:
+        return cfg
+    cfg = _load_client_config_from_tokens()
+    if cfg:
+        return cfg
     for path in credentials_file_candidates():
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -222,17 +229,40 @@ def _load_installed_client_config():
             cfg = _client_config_from_block(block, path)
             if cfg:
                 return cfg
+        except json.JSONDecodeError as exc:
+            log.warning("Google client config invalid JSON %s: %s", path, exc)
         except Exception as exc:
             log.warning("Google client config unreadable %s: %s", path, exc)
-    cfg = _load_client_config_from_env()
-    if cfg:
-        return cfg
-    return _load_client_config_from_tokens()
+    return {}
 
 
 def load_client_config():
-    """OAuth client id/secret from local json file, .env, or existing token payload."""
+    """OAuth client id/secret from .env, token payload, or local json file."""
     return dict(_load_installed_client_config() or {})
+
+
+def diagnose_oauth_files():
+    """Return human-readable warnings about broken local OAuth/token files."""
+    ensure_env_loaded()
+    warnings = []
+    for path in credentials_file_candidates():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = f.read().strip()
+            if not raw:
+                warnings.append(f"{path} exists but is empty. Remove it or paste valid Google OAuth JSON.")
+                continue
+            json.loads(raw)
+        except json.JSONDecodeError as exc:
+            warnings.append(f"{path} is not valid JSON ({exc}). Fix it, delete it, or use .env instead.")
+        except Exception as exc:
+            warnings.append(f"{path} could not be read ({exc}).")
+    token_data, source = find_existing_token_data()
+    if token_data and not token_data.get("refresh_token"):
+        warnings.append(
+            f"Token from {source} has no refresh_token. Run: python TokenGenerator.py --generate --manual"
+        )
+    return warnings
 
 
 def _repair_credentials(creds, token_path):

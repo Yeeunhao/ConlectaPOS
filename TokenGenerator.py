@@ -30,6 +30,7 @@ from conlecta_oauth import (
     credentials_file_candidates,
     ensure_env_loaded,
     find_existing_token_data,
+    diagnose_oauth_files,
     load_client_config,
     refresh_and_persist_tokens,
     write_token_env,
@@ -147,7 +148,19 @@ def _print_token_sources():
     print()
 
 
+def _print_diagnostics():
+    warnings = diagnose_oauth_files()
+    if not warnings:
+        return
+    print("[WARN] OAuth setup issues detected:")
+    for line in warnings:
+        print(f"  - {line}")
+    print("  Broken oauth_credentials.json is ignored when .env has valid client id/secret or tokens.")
+    print()
+
+
 def run_refresh(force=False):
+    _print_diagnostics()
     _print_token_sources()
     creds, err = refresh_and_persist_tokens(force=force)
     if err:
@@ -170,27 +183,26 @@ def run_refresh(force=False):
 
 
 def run_generate(manual=False):
+    _print_diagnostics()
     client_config = _resolve_client_config()
     if not client_config:
         print("ERROR: OAuth client config not found.\n")
         _client_config_help()
         print("For VPS: put client id/secret in .env (not in git), then run:")
-        print("  python TokenGenerator.py --generate --manual")
+        print("  python3 TokenGenerator.py --generate --manual")
+        print("\nIf oauth_credentials.json on the server is broken/empty, delete it or fix the JSON.")
         return 1
 
     source = client_config.get("source") or "configured client"
     print(f"Using OAuth client from: {source}\n")
 
-    for path in (GMAIL_TOKEN_FILE, OAUTH_TOKEN_FILE):
-        if os.path.exists(path):
-            try:
-                os.remove(path)
-                print(f"[INFO] Old {path} deleted")
-            except Exception as exc:
-                print(f"[WARNING] Failed delete old token {path}: {exc}")
-
     print("\n[INFO] Starting Google OAuth Login...\n")
-    creds = _run_oauth_flow(client_config, manual=manual)
+    try:
+        creds = _run_oauth_flow(client_config, manual=manual)
+    except Exception as exc:
+        print(f"\nERROR: OAuth login failed: {exc}")
+        print("Existing token.json / .env tokens were NOT deleted.")
+        return 1
 
     try:
         if creds.expired and creds.refresh_token:
@@ -248,8 +260,10 @@ def main():
     ensure_env_loaded()
 
     print("=========================================")
-    print(" GOOGLE TOKEN GENERATOR")
+    print(" GOOGLE TOKEN GENERATOR (refresh mode)")
     print("=========================================\n")
+    print("Default: refresh/sync tokens from .env or token.json")
+    print("New login: python3 TokenGenerator.py --generate --manual\n")
     print("Scopes:")
     for scope in SCOPES:
         print(f"  - {scope}")
