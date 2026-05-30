@@ -145,6 +145,7 @@ COL_OTP = 5
 COL_SESSION = 7
 COL_DEVICE_ID = 8
 COL_LAST_IP = 9
+COL_ADMIN_ACCOUNT = 11
 COL_LAST_ACTIVITY = 12
 SESSION_ACTIVE = "active"
 SESSION_LOGGED_OUT = "logged_out"
@@ -222,6 +223,8 @@ DEFAULT_SETTINGS = {
     "brand_logo_path": "",
     "payment_image_path": "",
     "payment_image_paths": [],
+    "admin_allow_stock_crud": True,
+    "admin_allow_analytics": True,
 }
 LEGACY_QRIS_SETTING_KEYS = {
     "partner_id", "client_id", "client_secret", "base_url", "token_url",
@@ -2199,8 +2202,6 @@ def create_account_record(account_name, email, password, merchant_id=None, admin
         account_id, account_name, email, password,
         "", account_name, SESSION_LOGGED_OUT, "", "", mid, "yes" if admin_account else "", "",
     ], value_input_option="USER_ENTERED")
-    if admin_account:
-        _clear_other_merchant_admins(ws, mid, account_id)
     log.info("Account registered from web: %s merchant=%s name=%s", account_id, mid, account_name)
     return True, f"Account berhasil dibuat: {account_id}"
 
@@ -2248,10 +2249,69 @@ def update_account_record(account_id, account_name=None, email=None, password=No
     if ws is None:
         return False, "Database account tidak tersedia."
     ws.update([row], f"A{acc['row_index']}")
-    if admin_flag:
-        _clear_other_merchant_admins(ws, row[9], row[0])
     log.info("System admin updated account: %s merchant=%s admin=%s", row[0], row[9], row[10])
     return True, "Account updated."
+
+
+def merchant_admin_accounts_payload(merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    accounts = _accounts_for_merchant(mid)
+    return [
+        {
+            "id": acc.get("id"),
+            "name": acc.get("name", ""),
+            "email": acc.get("email", ""),
+            "username": acc.get("username", ""),
+            "admin_account": _normalize_admin_account(acc.get("admin_account")),
+            "merchant_id": mid,
+        }
+        for acc in accounts
+    ]
+
+
+def save_merchant_admin_settings(data, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    settings = load_settings(mid)
+    if "admin_allow_stock_crud" in data:
+        settings["admin_allow_stock_crud"] = bool(data.get("admin_allow_stock_crud"))
+    if "admin_allow_analytics" in data:
+        settings["admin_allow_analytics"] = bool(data.get("admin_allow_analytics"))
+    saved = save_settings(settings, mid)
+    log.info(
+        "Merchant admin settings saved: merchant=%s stock_crud=%s analytics=%s",
+        mid,
+        saved.get("admin_allow_stock_crud"),
+        saved.get("admin_allow_analytics"),
+    )
+    return saved
+
+
+def toggle_merchant_account_admin(account_id, admin_account, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    acc = _find_account_by_id(account_id)
+    if not acc:
+        return False, "Account tidak ditemukan."
+    if normalize_merchant_id(acc.get("merchant_id")) != mid:
+        return False, "Account bukan milik merchant ini."
+    admin_flag = _normalize_admin_account(admin_account)
+    if _db_ready():
+        try:
+            if not conlecta_db.set_account_admin_flag(account_id, admin_flag):
+                return False, "Account tidak ditemukan."
+            log.info("Merchant admin flag updated: account=%s merchant=%s admin=%s", account_id, mid, admin_flag)
+            return True, "Admin role updated."
+        except Exception as exc:
+            log.warning("toggle merchant admin db failed: %s", exc)
+            if _db_mandatory():
+                return False, "Database account tidak tersedia."
+    if _db_mandatory():
+        return False, "Database account tidak tersedia."
+    ws = _get_ws(SHEET_ACCOUNTS, ACCOUNT_HEADER)
+    if ws is None:
+        return False, "Database account tidak tersedia."
+    ws.update_cell(acc["row_index"], COL_ADMIN_ACCOUNT, "yes" if admin_flag else "")
+    log.info("Merchant admin flag updated: account=%s merchant=%s admin=%s", account_id, mid, admin_flag)
+    return True, "Admin role updated."
 
 
 def load_email_templates():
@@ -3018,6 +3078,30 @@ def load_vendors(force=False, merchant_id=None):
 
 def is_merchant_admin_auth(auth):
     return _normalize_admin_account((auth or {}).get("admin_account"))
+
+
+def admin_allow_stock_crud(settings=None, merchant_id=None):
+    settings = settings if settings is not None else load_settings(merchant_id)
+    return bool(settings.get("admin_allow_stock_crud", True))
+
+
+def admin_allow_analytics(settings=None, merchant_id=None):
+    settings = settings if settings is not None else load_settings(merchant_id)
+    return bool(settings.get("admin_allow_analytics", True))
+
+
+def can_merchant_crud_stock(auth, merchant_id=None):
+    if not is_merchant_admin_auth(auth):
+        return False
+    mid = normalize_merchant_id(merchant_id or (auth or {}).get("merchant_id"))
+    return admin_allow_stock_crud(merchant_id=mid)
+
+
+def can_merchant_view_analytics(auth, merchant_id=None):
+    if not is_merchant_admin_auth(auth):
+        return False
+    mid = normalize_merchant_id(merchant_id or (auth or {}).get("merchant_id"))
+    return admin_allow_analytics(merchant_id=mid)
 
 
 def save_vendor(name, merchant_id=None, registered_by_account_id=None):
@@ -5264,6 +5348,13 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             raise PermissionError("Akses merchant admin diperlukan.")
         return auth
 
+    def request_merchant_stock_admin(self, state=None):
+        auth = self.request_merchant_admin(state)
+        mid = normalize_merchant_id(auth.get("merchant_id"))
+        if not admin_allow_stock_crud(merchant_id=mid):
+            raise PermissionError("CRUD stock belum diaktifkan untuk merchant ini.")
+        return auth
+
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
     
@@ -5506,6 +5597,22 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             auth = validate_stored_auth({**state, "auth": auth}) if auth else None
             mid = normalize_merchant_id((auth or {}).get("merchant_id"))
             return self.send_json({"ok": True, "vendors": load_vendors(merchant_id=mid)})
+        if path == "/api/merchant-admin/accounts":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            settings = load_settings(mid)
+            return self.send_json({
+                "ok": True,
+                "merchant_id": mid,
+                "merchant_name": merchant_payload(mid).get("name") or settings.get("shop_name") or DEFAULT_MERCHANT_NAME,
+                "admin_allow_stock_crud": admin_allow_stock_crud(settings),
+                "admin_allow_analytics": admin_allow_analytics(settings),
+                "accounts": merchant_admin_accounts_payload(mid),
+            })
         if path == "/api/assets":
             state = load_state()
             auth = self.get_device_auth(state)
@@ -5722,14 +5829,53 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json({"ok": True})
         if path == "/api/account/register":
             state = load_state()
-            mid, auth = self.request_merchant_id(state)
-            ok, msg = verify_admin_password(data.get("admin_password"), mid)
-            if not ok:
-                return self.send_error_json(msg, 403)
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
             ok, msg = create_account_record(data.get("name"), data.get("email"), data.get("password"), mid)
             if not ok:
                 return self.send_error_json(msg, 400)
-            return self.send_json({"ok": True, "message": msg, "merchant_id": mid})
+            return self.send_json({
+                "ok": True,
+                "message": msg,
+                "merchant_id": mid,
+                "accounts": merchant_admin_accounts_payload(mid),
+            })
+        if path == "/api/merchant-admin/settings":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            saved = save_merchant_admin_settings(data, mid)
+            return self.send_json({
+                "ok": True,
+                "settings": settings_payload(saved, mid),
+                "admin_allow_stock_crud": admin_allow_stock_crud(saved),
+                "admin_allow_analytics": admin_allow_analytics(saved),
+            })
+        if path == "/api/merchant-admin/account/toggle-admin":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            ok, msg = toggle_merchant_account_admin(
+                data.get("account_id"),
+                data.get("admin_account"),
+                mid,
+            )
+            if not ok:
+                return self.send_error_json(msg, 400)
+            return self.send_json({
+                "ok": True,
+                "message": msg,
+                "accounts": merchant_admin_accounts_payload(mid),
+            })
         if path == "/api/system-admin/merchant/save":
             state = load_state()
             try:
@@ -5797,7 +5943,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             state = load_state()
             try:
                 mid, auth = self.request_merchant_id(state)
-                self.request_merchant_admin(state)
+                self.request_merchant_stock_admin(state)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
             vendor = save_vendor(
@@ -5810,7 +5956,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             state = load_state()
             try:
                 mid, auth = self.request_merchant_id(state)
-                self.request_merchant_admin(state)
+                self.request_merchant_stock_admin(state)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
             delete_vendor(data.get("vendor_id"), merchant_id=mid)
@@ -5908,7 +6054,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             state = load_state()
             try:
                 mid, auth = self.request_merchant_id(state)
-                self.request_merchant_admin(state)
+                self.request_merchant_stock_admin(state)
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
 

@@ -198,6 +198,17 @@ def _persist_credentials(creds, path):
         f.write(creds.to_json())
 
 
+def _scopes_for_token_path(path):
+    target_abs = os.path.normcase(os.path.abspath(path))
+    gmail_abs = os.path.normcase(os.path.abspath(GMAIL_TOKEN_FILE))
+    oauth_abs = os.path.normcase(os.path.abspath(OAUTH_TOKEN_FILE))
+    if target_abs == gmail_abs:
+        return GMAIL_SCOPES
+    if target_abs == oauth_abs:
+        return SHEETS_SCOPES
+    return COMBINED_SCOPES
+
+
 def _mirror_token_files(creds, source_path):
     if not creds or not getattr(creds, "valid", False):
         return
@@ -206,6 +217,8 @@ def _mirror_token_files(creds, source_path):
     for path in token_file_candidates():
         target_abs = os.path.normcase(os.path.abspath(path))
         if target_abs == source_abs:
+            continue
+        if not _credentials_has_scopes(creds, _scopes_for_token_path(path), source_path):
             continue
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -314,11 +327,13 @@ def load_credentials_for_scopes(required_scopes):
 
 
 def load_gmail_credentials():
-    return load_credentials_for_scopes(GMAIL_SCOPES)
+    """Gmail OTP/receipt always use token.json (CONLECTA_GMAIL_TOKEN_FILE)."""
+    return _load_credentials_from_path(GMAIL_TOKEN_FILE, GMAIL_SCOPES)
 
 
 def load_sheets_credentials():
-    return load_credentials_for_scopes(SHEETS_SCOPES)
+    """Sheets sync uses oauth_token.json (CONLECTA_OAUTH_TOKEN_FILE)."""
+    return _load_credentials_from_path(OAUTH_TOKEN_FILE, SHEETS_SCOPES)
 
 
 def load_google_credentials(scopes):
@@ -329,15 +344,14 @@ def load_google_credentials(scopes):
 def warm_up_google_tokens():
     """Proactively refresh token files (call on server startup)."""
     results = {}
-    for label, scopes in (
-        ("gmail", GMAIL_SCOPES),
-        ("sheets", SHEETS_SCOPES),
-        ("combined", COMBINED_SCOPES),
+    for label, loader, path in (
+        ("gmail", load_gmail_credentials, GMAIL_TOKEN_FILE),
+        ("sheets", load_sheets_credentials, OAUTH_TOKEN_FILE),
     ):
-        creds, err = load_credentials_for_scopes(scopes)
+        creds, err = loader()
         results[label] = {
             "ok": bool(creds and creds.valid),
-            "path": err if isinstance(err, str) and err else "",
+            "path": path,
             "error": err if not creds else "",
         }
         if creds and creds.valid:

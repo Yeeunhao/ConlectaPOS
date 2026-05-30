@@ -8,7 +8,7 @@
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css?v=7">
-  <link rel="stylesheet" href="/theme-pack.css?v=7">
+  <link rel="stylesheet" href="/theme-pack.css?v=8">
 </head>
 <body data-theme="crystal_bloom">
   <div class="app-bg"></div>
@@ -200,7 +200,7 @@
         <button class="nav-btn pos-only active" type="button" data-page="cashier">Cashier</button>
         <button class="nav-btn pos-only" type="button" data-action="open-qr-display">QR Display</button>
         <button class="nav-btn pos-only" type="button" data-page="stock">Stock</button>
-        <button class="nav-btn pos-only merchant-admin-only" type="button" data-page="analytics">Analytics</button>
+        <button class="nav-btn pos-only can-view-analytics-only" type="button" data-page="analytics">Analytics</button>
         <button class="nav-btn pos-only" type="button" data-page="history">History</button>
         <button class="nav-btn pos-only" type="button" data-page="settings">Settings</button>
         <button class="nav-btn pos-only" type="button" data-page="log">Log</button>
@@ -457,8 +457,8 @@
 
         <div class="stock-tabs segmented">
           <button class="seg active" type="button" data-stock-tab="items">Items</button>
-          <button class="seg merchant-admin-only" type="button" data-stock-tab="vendors">Vendors</button>
-          <button class="seg merchant-admin-only" type="button" data-stock-tab="invoice">Vendor Invoice</button>
+          <button class="seg can-crud-stock-only" type="button" data-stock-tab="vendors">Vendors</button>
+          <button class="seg can-crud-stock-only" type="button" data-stock-tab="invoice">Vendor Invoice</button>
         </div>
 
         <div class="stock-section active" id="stock-section-items">
@@ -490,7 +490,7 @@
               <span>Vendor</span>
               <select id="stock-vendor"></select>
             </label>
-            <div class="button-row merchant-admin-only">
+            <div class="button-row can-crud-stock-only">
               <button class="btn primary" type="submit">Save / Update</button>
               <button class="btn danger-soft" type="button" data-action="delete-stock">Delete Selected</button>
             </div>
@@ -769,7 +769,7 @@
           <nav class="settings-tabs" aria-label="Settings sections">
             <button class="tab active" type="button" data-settings-tab="shop">Shop</button>
             <button class="tab" type="button" data-settings-tab="qris">QRIS</button>
-            <button class="tab" type="button" data-settings-tab="accounts">Accounts</button>
+            <button class="tab merchant-admin-only" type="button" data-settings-tab="admin">Admin Setting</button>
             <button class="tab" type="button" data-settings-tab="display">Display</button>
             <button class="tab" type="button" data-settings-tab="email">Email</button>
           </nav>
@@ -805,25 +805,45 @@
               </div>
             </section>
 
-            <section class="settings-section" id="settings-accounts">
-              <h2>Register Account</h2>
-              <p class="muted">Verifikasi admin dulu sebelum form account baru ditampilkan.</p>
+            <section class="settings-section" id="settings-admin">
+              <h2>Admin Setting</h2>
+              <p class="muted">Kelola permission admin dan account untuk merchant ini.</p>
               <div class="info-list merchant-info">
-                <div><span>Merchant</span><strong id="account-merchant-name">Conlecta</strong></div>
-                <div><span>Merchant ID</span><strong id="account-merchant-id">conlecta</strong></div>
+                <div><span>Merchant</span><strong id="admin-merchant-name">Conlecta</strong></div>
+                <div><span>Merchant ID</span><strong id="admin-merchant-id">conlecta</strong></div>
               </div>
-              <div class="account-gate" id="account-gate">
-                <label class="field"><span>Admin Password</span><input id="reg-admin-password" type="password"></label>
-                <button class="btn primary" type="button" data-action="unlock-account-form">Unlock Form</button>
+              <div class="admin-permission-grid">
+                <label class="check-row inline-check">
+                  <input id="admin-allow-stock" type="checkbox">
+                  <span>Allow stock CRUD</span>
+                </label>
+                <label class="check-row inline-check">
+                  <input id="admin-allow-analytics" type="checkbox">
+                  <span>Allow analytics menu</span>
+                </label>
               </div>
-              <div class="register-grid hidden" id="account-create-form">
-                <label class="field"><span>Account Name</span><input id="reg-name" type="text"></label>
-                <label class="field"><span>Email</span><input id="reg-email" type="email"></label>
-                <label class="field"><span>Password</span><input id="reg-password" type="password"></label>
-                <label class="field"><span>Confirm Password</span><input id="reg-confirm" type="password"></label>
-                <button class="btn primary" type="button" data-action="register-account">Add Account</button>
+              <div class="button-row">
+                <button class="btn primary" type="button" data-action="save-admin-settings">Save Permissions</button>
               </div>
-              <p class="auth-status" id="register-status"></p>
+              <div class="admin-account-frame panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Merchant Accounts</p>
+                    <h3 id="admin-account-count">0 accounts</h3>
+                  </div>
+                  <button class="btn ghost" type="button" data-action="reload-admin-accounts">Refresh</button>
+                </div>
+                <div class="admin-account-list" id="admin-account-list"></div>
+              </div>
+              <h3>Add Account</h3>
+              <div class="register-grid" id="admin-account-create-form">
+                <label class="field"><span>Account Name</span><input id="admin-reg-name" type="text"></label>
+                <label class="field"><span>Email</span><input id="admin-reg-email" type="email"></label>
+                <label class="field"><span>Password</span><input id="admin-reg-password" type="password"></label>
+                <label class="field"><span>Confirm Password</span><input id="admin-reg-confirm" type="password"></label>
+                <button class="btn primary" type="button" data-action="register-admin-account">Add Account</button>
+              </div>
+              <p class="auth-status" id="admin-register-status"></p>
             </section>
 
             <section class="settings-section" id="settings-display">
@@ -832,9 +852,12 @@
                 <span>Theme</span>
                 <select id="set-active-theme">
                   <option value="crystal_bloom">Crystal Bloom</option>
+                  <option value="lilac_glass">Lilac Glass</option>
                   <option value="pearl_mist">Pearl Mist</option>
                   <option value="aurora_glass">Aurora Glass</option>
+                  <option value="mint_prism">Mint Prism</option>
                   <option value="midnight_velvet">Midnight Velvet</option>
+                  <option value="rose_quartz">Rose Quartz</option>
                   <option value="deep_space">Deep Space</option>
                   <option value="warm_terminal">Warm Terminal</option>
                   <option value="midnight_teal">Midnight Teal</option>
@@ -1028,7 +1051,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/theme-engine.js?v=7"></script>
+  <script src="/theme-engine.js?v=8"></script>
   <script src="/qris-frame.js?v=7"></script>
   <script src="/app.js?v=10"></script>
   <script src="/qris-frame-admin.js?v=7"></script>

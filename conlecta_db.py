@@ -591,15 +591,6 @@ def create_account(account_id, account_name, email, password, merchant_id=None, 
                 """,
                 (account_id, account_name, email, password, account_name, "logged_out", mid, admin_flag),
             )
-            if admin_flag:
-                cur.execute(
-                    "UPDATE conlecta_account SET admin_account=FALSE, updated_at=CURRENT_TIMESTAMP WHERE merchant_id=%s AND account_id<>%s",
-                    (mid, str(account_id or "")),
-                )
-                cur.execute(
-                    "UPDATE conlecta_account SET admin_account=TRUE, updated_at=CURRENT_TIMESTAMP WHERE account_id=%s",
-                    (str(account_id or ""),),
-                )
         conn.commit()
 
 
@@ -677,15 +668,21 @@ def update_account(account_id, account_name=None, email=None, password=None, mer
                 """,
                 (name, mail, pwd, acc.get("username") or name, mid, admin, account_id),
             )
-            if admin:
-                cur.execute(
-                    "UPDATE conlecta_account SET admin_account=FALSE, updated_at=CURRENT_TIMESTAMP WHERE merchant_id=%s AND account_id<>%s",
-                    (mid, str(account_id or "")),
-                )
-                cur.execute(
-                    "UPDATE conlecta_account SET admin_account=TRUE, updated_at=CURRENT_TIMESTAMP WHERE account_id=%s",
-                    (str(account_id or ""),),
-                )
+        conn.commit()
+    return True
+
+
+def set_account_admin_flag(account_id, admin_account=False):
+    acc = find_account_by_id(account_id)
+    if not acc:
+        return False
+    admin = normalize_admin_account(admin_account)
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE conlecta_account SET admin_account=%s, updated_at=CURRENT_TIMESTAMP WHERE account_id=%s",
+                (admin, str(account_id or "")),
+            )
         conn.commit()
     return True
 

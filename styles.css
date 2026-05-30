@@ -700,20 +700,38 @@ button {
   display: none !important;
 }
 
+.can-crud-stock-only,
+.can-view-analytics-only {
+  display: none !important;
+}
+
 body.is-merchant-admin .merchant-admin-only.nav-btn,
-body.is-merchant-admin .merchant-admin-only.btn,
-body.is-merchant-admin .merchant-admin-only.seg,
-body.is-merchant-admin .merchant-admin-only.button-row {
+body.is-merchant-admin .merchant-admin-only.tab {
   display: inline-flex;
 }
 
-body.is-merchant-admin .merchant-admin-only.button-row {
+body.can-crud-stock .can-crud-stock-only.nav-btn,
+body.can-crud-stock .can-crud-stock-only.btn,
+body.can-crud-stock .can-crud-stock-only.seg,
+body.can-crud-stock .can-crud-stock-only.button-row {
+  display: inline-flex;
+}
+
+body.can-crud-stock .can-crud-stock-only.button-row {
   display: flex;
+}
+
+body.can-view-analytics .can-view-analytics-only.nav-btn {
+  display: inline-flex;
 }
 
 body.is-cashier-only .stock-readonly-note {
   display: block;
   margin-top: 12px;
+}
+
+body.can-crud-stock .stock-readonly-note {
+  display: none;
 }
 
 .stock-readonly-note {
@@ -722,7 +740,10 @@ body.is-cashier-only .stock-readonly-note {
 
 body.is-cashier-only #stock-form input,
 body.is-cashier-only #stock-form select,
-body.is-cashier-only #stock-form label.image-picker {
+body.is-cashier-only #stock-form label.image-picker,
+body.is-merchant-admin:not(.can-crud-stock) #stock-form input,
+body.is-merchant-admin:not(.can-crud-stock) #stock-form select,
+body.is-merchant-admin:not(.can-crud-stock) #stock-form label.image-picker {
   pointer-events: none;
   opacity: 0.72;
 }
@@ -1479,6 +1500,57 @@ textarea:focus {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.admin-permission-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin: 18px 0;
+}
+
+.admin-account-frame {
+  margin: 22px 0;
+}
+
+.admin-account-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-account-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-account-row strong,
+.admin-account-row span {
+  display: block;
+}
+
+.admin-account-row small {
+  color: var(--text2);
+}
+
+.admin-account-row .check-row {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .admin-account-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-account-row .check-row {
+    justify-self: start;
+  }
 }
 
 .stock-form,

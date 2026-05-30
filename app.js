@@ -53,6 +53,7 @@ const state = {
   systemTransactions: [],
   systemTxnProducts: [],
   selectedSystemTxnId: "",
+  merchantAccounts: [],
 };
 
 const qrChannel = "BroadcastChannel" in window ? new BroadcastChannel("conlecta-qr") : null;
@@ -443,6 +444,22 @@ function isMerchantAdmin() {
   return Boolean(state.auth?.admin_account);
 }
 
+function adminAllowStockCrud() {
+  return state.settings?.admin_allow_stock_crud !== false;
+}
+
+function adminAllowAnalytics() {
+  return state.settings?.admin_allow_analytics !== false;
+}
+
+function canCrudStock() {
+  return isMerchantAdmin() && adminAllowStockCrud();
+}
+
+function canViewAnalytics() {
+  return isMerchantAdmin() && adminAllowAnalytics();
+}
+
 function authRoleLabel() {
   if (isSystemAdmin()) return "Admin";
   if (isMerchantAdmin()) return "Merchant Admin";
@@ -454,7 +471,22 @@ function applyRolePermissions() {
   const systemMode = isSystemAdmin();
   const admin = isMerchantAdmin();
   document.body.classList.toggle("is-merchant-admin", loggedIn && admin && !systemMode);
-  document.body.classList.toggle("is-cashier-only", loggedIn && !admin && !systemMode);
+  document.body.classList.toggle("is-cashier-only", loggedIn && !canCrudStock() && !systemMode);
+  document.body.classList.toggle("can-crud-stock", loggedIn && canCrudStock() && !systemMode);
+  document.body.classList.toggle("can-view-analytics", loggedIn && canViewAnalytics() && !systemMode);
+}
+
+function assertCanCrudStock(action = "mengubah stock") {
+  if (isSystemAdmin()) return false;
+  if (!isMerchantAdmin()) {
+    showToast(`Hanya merchant admin yang bisa ${action}.`, "error");
+    return false;
+  }
+  if (!adminAllowStockCrud()) {
+    showToast("CRUD stock belum diaktifkan di Admin Setting.", "error");
+    return false;
+  }
+  return true;
 }
 
 function assertMerchantAdmin(action = "melakukan aksi ini") {
@@ -784,7 +816,7 @@ function applyRouteAfterBootstrap() {
   const requestedPage = ROUTE_PAGE_MAP[path];
   const page = requestedPage
     && !(path === "/system-admin" && !isSystemAdmin())
-    && !(requestedPage === "analytics" && !isMerchantAdmin())
+    && !(requestedPage === "analytics" && !canViewAnalytics())
     ? requestedPage
     : defaultAuthedPage();
   showPage(page, { updateRoute: false });
@@ -1678,8 +1710,8 @@ async function logout() {
 function showPage(name, { sync = true, updateRoute = true } = {}) {
   if (!name) return;
   if (isSystemAdmin() && name !== "system-admin") name = "system-admin";
-  if (!isSystemAdmin() && !isMerchantAdmin() && name === "analytics") {
-    showToast("Analytics hanya untuk merchant admin.", "error");
+  if (!isSystemAdmin() && !canViewAnalytics() && name === "analytics") {
+    showToast("Analytics hanya untuk merchant admin dengan permission aktif.", "error");
     name = "cashier";
   }
   $$(".page").forEach((page) => page.classList.toggle("active", page.id === `page-${name}`));
@@ -2707,7 +2739,7 @@ function resetStockForm() {
 
 async function saveStockForm(event) {
   event.preventDefault();
-  if (!assertMerchantAdmin("mengubah stock")) return;
+  if (!assertCanCrudStock("mengubah stock")) return;
   const name = $("#stock-name").value.trim();
   if (!name) {
     showToast("Nama item tidak boleh kosong", "error");
@@ -2734,7 +2766,7 @@ async function saveStockForm(event) {
 }
 
 async function deleteSelectedStock() {
-  if (!assertMerchantAdmin("menghapus stock")) return;
+  if (!assertCanCrudStock("menghapus stock")) return;
   const index = selectedStockIndex();
   if (index < 0) {
     showToast("Pilih item dulu", "error");
@@ -2755,7 +2787,7 @@ async function deleteSelectedStock() {
 
 async function setStockTab(tab, { loading = true } = {}) {
   let nextTab = ["items", "vendors", "invoice"].includes(tab) ? tab : "items";
-  if (!isMerchantAdmin()) nextTab = "items";
+  if (!canCrudStock()) nextTab = "items";
   state.stockTab = nextTab;
   $$(".stock-tabs .seg").forEach((btn) => btn.classList.toggle("active", btn.dataset.stockTab === nextTab));
   $$(".stock-section").forEach((section) => section.classList.toggle("active", section.id === `stock-section-${nextTab}`));
@@ -2764,7 +2796,7 @@ async function setStockTab(tab, { loading = true } = {}) {
 }
 
 async function addVendor() {
-  if (!assertMerchantAdmin("menambah vendor")) return;
+  if (!assertCanCrudStock("menambah vendor")) return;
   const name = $("#vendor-name").value.trim();
   if (!name) {
     showToast("Vendor name kosong", "error");
@@ -2783,7 +2815,7 @@ async function addVendor() {
 }
 
 async function deleteVendor(vendorId) {
-  if (!assertMerchantAdmin("menghapus vendor")) return;
+  if (!assertCanCrudStock("menghapus vendor")) return;
   const result = await api("/api/vendor/delete", { method: "POST", body: { vendor_id: vendorId } });
   state.vendors = result.vendors || [];
   state.products = state.products.map((item) => String(item.vendor_id || "") === String(vendorId) ? { ...item, vendor_id: "" } : item);
@@ -3382,8 +3414,6 @@ function renderSettings() {
   $("#set-shop-postcode").value = s.shop_postcode || "";
   $("#set-customer-prefix").value = s.default_customer_prefix || "Conlecta Customer";
   if ($("#set-admin-password")) $("#set-admin-password").value = "";
-  if ($("#account-merchant-name")) $("#account-merchant-name").textContent = s.merchant_name || s.shop_name || "Conlecta";
-  if ($("#account-merchant-id")) $("#account-merchant-id").textContent = s.merchant_id || "conlecta";
   $("#set-active-theme").value = deviceThemeId() || s.active_theme || DEFAULT_THEME;
   const marquee = s.marquee_msgs || [];
   $$(".marquee-input").forEach((input, index) => { input.value = marquee[index] || ""; });
@@ -3391,7 +3421,7 @@ function renderSettings() {
   renderPaymentPreview();
   renderVideoAssets();
   renderEmailTemplate();
-  renderAccountGate();
+  renderAdminSettings();
 }
 
 function collectSettings() {
@@ -3573,8 +3603,136 @@ async function saveSettings() {
 }
 
 function setSettingsTab(tab) {
-  $$(".tab").forEach((btn) => btn.classList.toggle("active", btn.dataset.settingsTab === tab));
+  $$(".settings-tabs .tab").forEach((btn) => btn.classList.toggle("active", btn.dataset.settingsTab === tab));
   $$(".settings-section").forEach((section) => section.classList.toggle("active", section.id === `settings-${tab}`));
+  if (tab === "admin" && isMerchantAdmin()) {
+    loadMerchantAdminData().catch((err) => showToast(err.message, "error"));
+  }
+}
+
+function renderAdminSettings() {
+  const s = state.settings || {};
+  if ($("#admin-merchant-name")) $("#admin-merchant-name").textContent = s.merchant_name || s.shop_name || "Conlecta";
+  if ($("#admin-merchant-id")) $("#admin-merchant-id").textContent = s.merchant_id || "conlecta";
+  if ($("#admin-allow-stock")) $("#admin-allow-stock").checked = adminAllowStockCrud();
+  if ($("#admin-allow-analytics")) $("#admin-allow-analytics").checked = adminAllowAnalytics();
+  renderMerchantAccountList();
+}
+
+function renderMerchantAccountList() {
+  const list = $("#admin-account-list");
+  if (!list) return;
+  const accounts = Array.isArray(state.merchantAccounts) ? state.merchantAccounts : [];
+  if ($("#admin-account-count")) {
+    $("#admin-account-count").textContent = `${accounts.length} account${accounts.length === 1 ? "" : "s"}`;
+  }
+  if (!accounts.length) {
+    list.innerHTML = `<div class="empty-state">Belum ada account untuk merchant ini.</div>`;
+    return;
+  }
+  list.innerHTML = accounts.map((account) => {
+    const self = String(account.id) === String(state.auth?.id || "");
+    return `
+      <div class="admin-account-row">
+        <div>
+          <strong>${escapeHtml(account.name || account.username || "Account")}</strong>
+          <small>${escapeHtml(account.id || "")}${self ? " · you" : ""}</small>
+        </div>
+        <div>
+          <span>${escapeHtml(account.email || "-")}</span>
+        </div>
+        <label class="check-row inline-check">
+          <input type="checkbox" data-action="toggle-merchant-admin" data-account-id="${escapeAttr(account.id)}" ${account.admin_account ? "checked" : ""}>
+          <span>Merchant Admin</span>
+        </label>
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadMerchantAdminData() {
+  if (!isMerchantAdmin()) return;
+  const result = await api("/api/merchant-admin/accounts", { loading: false });
+  state.merchantAccounts = Array.isArray(result.accounts) ? result.accounts : [];
+  if (Object.prototype.hasOwnProperty.call(result, "admin_allow_stock_crud")) {
+    state.settings = {
+      ...(state.settings || {}),
+      admin_allow_stock_crud: Boolean(result.admin_allow_stock_crud),
+    };
+  }
+  if (Object.prototype.hasOwnProperty.call(result, "admin_allow_analytics")) {
+    state.settings = {
+      ...(state.settings || {}),
+      admin_allow_analytics: Boolean(result.admin_allow_analytics),
+    };
+  }
+  if (result.merchant_id) {
+    state.settings = { ...(state.settings || {}), merchant_id: result.merchant_id };
+  }
+  if (result.merchant_name) {
+    state.settings = { ...(state.settings || {}), merchant_name: result.merchant_name };
+  }
+  applyRolePermissions();
+  renderAdminSettings();
+}
+
+async function saveAdminSettings() {
+  if (!assertMerchantAdmin("mengubah Admin Setting")) return;
+  const result = await api("/api/merchant-admin/settings", {
+    method: "POST",
+    body: {
+      admin_allow_stock_crud: Boolean($("#admin-allow-stock")?.checked),
+      admin_allow_analytics: Boolean($("#admin-allow-analytics")?.checked),
+    },
+  });
+  if (result.settings) state.settings = result.settings;
+  applyRolePermissions();
+  renderAdminSettings();
+  showToast("Admin permissions saved");
+}
+
+async function toggleMerchantAccountAdmin(accountId, adminAccount) {
+  if (!assertMerchantAdmin("mengubah role admin")) return;
+  const result = await api("/api/merchant-admin/account/toggle-admin", {
+    method: "POST",
+    body: {
+      account_id: accountId,
+      admin_account: Boolean(adminAccount),
+    },
+  });
+  state.merchantAccounts = Array.isArray(result.accounts) ? result.accounts : [];
+  if (String(accountId) === String(state.auth?.id || "")) {
+    state.auth = { ...(state.auth || {}), admin_account: Boolean(adminAccount) };
+    applyRolePermissions();
+  }
+  renderMerchantAccountList();
+  showToast(result.message || "Admin role updated");
+}
+
+async function registerAdminAccount() {
+  if (!assertMerchantAdmin("menambah account")) return;
+  const password = $("#admin-reg-password")?.value || "";
+  const confirm = $("#admin-reg-confirm")?.value || "";
+  if (password !== confirm) {
+    if ($("#admin-register-status")) $("#admin-register-status").textContent = "Password confirmation tidak sama.";
+    return;
+  }
+  if ($("#admin-register-status")) $("#admin-register-status").textContent = "Menyimpan account...";
+  const result = await api("/api/account/register", {
+    method: "POST",
+    body: {
+      name: $("#admin-reg-name")?.value.trim(),
+      email: $("#admin-reg-email")?.value.trim(),
+      password,
+    },
+  });
+  state.merchantAccounts = Array.isArray(result.accounts) ? result.accounts : state.merchantAccounts;
+  if ($("#admin-register-status")) $("#admin-register-status").textContent = result.message || "Account berhasil dibuat.";
+  if ($("#admin-reg-name")) $("#admin-reg-name").value = "";
+  if ($("#admin-reg-email")) $("#admin-reg-email").value = "";
+  if ($("#admin-reg-password")) $("#admin-reg-password").value = "";
+  if ($("#admin-reg-confirm")) $("#admin-reg-confirm").value = "";
+  renderMerchantAccountList();
 }
 
 async function uploadBrandLogo(file) {
@@ -3600,59 +3758,6 @@ async function checkQrisEnv() {
   $("#qris-env-status").textContent = "Checking...";
   const result = await api("/api/qris/env");
   $("#qris-env-status").textContent = `${result.environment}: ${result.detail}`;
-}
-
-async function unlockAccountForm() {
-  const adminPassword = $("#reg-admin-password").value;
-  $("#register-status").textContent = "Memverifikasi admin...";
-  await withLoading("Memverifikasi admin...", async () => {
-    await api("/api/admin/verify", { method: "POST", body: { admin_password: adminPassword } });
-  });
-  state.accountAdminPassword = adminPassword;
-  state.accountFormUnlocked = true;
-  renderAccountGate();
-  $("#register-status").textContent = "Form account baru sudah terbuka.";
-}
-
-function renderAccountGate() {
-  const unlocked = Boolean(state.accountFormUnlocked);
-  const adminInput = $("#reg-admin-password");
-  const unlockButton = $("#account-gate [data-action='unlock-account-form']");
-  $("#account-create-form").classList.toggle("hidden", !unlocked);
-  $("#account-gate").classList.toggle("is-unlocked", unlocked);
-  if (adminInput) adminInput.disabled = unlocked;
-  if (unlockButton) {
-    unlockButton.disabled = unlocked;
-    unlockButton.textContent = unlocked ? "Unlocked" : "Unlock Form";
-  }
-}
-
-async function registerAccount() {
-  const password = $("#reg-password").value;
-  const confirm = $("#reg-confirm").value;
-  if (password !== confirm) {
-    $("#register-status").textContent = "Password confirmation tidak sama.";
-    return;
-  }
-  $("#register-status").textContent = "Menyimpan account...";
-  const result = await api("/api/account/register", {
-    method: "POST",
-    body: {
-      admin_password: state.accountAdminPassword || $("#reg-admin-password").value,
-      name: $("#reg-name").value.trim(),
-      email: $("#reg-email").value.trim(),
-      password,
-    },
-  });
-  $("#register-status").textContent = result.message || "Account berhasil dibuat.";
-  $("#reg-name").value = "";
-  $("#reg-email").value = "";
-  $("#reg-password").value = "";
-  $("#reg-confirm").value = "";
-  $("#reg-admin-password").value = "";
-  state.accountAdminPassword = "";
-  state.accountFormUnlocked = false;
-  renderAccountGate();
 }
 
 function renderLogs() {
@@ -4408,12 +4513,24 @@ async function handleAction(action, target) {
       await saveSystemTransaction();
     } else if (action === "save-settings") {
       await saveSettings();
+    } else if (action === "save-admin-settings") {
+      await saveAdminSettings();
+    } else if (action === "reload-admin-accounts") {
+      await loadMerchantAdminData();
+      showToast("Accounts refreshed");
+    } else if (action === "register-admin-account") {
+      await registerAdminAccount();
+    } else if (action === "toggle-merchant-admin") {
+      const accountId = target.dataset.accountId || "";
+      const nextValue = Boolean(target.checked);
+      try {
+        await toggleMerchantAccountAdmin(accountId, nextValue);
+      } catch (err) {
+        target.checked = !nextValue;
+        throw err;
+      }
     } else if (action === "check-qris-env") {
       await checkQrisEnv();
-    } else if (action === "unlock-account-form") {
-      await unlockAccountForm();
-    } else if (action === "register-account") {
-      await registerAccount();
     } else if (action === "pick-brand-logo") {
       $("#brand-logo-file").click();
     } else if (action === "pick-payment-images") {
