@@ -707,14 +707,53 @@ function applyVideoPlaylist(forceIndex = null, options = {}) {
   video.play?.().catch(() => null);
 }
 
+function videoMediaBasename(value) {
+  const text = String(value || "").split("?")[0];
+  try {
+    return decodeURIComponent(text.split("/").pop() || "").toLowerCase();
+  } catch {
+    return text.split("/").pop()?.toLowerCase() || "";
+  }
+}
+
+function videoMediaKeysMatch(a, b) {
+  const left = String(a || "").split("?")[0].toLowerCase();
+  const right = String(b || "").split("?")[0].toLowerCase();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftBase = videoMediaBasename(left);
+  const rightBase = videoMediaBasename(right);
+  return Boolean(leftBase && rightBase && leftBase === rightBase);
+}
+
 function playVideoImmediately(urlOrPath) {
+  const raw = String(urlOrPath || "").trim();
+  if (!raw) return;
+  setupVideoPlaylistPlayer();
   const playlist = qrState.settings?.video_playlist_urls || [];
-  const targetKey = String(urlOrPath || "").split("?")[0].toLowerCase();
-  const idx = playlist.findIndex((entry) => {
-    const entryKey = String(entry || "").split("?")[0].toLowerCase();
-    return entryKey === targetKey || entryKey.endsWith(targetKey.split("/").pop() || "");
-  });
-  applyVideoPlaylist(idx >= 0 ? idx : 0, { forceRestart: true });
+  const idx = playlist.findIndex((entry) => videoMediaKeysMatch(entry, raw));
+  if (idx >= 0) {
+    applyVideoPlaylist(idx, { forceRestart: true });
+    return;
+  }
+
+  const video = $("#display-video");
+  if (!video) return;
+  let src = raw;
+  if (!/^https?:\/\//i.test(src) && !src.startsWith("/")) {
+    const match = playlist.find((entry) => videoMediaKeysMatch(entry, raw));
+    if (match) src = match;
+  }
+  video.loop = playlist.length <= 1;
+  const currentSrc = video.currentSrc || video.getAttribute("src") || "";
+  const sameSrc = videoMediaKeysMatch(currentSrc, src);
+  if (sameSrc) {
+    video.currentTime = 0;
+  } else {
+    video.src = src;
+    video.load();
+  }
+  video.play?.().catch(() => null);
 }
 
 let lastPaymentLogoSignature = "";

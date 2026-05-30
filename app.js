@@ -3648,7 +3648,8 @@ function userUploadedVideos() {
 }
 
 function hasUserUploadedVideo() {
-  return userUploadedVideos().length > 0;
+  if (userUploadedVideos().length > 0) return true;
+  return userPlaylistEntries().length > 0;
 }
 
 function isDisableDefaultSplash() {
@@ -3678,11 +3679,13 @@ function renderVideoSplashToggle() {
   const wrap = $("#video-disable-splash-wrap");
   if (!input) return;
   const hasUpload = hasUserUploadedVideo();
-  input.checked = isDisableDefaultSplash();
-  input.disabled = !hasUpload;
+  const disabled = isDisableDefaultSplash();
+  input.checked = disabled;
+  // Require an upload before enabling disable; always allow turning it back off.
+  input.disabled = !disabled && !hasUpload;
   if (wrap) {
-    wrap.title = hasUpload ? "" : "Upload a video first";
-    wrap.classList.toggle("is-disabled", !hasUpload);
+    wrap.title = (!disabled && !hasUpload) ? "Upload a video first" : "";
+    wrap.classList.toggle("is-disabled", input.disabled);
   }
 }
 
@@ -3723,6 +3726,14 @@ function videoPlaylistEntries() {
     : [];
 }
 
+function syncVideoPlaylistUrls() {
+  const entries = Array.isArray(state.settings?.video_playlist) ? state.settings.video_playlist : [];
+  state.settings.video_playlist_urls = entries.map((entry) => {
+    const video = resolveVideoAsset(entry);
+    return video.url || entry;
+  }).filter(Boolean);
+}
+
 function applyVideoPlaylistState(entries) {
   const list = Array.isArray(entries)
     ? entries.map((entry) => resolvePlaylistEntry(entry)).filter(Boolean)
@@ -3736,9 +3747,7 @@ function applyVideoPlaylistState(entries) {
     deduped.push(entry);
   });
   state.settings.video_playlist = deduped;
-  if (Array.isArray(state.settings.video_playlist_urls)) {
-    delete state.settings.video_playlist_urls;
-  }
+  syncVideoPlaylistUrls();
 }
 
 async function persistVideoPlaylist(entries = videoPlaylistEntries(), extra = {}) {
@@ -3747,8 +3756,12 @@ async function persistVideoPlaylist(entries = videoPlaylistEntries(), extra = {}
     body: { playlist: entries, ...extra },
   });
   if (result.settings) {
+    const disableDefaultSplash = result.settings.video_disable_default_splash;
     state.settings = result.settings;
     applyVideoPlaylistState(result.settings.video_playlist || []);
+    if (Object.prototype.hasOwnProperty.call(result.settings, "video_disable_default_splash")) {
+      state.settings.video_disable_default_splash = disableDefaultSplash;
+    }
   } else if (result.playlist) {
     applyVideoPlaylistState(result.playlist);
   }
@@ -3792,10 +3805,29 @@ function moveVideoInPlaylist(url, path, direction) {
 async function playVideoNow(target) {
   const url = target?.dataset?.url || target;
   const path = target?.dataset?.path || url;
-  const video = resolveVideoAsset(path || url);
-  const playTarget = video.url || video.path || path || url;
-  publishDisplayState({ videoPlayNow: playTarget });
-  showToast("Video diputar di QR Display");
+  const refs = [path, url].filter(Boolean);
+  const list = videoPlaylistEntries();
+  const index = list.findIndex((entry) => refs.some((ref) => videoKeysMatch(entry, ref)));
+  let next;
+  if (index >= 0) {
+    const entry = resolvePlaylistEntry(list[index]);
+    next = [entry, ...list.filter((_, i) => i !== index).map(resolvePlaylistEntry)];
+  } else {
+    next = [resolvePlaylistEntry(path || url), ...list.map(resolvePlaylistEntry)];
+  }
+  applyVideoPlaylistState(next);
+  renderVideoAssets();
+  try {
+    const result = await persistVideoPlaylist(next);
+    const playTarget = result.settings?.video_playlist_urls?.[0]
+      || resolveVideoAsset(path || url).url
+      || path
+      || url;
+    publishDisplayState({ videoPlayNow: playTarget });
+    showToast("Video diputar di QR Display");
+  } catch (err) {
+    showToast(err.message, "error");
+  }
 }
 
 async function removeVideo(target) {
@@ -4675,6 +4707,10 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   if (epoch !== authEpoch) return;
   if (bootProgress) updateBootLoading("catalog", 28);
   state.settings = result.settings || {};
+  applyVideoPlaylistState(state.settings.video_playlist || []);
+  if (Object.prototype.hasOwnProperty.call(result.settings || {}, "video_disable_default_splash")) {
+    state.settings.video_disable_default_splash = result.settings.video_disable_default_splash;
+  }
   if (Object.prototype.hasOwnProperty.call(result, "auth")) state.auth = result.auth || null;
   if (state.auth) {
     lastActivityTs = authActivityMs(state.auth) || lastActivityTs || Date.now();

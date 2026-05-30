@@ -5507,6 +5507,8 @@ def settings_payload(settings=None, merchant_id=None, device_settings=None):
     settings["brand_logo_url"] = merchant_brand_logo_url(settings, mid)
     settings["payment_image_urls"] = [public_asset_url(path) for path in configured_payment_image_paths(settings)]
     settings["payment_image_urls"] = [url for url in settings["payment_image_urls"] if url]
+    if device_settings is not None:
+        settings["video_disable_default_splash"] = bool(device_settings.get("video_disable_default_splash"))
     settings["video_playlist_urls"] = video_playlist_urls(settings)
     settings["qris_frame"] = resolve_qris_frame_config(mid, load_state())
     settings["qris_vps_env_var"] = "CONLECTA_QRIS_VPS_URL"
