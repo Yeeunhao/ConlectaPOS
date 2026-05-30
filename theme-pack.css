@@ -1031,19 +1031,23 @@ body[data-theme="pearl_mist"] .loading-overlay {
   background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.45), rgba(200, 188, 255, 0.7));
 }
 
-/* Loading ring theme-aware colors */
-body[data-theme="pearl_mist"] .loading-ring {
-  border-color: rgba(124, 92, 255, 0.18);
-  border-top-color: var(--purple);
-  border-right-color: var(--gold);
-}
-
-body[data-theme="pearl_mist"] .loading-card strong {
+body[data-theme="pearl_mist"] .loading-logo-text,
+body[data-theme="pearl_mist"] .loading-percent-row,
+body[data-theme="pearl_mist"] .loading-percent-row strong {
   color: var(--text);
 }
 
-body[data-theme="pearl_mist"] .loading-card span {
+body[data-theme="pearl_mist"] .loading-subtitle,
+body[data-theme="pearl_mist"] .loading-footer {
   color: var(--text2);
+}
+
+body[data-theme="pearl_mist"] .loading-progress {
+  background: rgba(120, 92, 200, 0.12);
+}
+
+body[data-theme="pearl_mist"] .loading-progress-fill {
+  background: linear-gradient(90deg, var(--purple), #9b87ff, var(--gold));
 }
 
 /* ============================================================

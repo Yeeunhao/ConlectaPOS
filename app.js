@@ -105,6 +105,17 @@ let activityHeartbeatPending = false;
 let dismissQrLockedUntil = 0;
 let qrDismissInFlight = false;
 let loadingDepth = 0;
+let loadingProgressTimer = null;
+let loadingProgressValue = 0;
+let loadingBootMode = false;
+
+const BOOT_LOADING_STEPS = [
+  { key: "session", label: "Mengecek session user..." },
+  { key: "catalog", label: "Loading item from Database..." },
+  { key: "vendor", label: "Memuat vendor dari database..." },
+  { key: "history", label: "Memuat history terbaru..." },
+  { key: "ready", label: "Mohon tunggu..." },
+];
 let displayPublishQueued = false;
 let hasBootstrapped = false;
 let authEpoch = 0;
@@ -554,11 +565,97 @@ function showToast(message, type = "success", duration = 3200) {
   toastTimer = setTimeout(() => toast.classList.remove("show"), duration);
 }
 
-function showLoading(message = "Mohon tunggu...") {
+function bootStepsSnapshot(activeKey = "") {
+  const activeIndex = BOOT_LOADING_STEPS.findIndex((step) => step.key === activeKey);
+  return BOOT_LOADING_STEPS.map((step, index) => {
+    let status = "pending";
+    if (activeIndex >= 0) {
+      if (index < activeIndex) status = "done";
+      else if (index === activeIndex) status = "active";
+    }
+    return { label: step.label, status };
+  });
+}
+
+function renderLoadingSteps(steps = []) {
+  const container = $("#loading-boot-steps");
+  if (!container) return;
+  if (!steps.length) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = steps.map((step) => {
+    const status = step.status || "pending";
+    const icon = status === "done"
+      ? "✓"
+      : status === "active"
+        ? '<span class="spinner">⟳</span>'
+        : "·";
+    return `<div class="loading-line ${status}"><span>${icon}</span><span>${escapeHtml(step.label)}</span></div>`;
+  }).join("");
+}
+
+function setLoadingProgress(percent = 0) {
+  const pct = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  const fill = $("#loading-progress-fill");
+  const label = $("#loading-percent");
+  if (fill) fill.style.width = `${pct}%`;
+  if (label) label.textContent = `${pct}%`;
+  loadingProgressValue = pct;
+}
+
+function stopLoadingProgressAnimation() {
+  if (loadingProgressTimer) {
+    clearInterval(loadingProgressTimer);
+    loadingProgressTimer = null;
+  }
+}
+
+function startLoadingProgressAnimation() {
+  stopLoadingProgressAnimation();
+  loadingProgressValue = Math.max(loadingProgressValue, 8);
+  setLoadingProgress(loadingProgressValue);
+  loadingProgressTimer = setInterval(() => {
+    if (loadingProgressValue >= 92) return;
+    loadingProgressValue = Math.min(92, loadingProgressValue + Math.random() * 6 + 2);
+    setLoadingProgress(loadingProgressValue);
+  }, 420);
+}
+
+function paintLoadingUi(message = "Mohon tunggu...", { boot = false, steps = [], percent = null } = {}) {
+  const subtitle = $("#loading-subtitle");
+  if (subtitle) subtitle.textContent = message;
+  if (boot) {
+    loadingBootMode = true;
+    renderLoadingSteps(steps.length ? steps : [{ label: message, status: "active" }]);
+    if (percent !== null) setLoadingProgress(percent);
+    stopLoadingProgressAnimation();
+    return;
+  }
+  loadingBootMode = false;
+  renderLoadingSteps([{ label: message, status: "active" }]);
+  if (percent !== null) {
+    setLoadingProgress(percent);
+    stopLoadingProgressAnimation();
+  } else {
+    startLoadingProgressAnimation();
+  }
+}
+
+function updateBootLoading(activeKey, percent) {
+  const step = BOOT_LOADING_STEPS.find((entry) => entry.key === activeKey);
+  paintLoadingUi(step?.label || "Mohon tunggu...", {
+    boot: true,
+    steps: bootStepsSnapshot(activeKey),
+    percent,
+  });
+}
+
+function showLoading(message = "Mohon tunggu...", options = {}) {
   loadingDepth += 1;
   const overlay = $("#loading-overlay");
   if (!overlay) return;
-  $("#loading-message").textContent = message;
+  paintLoadingUi(message, options);
   overlay.hidden = false;
   requestAnimationFrame(() => overlay.classList.add("show"));
 }
@@ -568,9 +665,17 @@ function hideLoading() {
   if (loadingDepth > 0) return;
   const overlay = $("#loading-overlay");
   if (!overlay) return;
+  if (loadingBootMode) setLoadingProgress(100);
+  else setLoadingProgress(Math.max(loadingProgressValue, 100));
+  stopLoadingProgressAnimation();
   overlay.classList.remove("show");
   setTimeout(() => {
-    if (loadingDepth === 0) overlay.hidden = true;
+    if (loadingDepth === 0) {
+      overlay.hidden = true;
+      loadingBootMode = false;
+      setLoadingProgress(0);
+      renderLoadingSteps([]);
+    }
   }, 180);
 }
 
@@ -4445,10 +4550,12 @@ async function syncMenuData(name) {
   }
 }
 
-async function reloadBootstrap() {
+async function reloadBootstrap({ bootProgress = false } = {}) {
   const epoch = authEpoch;
-  const result = await api("/api/bootstrap");
+  if (bootProgress) updateBootLoading("session", 8);
+  const result = await api("/api/bootstrap", { loading: false });
   if (epoch !== authEpoch) return;
+  if (bootProgress) updateBootLoading("catalog", 28);
   state.settings = result.settings || {};
   if (Object.prototype.hasOwnProperty.call(result, "auth")) state.auth = result.auth || null;
   if (state.auth) {
@@ -4456,7 +4563,9 @@ async function reloadBootstrap() {
   }
   const bootProducts = Array.isArray(result.products) ? result.products : [];
   state.products = bootProducts;
+  if (bootProgress) updateBootLoading("vendor", 48);
   state.vendors = result.vendors || [];
+  if (bootProgress) updateBootLoading("history", 68);
   state.activeQr = sanitizeActiveQr(result.active_qr || null);
   reconcileCartWithStock();
   state.history = result.history || [];
@@ -4469,6 +4578,7 @@ async function reloadBootstrap() {
   setDisplayEvent(result.display_event || null);
   state.session = result.session || { sales: 0, revenue: 0 };
   state.logs = result.logs || [];
+  if (bootProgress) updateBootLoading("ready", 84);
   applyBrand();
   bootstrapDeviceTheme();
   applyCashierQrisFrame();
@@ -4499,6 +4609,7 @@ async function reloadBootstrap() {
   }
   updateQrActions();
   scheduleDailySessionReset();
+  if (bootProgress) updateBootLoading("ready", 100);
 }
 
 async function handleAction(action, target) {
@@ -5019,7 +5130,7 @@ async function init() {
   preloadQrisFrame();
   updateClock();
   setInterval(updateClock, 1000);
-  await withLoading("Mengecek session user...", reloadBootstrap);
+  await withLoading("Mengecek session user...", () => reloadBootstrap({ bootProgress: true }));
   try {
     if (sessionStorage.getItem("conlecta_fresh_login")) {
       sessionStorage.removeItem("conlecta_fresh_login");

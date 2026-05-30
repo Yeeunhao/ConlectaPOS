@@ -6,8 +6,8 @@
   <title>Conlecta QR Display</title>
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=7">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=8">
   <link rel="stylesheet" href="/theme-pack.css?v=10">
 </head>
 <body class="qr-display-body" data-theme="crystal_bloom">
@@ -75,9 +75,29 @@
   <main class="display-shell">
     <section class="display-stage">
       <div class="display-splash" id="display-splash">
-        <img class="js-display-logo" src="/assets/ConlectaPosLogo.png" alt="">
-        <strong>Conlecta POS</strong>
-        <span>Payment Display</span>
+        <div class="display-splash-card">
+          <div class="display-splash-logo">
+            <img class="js-display-logo" src="/assets/ConlectaPosLogo.png" alt="">
+            <div>
+              <strong>Conlecta POS</strong>
+            </div>
+          </div>
+          <div class="display-splash-subtitle">Payment Display</div>
+          <div class="display-splash-progress-row">
+            <span>Processing</span>
+            <span id="display-splash-percent">0%</span>
+          </div>
+          <div class="display-splash-progress">
+            <div class="display-splash-progress-fill" id="display-splash-progress-fill"></div>
+          </div>
+          <div class="loading-boot" id="display-splash-steps">
+            <div class="loading-line loading"><span class="spinner">⟳</span><span>Mohon tunggu...</span></div>
+          </div>
+          <div class="display-splash-footer">
+            <span class="loading-status-dot" aria-hidden="true"></span>
+            Secure Conlecta access
+          </div>
+        </div>
       </div>
 
       <div class="display-media">
@@ -180,6 +200,6 @@
 
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=7"></script>
-  <script src="/qr-display.js?v=10"></script>
+  <script src="/qr-display.js?v=11"></script>
 </body>
 </html>

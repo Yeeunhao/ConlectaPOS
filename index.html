@@ -6,8 +6,8 @@
   <title>Conlecta Web POS</title>
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=7">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css?v=8">
   <link rel="stylesheet" href="/theme-pack.css?v=10">
 </head>
 <body data-theme="crystal_bloom">
@@ -1043,10 +1043,25 @@
 
   <div class="loading-overlay" id="loading-overlay" hidden>
     <div class="loading-card">
-      <img class="conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="">
-      <div class="loading-ring"></div>
-      <strong id="loading-title">Processing</strong>
-      <span id="loading-message">Mohon tunggu...</span>
+      <div class="loading-logo">
+        <img class="loading-logo-img conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="Conlecta">
+        <div class="loading-logo-text">Conlecta</div>
+      </div>
+      <div class="loading-subtitle" id="loading-subtitle">Mohon tunggu...</div>
+      <div class="loading-progress-wrap">
+        <div class="loading-percent-row">
+          <strong id="loading-title">Processing</strong>
+          <span id="loading-percent">0%</span>
+        </div>
+        <div class="loading-progress">
+          <div class="loading-progress-fill" id="loading-progress-fill"></div>
+        </div>
+      </div>
+      <div class="loading-boot" id="loading-boot-steps" aria-live="polite"></div>
+      <div class="loading-footer">
+        <span class="loading-status-dot" aria-hidden="true"></span>
+        <span id="loading-footer">Secure Conlecta access</span>
+      </div>
     </div>
   </div>
 
@@ -1055,7 +1070,7 @@
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=7"></script>
   <script src="/image-crop.js?v=1"></script>
-  <script src="/app.js?v=13"></script>
+  <script src="/app.js?v=14"></script>
   <script src="/qris-frame-admin.js?v=7"></script>
 </body>
 </html>

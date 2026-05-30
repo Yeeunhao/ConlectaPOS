@@ -1039,7 +1039,44 @@ async function refreshFromServer() {
 
 function startSplash() {
   const splash = $("#display-splash");
-  setTimeout(() => splash.classList.add("hide"), 1700);
+  const fill = $("#display-splash-progress-fill");
+  const percent = $("#display-splash-percent");
+  const steps = $("#display-splash-steps");
+  let value = 0;
+  const bootLines = [
+    { label: "Mengecek session user...", status: "active" },
+  ];
+  const paintSteps = (lines) => {
+    if (!steps) return;
+    steps.innerHTML = lines.map((line) => {
+      const icon = line.status === "done"
+        ? "✓"
+        : line.status === "active"
+          ? '<span class="spinner">⟳</span>'
+          : "·";
+      return `<div class="loading-line ${line.status}"><span>${icon}</span><span>${escapeHtml(line.label)}</span></div>`;
+    }).join("");
+  };
+  paintSteps(bootLines);
+  const timer = setInterval(() => {
+    value = Math.min(100, value + Math.random() * 14 + 6);
+    if (fill) fill.style.width = `${Math.round(value)}%`;
+    if (percent) percent.textContent = `${Math.round(value)}%`;
+    if (value >= 35 && value < 70) {
+      paintSteps([
+        { label: "Mengecek session user...", status: "done" },
+        { label: "Mohon tunggu...", status: "active" },
+      ]);
+    }
+    if (value >= 100) {
+      clearInterval(timer);
+      paintSteps([
+        { label: "Mengecek session user...", status: "done" },
+        { label: "Mohon tunggu...", status: "done" },
+      ]);
+      splash?.classList.add("hide");
+    }
+  }, 120);
   const video = $("#display-video");
   video?.play?.().catch(() => null);
 }
