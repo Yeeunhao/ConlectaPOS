@@ -1377,19 +1377,14 @@ async function loginSubmit(event) {
 async function finishAuthLogin(result) {
   authEpoch += 1;
   clearDisplayLocalCache();
-  state.auth = result.auth;
-  lastActivityTs = authActivityMs(result.auth) || Date.now();
-  lastActivitySyncTs = 0;
-  state.pendingLogin = null;
-  state.systemAdmin = result.system_admin || null;
-  stopOtpTimer();
-  if (result.settings) state.settings = result.settings;
-  resetAuthForms({ clearCredentials: true, updateRoute: false });
-  renderAuth();
-  applyBrand();
-  await withLoading(isSystemAdmin() ? "Memuat dashboard admin..." : "Memuat data kasir...", reloadBootstrap);
-  applyRouteAfterBootstrap();
-  showToast("Login berhasil");
+  const isAdmin = Boolean(result.system_admin || result.auth?.role === "system_admin");
+  const route = routeForPage(isAdmin ? "system-admin" : "cashier");
+  try {
+    sessionStorage.setItem("conlecta_fresh_login", "1");
+  } catch {
+    // Private browsing may block storage; reload still clears in-memory state.
+  }
+  window.location.replace(`${route}?fresh=${Date.now()}`);
 }
 
 async function otpSubmit(event) {
@@ -4113,7 +4108,7 @@ async function reloadBootstrap() {
     lastActivityTs = authActivityMs(state.auth) || lastActivityTs || Date.now();
   }
   const bootProducts = Array.isArray(result.products) ? result.products : [];
-  if (bootProducts.length || !state.products.length) state.products = bootProducts;
+  state.products = bootProducts;
   state.vendors = result.vendors || [];
   state.activeQr = sanitizeActiveQr(result.active_qr || null);
   reconcileCartWithStock();
@@ -4647,6 +4642,14 @@ async function init() {
   updateClock();
   setInterval(updateClock, 1000);
   await withLoading("Mengecek session user...", reloadBootstrap);
+  try {
+    if (sessionStorage.getItem("conlecta_fresh_login")) {
+      sessionStorage.removeItem("conlecta_fresh_login");
+      showToast("Login berhasil");
+    }
+  } catch {
+    // Ignore storage failures on the post-login toast.
+  }
 }
 
 init().catch((err) => showToast(err.message, "error"));
