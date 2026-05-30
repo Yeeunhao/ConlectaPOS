@@ -886,8 +886,12 @@
                   <p class="muted">Per account playlist. Diputar bergantian di QR Display saat standby. Urutan atas = main lebih dulu.</p>
                 </div>
                 <input id="video-upload-file" type="file" accept="video/mp4,video/webm,video/quicktime" hidden>
-                <div class="button-row">
+                <div class="button-row video-playlist-actions">
                   <button class="btn ghost" type="button" data-action="pick-video-upload">Upload Video</button>
+                  <label class="check-row inline-check video-disable-splash-check" id="video-disable-splash-wrap" title="Upload a video first">
+                    <input id="video-disable-default-splash" type="checkbox">
+                    <span>Disable default sample video</span>
+                  </label>
                   <button class="btn ghost" type="button" data-action="scan-assets">Scan Assets</button>
                 </div>
                 <div class="asset-list" id="video-asset-list"></div>
@@ -1070,7 +1074,7 @@
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=8"></script>
   <script src="/image-crop.js?v=2"></script>
-  <script src="/app.js?v=14"></script>
+  <script src="/app.js?v=16"></script>
   <script src="/qris-frame-admin.js?v=9"></script>
 </body>
 </html>

@@ -3554,22 +3554,29 @@ function renderPaymentPreview() {
 function renderVideoAssets() {
   const list = $("#video-asset-list");
   if (!list) return;
+  renderVideoSplashToggle();
   const playlist = videoPlaylistEntries();
-  const playlistKeys = new Set(playlist.map((entry) => videoEntryKey(entry)));
   const videos = state.assets?.videos || [];
-  const byKey = new Map(videos.map((video) => [videoEntryKey(video.url || video.path), video]));
 
   const rows = [];
   playlist.forEach((entry, index) => {
-    const key = videoEntryKey(entry);
-    const video = byKey.get(key) || { name: entry.split("/").pop() || "Video", url: entry, path: entry, size_mb: "" };
-    rows.push(renderVideoPlaylistRow(video, { inPlaylist: true, index, total: playlist.length }));
+    const video = resolveVideoAsset(entry, videos);
+    rows.push(renderVideoPlaylistRow(video, {
+      inPlaylist: true,
+      index,
+      total: playlist.length,
+      canRemove: canRemovePlaylistVideo(video, playlist),
+    }));
   });
 
   videos.forEach((video) => {
-    const key = videoEntryKey(video.url || video.path);
-    if (playlistKeys.has(key)) return;
-    rows.push(renderVideoPlaylistRow(video, { inPlaylist: false, index: -1, total: 0 }));
+    if (isVideoInPlaylist(video, playlist)) return;
+    rows.push(renderVideoPlaylistRow(video, {
+      inPlaylist: false,
+      index: -1,
+      total: 0,
+      canRemove: canRemoveAssetVideo(video, playlist),
+    }));
   });
 
   list.innerHTML = rows.length
@@ -3580,11 +3587,102 @@ function renderVideoAssets() {
 function videoEntryKey(value) {
   const text = String(value || "").trim();
   if (!text) return "";
+  let pathname = text.split("?")[0];
   try {
-    const url = new URL(text, window.location.origin);
-    return decodeURIComponent(url.pathname).toLowerCase();
+    pathname = decodeURIComponent(new URL(pathname, window.location.origin).pathname);
   } catch {
-    return text.split("?")[0].toLowerCase();
+    pathname = pathname.replace(/\\/g, "/");
+  }
+  pathname = pathname.replace(/\\/g, "/").toLowerCase();
+  const assetsIdx = pathname.indexOf("/assets/videos/");
+  if (assetsIdx >= 0) return pathname.slice(assetsIdx);
+  return pathname;
+}
+
+function videoEntryBasename(value) {
+  const key = videoEntryKey(value);
+  return key.split("/").pop() || key;
+}
+
+function videoKeysMatch(a, b) {
+  if (!a || !b) return false;
+  const ka = videoEntryKey(a);
+  const kb = videoEntryKey(b);
+  if (ka && kb && ka === kb) return true;
+  const ba = videoEntryBasename(a);
+  const bb = videoEntryBasename(b);
+  return Boolean(ba && bb && ba === bb);
+}
+
+function isDefaultSplashEntry(value) {
+  const key = videoEntryKey(value);
+  const base = videoEntryBasename(value);
+  return base === "splash.mp4" || key.endsWith("/assets/videos/splash.mp4");
+}
+
+function isVideoInPlaylist(video, playlist) {
+  const refs = [video.path, video.url].filter(Boolean);
+  if (!refs.length) return false;
+  return playlist.some((entry) => refs.some((ref) => videoKeysMatch(ref, entry)));
+}
+
+function resolveVideoAsset(entry, videos = state.assets?.videos || []) {
+  const match = videos.find((video) => videoKeysMatch(video.url || video.path, entry));
+  if (match) return match;
+  return {
+    name: videoEntryBasename(entry) || "Video",
+    url: entry,
+    path: entry,
+    size_mb: "",
+  };
+}
+
+function resolvePlaylistEntry(entry) {
+  const video = resolveVideoAsset(entry);
+  if (video.path && !String(video.path).startsWith("http")) return video.path;
+  return video.path || video.url || entry;
+}
+
+function userUploadedVideos() {
+  return (state.assets?.videos || []).filter((video) => !isDefaultSplashEntry(video.url || video.path));
+}
+
+function hasUserUploadedVideo() {
+  return userUploadedVideos().length > 0;
+}
+
+function isDisableDefaultSplash() {
+  return Boolean(state.settings?.video_disable_default_splash);
+}
+
+function userPlaylistEntries(playlist = videoPlaylistEntries()) {
+  return playlist.filter((entry) => !isDefaultSplashEntry(entry));
+}
+
+function canRemovePlaylistVideo(video, playlist = videoPlaylistEntries()) {
+  if (!isDisableDefaultSplash()) return true;
+  if (isDefaultSplashEntry(video.url || video.path)) return true;
+  return userPlaylistEntries(playlist).length > 1;
+}
+
+function canRemoveAssetVideo(video, playlist = videoPlaylistEntries()) {
+  if (!isDisableDefaultSplash()) return true;
+  if (isDefaultSplashEntry(video.url || video.path)) return true;
+  const inPlaylist = isVideoInPlaylist(video, playlist);
+  if (!inPlaylist) return userUploadedVideos().length > 1;
+  return canRemovePlaylistVideo(video, playlist);
+}
+
+function renderVideoSplashToggle() {
+  const input = $("#video-disable-default-splash");
+  const wrap = $("#video-disable-splash-wrap");
+  if (!input) return;
+  const hasUpload = hasUserUploadedVideo();
+  input.checked = isDisableDefaultSplash();
+  input.disabled = !hasUpload;
+  if (wrap) {
+    wrap.title = hasUpload ? "" : "Upload a video first";
+    wrap.classList.toggle("is-disabled", !hasUpload);
   }
 }
 
@@ -3592,14 +3690,18 @@ function renderVideoPlaylistRow(video, meta) {
   const url = video.url || video.path || "";
   const path = video.path || url;
   const orderLabel = meta.inPlaylist ? `#${meta.index + 1}` : "—";
+  const removeDisabled = meta.canRemove === false ? "disabled" : "";
+  const removeTitle = removeDisabled
+    ? "Cannot remove the last uploaded video while sample video is disabled"
+    : "";
   const orderControls = meta.inPlaylist ? `
     <button class="btn ghost" type="button" data-action="move-video-up" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}" ${meta.index <= 0 ? "disabled" : ""}>Up</button>
     <button class="btn ghost" type="button" data-action="move-video-down" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}" ${meta.index >= meta.total - 1 ? "disabled" : ""}>Down</button>
     <button class="btn primary" type="button" data-action="play-video-now" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}">Play Now</button>
-    <button class="btn danger-soft" type="button" data-action="remove-video" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}">Remove</button>
+    <button class="btn danger-soft" type="button" data-action="remove-video" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}" ${removeDisabled} title="${escapeAttr(removeTitle)}">Remove</button>
   ` : `
     <button class="btn ghost" type="button" data-action="toggle-video" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}">Add</button>
-    <button class="btn danger-soft" type="button" data-action="remove-video" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}">Delete</button>
+    <button class="btn danger-soft" type="button" data-action="remove-video" data-url="${escapeAttr(url)}" data-path="${escapeAttr(path)}" ${removeDisabled} title="${escapeAttr(removeTitle)}">Delete</button>
   `;
   return `
     <div class="asset-row video-playlist-row">
@@ -3612,38 +3714,60 @@ function renderVideoPlaylistRow(video, meta) {
 }
 
 function videoPlaylistEntries() {
-  const urls = Array.isArray(state.settings?.video_playlist_urls)
-    ? state.settings.video_playlist_urls.map(String).filter(Boolean)
-    : [];
-  if (urls.length) return urls;
-  return Array.isArray(state.settings?.video_playlist)
+  const fromPlaylist = Array.isArray(state.settings?.video_playlist)
     ? state.settings.video_playlist.map(String).filter(Boolean)
+    : [];
+  if (fromPlaylist.length) return fromPlaylist;
+  return Array.isArray(state.settings?.video_playlist_urls)
+    ? state.settings.video_playlist_urls.map(String).filter(Boolean)
     : [];
 }
 
 function applyVideoPlaylistState(entries) {
-  const list = Array.isArray(entries) ? entries.map(String).filter(Boolean) : [];
-  state.settings.video_playlist = list.slice();
-  state.settings.video_playlist_urls = list.slice();
+  const list = Array.isArray(entries)
+    ? entries.map((entry) => resolvePlaylistEntry(entry)).filter(Boolean)
+    : [];
+  const seen = new Set();
+  const deduped = [];
+  list.forEach((entry) => {
+    const key = videoEntryKey(entry) || String(entry);
+    if (seen.has(key)) return;
+    seen.add(key);
+    deduped.push(entry);
+  });
+  state.settings.video_playlist = deduped;
+  if (Array.isArray(state.settings.video_playlist_urls)) {
+    delete state.settings.video_playlist_urls;
+  }
 }
 
-async function persistVideoPlaylist(entries = videoPlaylistEntries()) {
+async function persistVideoPlaylist(entries = videoPlaylistEntries(), extra = {}) {
   const result = await api("/api/video-playlist", {
     method: "POST",
-    body: { playlist: entries },
+    body: { playlist: entries, ...extra },
   });
-  if (result.settings) state.settings = result.settings;
-  if (result.playlist) applyVideoPlaylistState(result.settings?.video_playlist_urls || result.playlist);
+  if (result.settings) {
+    state.settings = result.settings;
+    applyVideoPlaylistState(result.settings.video_playlist || []);
+  } else if (result.playlist) {
+    applyVideoPlaylistState(result.playlist);
+  }
   if (result.assets) state.assets = result.assets;
   return result;
+}
+
+async function persistDisableDefaultSplash(disabled) {
+  if (disabled && !hasUserUploadedVideo()) {
+    throw new Error("Upload at least one video before disabling the default sample video.");
+  }
+  return persistVideoPlaylist(videoPlaylistEntries(), { disable_default_splash: disabled });
 }
 
 function toggleVideo(target) {
   const url = target?.dataset?.url || target;
   const path = target?.dataset?.path || url;
-  const key = videoEntryKey(url || path);
   const list = videoPlaylistEntries();
-  if (list.some((entry) => videoEntryKey(entry) === key)) return;
+  if (list.some((entry) => videoKeysMatch(entry, path || url))) return;
   const next = list.concat([path || url]).filter(Boolean);
   applyVideoPlaylistState(next);
   renderVideoAssets();
@@ -3652,9 +3776,8 @@ function toggleVideo(target) {
 }
 
 function moveVideoInPlaylist(url, path, direction) {
-  const key = videoEntryKey(url || path);
   const list = videoPlaylistEntries();
-  const index = list.findIndex((entry) => videoEntryKey(entry) === key);
+  const index = list.findIndex((entry) => videoKeysMatch(entry, path || url));
   if (index < 0) return;
   const swapWith = direction === "up" ? index - 1 : index + 1;
   if (swapWith < 0 || swapWith >= list.length) return;
@@ -3669,21 +3792,31 @@ function moveVideoInPlaylist(url, path, direction) {
 async function playVideoNow(target) {
   const url = target?.dataset?.url || target;
   const path = target?.dataset?.path || url;
-  const key = videoEntryKey(url || path);
-  const list = videoPlaylistEntries();
-  const index = list.findIndex((entry) => videoEntryKey(entry) === key);
-  let next;
-  if (index >= 0) {
-    next = [list[index], ...list.filter((_, i) => i !== index)];
-  } else {
-    next = [path || url, ...list];
-  }
-  applyVideoPlaylistState(next);
-  renderVideoAssets();
-  const result = await persistVideoPlaylist(next);
-  const playTarget = result.settings?.video_playlist_urls?.[0] || next[0] || url || path;
+  const video = resolveVideoAsset(path || url);
+  const playTarget = video.url || video.path || path || url;
   publishDisplayState({ videoPlayNow: playTarget });
   showToast("Video diputar di QR Display");
+}
+
+async function removeVideo(target) {
+  const url = target?.dataset?.url || "";
+  const path = target?.dataset?.path || "";
+  const playlist = videoPlaylistEntries();
+  const video = { url, path };
+  const inPlaylist = isVideoInPlaylist(video, playlist);
+  if (inPlaylist ? !canRemovePlaylistVideo(video, playlist) : !canRemoveAssetVideo(video, playlist)) {
+    showToast("Cannot remove the last uploaded video while sample video is disabled", "error");
+    return;
+  }
+  const result = await api("/api/video/remove", {
+    method: "POST",
+    body: { url, path },
+  });
+  state.settings = result.settings || state.settings;
+  state.assets = result.assets || state.assets;
+  renderVideoAssets();
+  publishDisplayState();
+  showToast("Video removed");
 }
 
 async function uploadPaymentImages(files) {
@@ -3713,7 +3846,7 @@ async function uploadVideo(file) {
   state.assets = result.assets || state.assets;
   if (result.settings) {
     state.settings = result.settings;
-    applyVideoPlaylistState(result.settings.video_playlist_urls || result.settings.video_playlist || []);
+    applyVideoPlaylistState(result.settings.video_playlist || []);
   } else if (result.video?.path || result.video?.url) {
     const next = videoPlaylistEntries().concat([result.video.path || result.video.url]);
     applyVideoPlaylistState(next);
@@ -3721,21 +3854,6 @@ async function uploadVideo(file) {
   renderVideoAssets();
   publishDisplayState();
   showToast("Video uploaded");
-}
-
-async function removeVideo(target) {
-  const result = await api("/api/video/remove", {
-    method: "POST",
-    body: {
-      url: target.dataset.url || "",
-      path: target.dataset.path || "",
-    },
-  });
-  state.settings = result.settings || state.settings;
-  state.assets = result.assets || state.assets;
-  renderVideoAssets();
-  publishDisplayState();
-  showToast("Video removed");
 }
 
 function renderEmailTemplate() {
@@ -5058,6 +5176,19 @@ function bindEvents() {
   $("#video-upload-file").addEventListener("change", (event) => {
     uploadVideo(event.target.files?.[0]).catch((err) => showToast(err.message, "error"));
     event.target.value = "";
+  });
+  $("#video-disable-default-splash")?.addEventListener("change", (event) => {
+    const enabled = Boolean(event.target.checked);
+    persistDisableDefaultSplash(enabled)
+      .then(() => {
+        renderVideoAssets();
+        publishDisplayState();
+        showToast(enabled ? "Default sample video disabled" : "Default sample video enabled");
+      })
+      .catch((err) => {
+        event.target.checked = isDisableDefaultSplash();
+        showToast(err.message, "error");
+      });
   });
   $("#email-template-key").addEventListener("change", renderEmailTemplate);
   $("#log-search").addEventListener("input", renderLogs);

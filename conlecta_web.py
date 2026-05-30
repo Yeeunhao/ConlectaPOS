@@ -527,6 +527,37 @@ def get_device_settings(state, device_id, account_id=None):
         if isinstance(themes, dict) and themes.get(aid):
             current["active_theme"] = themes[aid]
         current["video_playlist"] = _resolve_account_video_playlist(current, aid)
+        current["video_disable_default_splash"] = _resolve_account_disable_default_splash(current, aid)
+    return current
+
+
+def _resolve_account_disable_default_splash(device_settings, account_id=""):
+    device_settings = dict(device_settings or {})
+    aid = str(account_id or "").strip()
+    by_account = device_settings.get("video_disable_default_splash_by_account")
+    if isinstance(by_account, dict) and aid and aid in by_account:
+        return bool(by_account.get(aid))
+    legacy = bool(device_settings.get("video_disable_default_splash"))
+    legacy_aid = str(device_settings.get("account_id") or "").strip()
+    if legacy and (not aid or not legacy_aid or legacy_aid == aid):
+        return legacy
+    return False
+
+
+def _store_account_disable_default_splash(current, account_id, disabled):
+    current = dict(current or {})
+    aid = str(account_id or "").strip()
+    disabled = bool(disabled)
+    if aid:
+        by_account = current.get("video_disable_default_splash_by_account")
+        if not isinstance(by_account, dict):
+            by_account = {}
+        by_account[aid] = disabled
+        current["video_disable_default_splash_by_account"] = by_account
+        if str(current.get("account_id") or "") == aid:
+            current["video_disable_default_splash"] = disabled
+    else:
+        current["video_disable_default_splash"] = disabled
     return current
 
 
@@ -601,9 +632,99 @@ def merge_settings_with_device(merchant_settings, device_settings):
         merged["payment_image_paths"] = [merged["payment_image_path"]]
     if "video_playlist" in device:
         merged["video_playlist"] = list(device.get("video_playlist") or [])
+    if "video_disable_default_splash" in device:
+        merged["video_disable_default_splash"] = bool(device.get("video_disable_default_splash"))
     if str(device.get("active_theme") or "").strip():
         merged["active_theme"] = str(device.get("active_theme") or "").strip()
     return merged
+
+
+def _is_default_splash_value(value):
+    text = str(value or "").strip().lower()
+    if text.endswith("/splash.mp4") or text.endswith("\\splash.mp4"):
+        return True
+    if text.endswith("/assets/videos/splash.mp4"):
+        return True
+    path = _video_path_from_value(value)
+    if path and os.path.isfile(path):
+        try:
+            return os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(SPLASH_VIDEO))
+        except Exception:
+            return False
+    return False
+
+
+def _account_has_uploaded_video(device_id, account_id):
+    assets = scan_asset_payload(device_id, account_id).get("videos") or []
+    return any(not _is_default_splash_value(item.get("path") or item.get("url")) for item in assets)
+
+
+def _validate_disable_default_splash(device_id, account_id, disabled):
+    if not disabled:
+        return
+    if not _account_has_uploaded_video(device_id, account_id):
+        raise ValueError("Upload at least one video before disabling the default sample video.")
+
+
+def _validate_user_playlist_not_empty(playlist, disable_default):
+    if not disable_default:
+        return
+    user_entries = [entry for entry in (playlist or []) if not _is_default_splash_value(entry)]
+    if not user_entries:
+        raise ValueError(
+            "Cannot remove the last uploaded video while default sample video is disabled. "
+            "Upload another video first or re-enable the sample video."
+        )
+
+
+def _validate_user_video_removal(device_id, account_id, target_path, disable_default):
+    if not disable_default:
+        return
+    if _is_default_splash_value(target_path):
+        return
+    target_norm = os.path.normcase(os.path.abspath(target_path))
+    remaining = []
+    for item in scan_asset_payload(device_id, account_id).get("videos") or []:
+        if _is_default_splash_value(item.get("path") or item.get("url")):
+            continue
+        item_path = str(item.get("path") or "").strip()
+        if not item_path:
+            continue
+        try:
+            item_norm = os.path.normcase(os.path.abspath(item_path))
+        except Exception:
+            continue
+        if item_norm != target_norm:
+            remaining.append(item)
+    if not remaining:
+        raise ValueError(
+            "Cannot remove the last uploaded video while default sample video is disabled. "
+            "Upload another video first or re-enable the sample video."
+        )
+
+
+def save_account_disable_default_splash(state, device_id, account_id, disabled, merchant_id=None):
+    if not device_id:
+        raise ValueError("Device ID tidak valid untuk video settings.")
+    _validate_disable_default_splash(device_id, account_id, disabled)
+    root = _device_settings_root(state)
+    current = dict(root.get(device_id) or {})
+    aid = str(account_id or "").strip()
+    current = _store_account_disable_default_splash(current, aid, disabled)
+    if merchant_id is not None:
+        current["merchant_id"] = normalize_merchant_id(merchant_id)
+    if aid:
+        current["account_id"] = aid
+    if disabled:
+        playlist = [
+            entry for entry in (_resolve_account_video_playlist(current, aid) or [])
+            if not _is_default_splash_value(entry)
+        ]
+        current = _store_account_video_playlist(current, aid, playlist)
+    current["updated_ts"] = time.time()
+    root[device_id] = current
+    save_state(state)
+    return get_device_settings(state, device_id, account_id=aid or None)
 
 
 def normalize_video_playlist(entries):
@@ -628,6 +749,8 @@ def save_device_video_playlist(state, device_id, entries, merchant_id=None, acco
     root = _device_settings_root(state)
     current = dict(root.get(device_id) or {})
     aid = str(account_id or "").strip()
+    disable_default = _resolve_account_disable_default_splash(current, aid)
+    _validate_user_playlist_not_empty(playlist, disable_default)
     current = _store_account_video_playlist(current, aid, playlist)
     if merchant_id is not None:
         current["merchant_id"] = normalize_merchant_id(merchant_id)
@@ -5153,7 +5276,7 @@ def video_playlist_urls(settings=None):
         url = public_asset_url(path)
         if url:
             urls.append(url)
-    if not urls and os.path.isfile(SPLASH_VIDEO):
+    if not urls and not bool(settings.get("video_disable_default_splash")) and os.path.isfile(SPLASH_VIDEO):
         urls.append("/assets/videos/Splash.mp4")
     return urls
 
@@ -5342,6 +5465,8 @@ def remove_video_asset(data, merchant_id=None, device_id=None, account_id=None, 
         raise ValueError("Video ini bukan milik account/device saat ini.")
     target_url = public_asset_url(target)
     device_settings = get_device_settings(state, device_id, account_id)
+    disable_default = _resolve_account_disable_default_splash(device_settings, account_id)
+    _validate_user_video_removal(device_id, account_id, target, disable_default)
     playlist = []
     for value in device_settings.get("video_playlist", []) or []:
         value_path = _video_path_from_value(value)
@@ -5351,6 +5476,7 @@ def remove_video_asset(data, merchant_id=None, device_id=None, account_id=None, 
         if target_url and value_url == target_url:
             continue
         playlist.append(value)
+    _validate_user_playlist_not_empty(playlist, disable_default)
     save_device_video_playlist(state, device_id, playlist, merchant_id=mid, account_id=account_id)
     if os.path.isfile(target):
         os.remove(target)
@@ -6186,16 +6312,32 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             did = self.device_id()
             if not did:
                 return self.send_error_json("Device ID tidak valid.", 400)
-            entries = data.get("playlist")
-            if entries is None:
-                entries = data.get("video_playlist") or []
-            playlist = save_device_video_playlist(state, did, entries, merchant_id=mid, account_id=auth.get("id"))
-            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, auth.get("id")))
+            aid = auth.get("id")
+            try:
+                if "disable_default_splash" in data:
+                    save_account_disable_default_splash(
+                        state,
+                        did,
+                        aid,
+                        bool(data.get("disable_default_splash")),
+                        merchant_id=mid,
+                    )
+                entries = data.get("playlist")
+                if entries is None:
+                    entries = data.get("video_playlist")
+                if entries is not None:
+                    playlist = save_device_video_playlist(state, did, entries, merchant_id=mid, account_id=aid)
+                else:
+                    device_settings = get_device_settings(state, did, aid)
+                    playlist = list(device_settings.get("video_playlist") or [])
+            except ValueError as exc:
+                return self.send_error_json(exc, 400)
+            merged = settings_payload(load_settings(mid), mid, get_device_settings(state, did, aid))
             return self.send_json({
                 "ok": True,
                 "playlist": playlist,
                 "settings": merged,
-                "assets": scan_asset_payload(did, auth.get("id")),
+                "assets": scan_asset_payload(did, aid),
             })
         if path == "/api/video/remove":
             state = load_state()

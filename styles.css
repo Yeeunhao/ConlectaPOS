@@ -1549,6 +1549,20 @@ textarea:focus {
   margin: 18px 0;
 }
 
+.video-playlist-actions {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.video-disable-splash-check.is-disabled {
+  opacity: 0.55;
+}
+
+.video-disable-splash-check input:disabled {
+  cursor: not-allowed;
+}
+
 .video-playlist-row {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto auto;
