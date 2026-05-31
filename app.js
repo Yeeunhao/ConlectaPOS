@@ -2575,26 +2575,15 @@ function scheduleDailySessionReset() {
   }, msUntilNextSessionReset());
 }
 
-function canUseQrDisplay() {
-  return window.ConlectaPwa?.canUseQrDisplay?.() !== false;
-}
-
 function openQrDisplay() {
-  if (!canUseQrDisplay()) {
-    showToast(window.ConlectaPwa?.mobileQrBlockMessage?.() || "QR Display is not available on Android or iOS.", "error");
-    return;
-  }
   syncCashierThemeForDisplay();
   publishDisplayState();
-  const deviceId = getDeviceId();
-  const win = window.ConlectaPwa?.openQrDisplayWindow?.(deviceId)
-    || window.open(`/qr-display.html?device=${encodeURIComponent(deviceId)}`, `conlecta_qr_display_${deviceId}`, "noopener,noreferrer");
+  const win = window.open("/qr-display.html", `conlecta_qr_display_${getDeviceId()}`);
   if (win) {
     qrDisplayWindow = win;
     win.focus();
-    showToast("QR Display opened in a separate window");
   } else {
-    showToast("Allow pop-ups to open QR Display, or check browser settings", "error");
+    showToast("Browser blocked the QR Display tab", "error");
   }
 }
 
@@ -3559,39 +3548,6 @@ async function exportHistoryPdf() {
   showToast("History invoice downloaded");
 }
 
-function renderPwaInstallUi() {
-  const pwa = window.ConlectaPwa;
-  const status = $("#pwa-install-status");
-  const installBtn = $("#pwa-install-app");
-  const mobileNote = $("#pwa-mobile-note");
-  if (!status || !pwa) return;
-
-  status.textContent = pwa.installStatusText();
-  if (mobileNote) {
-    mobileNote.hidden = pwa.canUseQrDisplay();
-  }
-  if (installBtn) {
-    installBtn.hidden = pwa.isStandalone() || (!pwa.installAvailable() && !pwa.isIos());
-  }
-  pwa.applyMobileQrRules(document);
-}
-
-async function installPwa() {
-  const pwa = window.ConlectaPwa;
-  if (!pwa) return;
-  const result = await pwa.promptInstall();
-  if (result.ok) {
-    showToast("Conlecta app installed");
-  } else if (result.reason === "ios-manual") {
-    showToast("Safari: tap Share, then Add to Home Screen");
-  } else if (result.reason === "unavailable") {
-    showToast("Use Install in the browser address bar (Chrome/Edge) or Share → Add to Home Screen (Safari)", "error");
-  } else {
-    showToast("Install cancelled");
-  }
-  renderPwaInstallUi();
-}
-
 function renderSettings() {
   const s = state.settings || {};
   $("#set-active-theme").value = deviceThemeId() || s.active_theme || DEFAULT_THEME;
@@ -3602,7 +3558,6 @@ function renderSettings() {
   renderVideoAssets();
   renderEmailTemplate();
   renderAdminSettings();
-  renderPwaInstallUi();
   if (isMerchantAdmin()) {
     setSettingsTab("admin");
   }
@@ -4813,7 +4768,6 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   applyCashierQrisFrame();
   renderAuth();
   applyRolePermissions();
-  window.ConlectaPwa?.applyMobileQrRules?.(document);
   if (!hasBootstrapped) applyRouteAfterBootstrap();
   hasBootstrapped = true;
   publishDisplayState();
@@ -4851,8 +4805,6 @@ async function handleAction(action, target) {
       showToast("Data synced");
     } else if (action === "open-qr-display") {
       openQrDisplay();
-    } else if (action === "install-pwa") {
-      await installPwa();
     } else if (action === "logout") {
       showLogoutModal();
     } else if (action === "confirm-logout") {
@@ -5367,9 +5319,6 @@ function bindEvents() {
     state.settings = { ...(state.settings || {}), active_theme: theme };
     publishDisplayState();
   });
-
-  document.addEventListener("conlecta:pwa-ready", renderPwaInstallUi);
-  document.addEventListener("conlecta:pwa-installed", renderPwaInstallUi);
 }
 
 async function init() {

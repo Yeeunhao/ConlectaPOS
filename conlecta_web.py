@@ -5706,7 +5706,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.serve_file(os.path.join(WEB_DIR, "qr-display.html"))
             if path.startswith("/assets/"):
                 return self.serve_file(safe_path(BASE_DIR, path))
-            if path in ("/styles.css", "/app.js", "/qr-display.js", "/qris-frame.js", "/qris-frame-admin.js", "/image-crop.js", "/theme-pack.css", "/theme-engine.js", "/pwa.js", "/service-worker.js", "/manifest.webmanifest"):
+            if path in ("/styles.css", "/app.js", "/qr-display.js", "/qris-frame.js", "/qris-frame-admin.js", "/image-crop.js", "/theme-pack.css", "/theme-engine.js"):
                 return self.serve_file(os.path.join(WEB_DIR, path.lstrip("/")))
             return self.send_error(404, "Not found")
         except Exception as exc:
@@ -5725,8 +5725,6 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         if not path or not os.path.isfile(path):
             return self.send_error(404, "File not found")
         ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
-        if path.endswith(".webmanifest"):
-            ctype = "application/manifest+json"
         with open(path, "rb") as f:
             data = f.read()
         self.send_response(200)

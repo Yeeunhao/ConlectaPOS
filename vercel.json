@@ -17,18 +17,6 @@
       "dest": "http://34.128.90.163:8765/assets/videos/$1/$2"
     },
     {
-      "src": "/service-worker.js",
-      "dest": "/service-worker.js"
-    },
-    {
-      "src": "/manifest.webmanifest",
-      "dest": "/manifest.webmanifest"
-    },
-    {
-      "src": "/pwa.js",
-      "dest": "/pwa.js"
-    },
-    {
       "handle": "filesystem"
     },
     {
