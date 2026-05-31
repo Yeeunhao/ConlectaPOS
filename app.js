@@ -2578,7 +2578,7 @@ function scheduleDailySessionReset() {
 function openQrDisplay() {
   syncCashierThemeForDisplay();
   publishDisplayState();
-  const win = window.open("/qr-display.html", `conlecta_qr_display_${getDeviceId()}`);
+  const win = window.open("/qr-display", `conlecta_qr_display_${getDeviceId()}`);
   if (win) {
     qrDisplayWindow = win;
     win.focus();

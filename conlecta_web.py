@@ -5702,7 +5702,12 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.handle_api_get(path, parse_qs(parsed.query))
             if app_path in ("", "/", "/login", "/otp", "/pin", "/pin-register", "/cashier", "/stock", "/analytics", "/history", "/settings", "/log", "/system-admin"):
                 return self.serve_file(os.path.join(WEB_DIR, "index.html"))
-            if app_path in ("/qr-display", "/qr-display.html"):
+            if app_path == "/qr-display.html":
+                self.send_response(308)
+                self.send_header("Location", "/qr-display")
+                self.end_headers()
+                return
+            if app_path == "/qr-display":
                 return self.serve_file(os.path.join(WEB_DIR, "qr-display.html"))
             if path.startswith("/assets/"):
                 return self.serve_file(safe_path(BASE_DIR, path))

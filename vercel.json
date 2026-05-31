@@ -20,6 +20,11 @@
       "handle": "filesystem"
     },
     {
+      "src": "/qr-display.html",
+      "dest": "/qr-display",
+      "status": 308
+    },
+    {
       "src": "/qr-display",
       "dest": "/qr-display.html"
     },
