@@ -1174,19 +1174,28 @@ function shutdownDisplay() {
 }
 
 bootstrapDisplaySession();
-setupVideoPlaylistPlayer();
-qrState.settings = readLocalSettings();
-if (displaySession.theme) {
-  applyDisplayTheme(displaySession.theme);
+
+if (window.ConlectaPwa && !window.ConlectaPwa.canUseQrDisplay()) {
+  const block = document.getElementById("qr-mobile-block");
+  const text = document.getElementById("qr-mobile-block-text");
+  if (text) text.textContent = window.ConlectaPwa.mobileQrBlockMessage();
+  if (block) block.hidden = false;
+  document.body.classList.add("qr-display-mobile-blocked");
 } else {
-  bootstrapDisplayTheme();
+  setupVideoPlaylistPlayer();
+  qrState.settings = readLocalSettings();
+  if (displaySession.theme) {
+    applyDisplayTheme(displaySession.theme);
+  } else {
+    bootstrapDisplayTheme();
+  }
+  renderPaymentLogos();
+  if (Object.keys(qrState.settings || {}).length) {
+    preloadQrisFrame();
+  }
+  updateClock();
+  clockTimer = setInterval(updateClock, 1000);
+  startSplash();
+  refreshFromServer();
+  refreshTimer = setInterval(refreshFromServer, 5000);
 }
-renderPaymentLogos();
-if (Object.keys(qrState.settings || {}).length) {
-  preloadQrisFrame();
-}
-updateClock();
-clockTimer = setInterval(updateClock, 1000);
-startSplash();
-refreshFromServer();
-refreshTimer = setInterval(refreshFromServer, 5000);

@@ -3,9 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="QR Display">
   <title>Conlecta QR Display</title>
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
+  <link rel="manifest" href="/manifest.webmanifest">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css?v=8">
   <link rel="stylesheet" href="/theme-pack.css?v=10">
@@ -50,6 +56,12 @@
       } catch (_) {}
     })();
   </script>
+  <div class="qr-mobile-block" id="qr-mobile-block" hidden>
+    <div class="qr-mobile-block-card">
+      <strong>QR Display unavailable</strong>
+      <p id="qr-mobile-block-text">QR Display is not available on Android or iOS. Open Conlecta on desktop or Mac.</p>
+    </div>
+  </div>
   <div class="display-crystal-scene" aria-hidden="true">
     <i class="crystal c1"></i>
     <i class="crystal c2"></i>
@@ -198,8 +210,9 @@
     </aside>
   </main>
 
+  <script src="/pwa.js?v=2"></script>
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=8"></script>
-  <script src="/qr-display.js?v=12"></script>
+  <script src="/qr-display.js?v=14"></script>
 </body>
 </html>

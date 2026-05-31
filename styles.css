@@ -1563,6 +1563,47 @@ textarea:focus {
   cursor: not-allowed;
 }
 
+.pwa-install-box {
+  margin-bottom: 18px;
+}
+
+.pwa-mobile-note {
+  color: #fbbf24;
+}
+
+body.mobile-no-qr-display .qr-display-only {
+  display: none !important;
+}
+
+.qr-mobile-block {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #050508;
+}
+
+.qr-mobile-block-card {
+  max-width: 420px;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.qr-mobile-block-card p {
+  margin: 12px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+body.qr-display-mobile-blocked main,
+body.qr-display-mobile-blocked .display-crystal-scene {
+  visibility: hidden;
+}
+
 .video-playlist-row {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto auto;

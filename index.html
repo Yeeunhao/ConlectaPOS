@@ -3,9 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#6b21a8">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Conlecta POS">
   <title>Conlecta Web POS</title>
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
+  <link rel="manifest" href="/manifest.webmanifest">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css?v=8">
   <link rel="stylesheet" href="/theme-pack.css?v=10">
@@ -198,7 +204,7 @@
         <button class="nav-btn" type="button" data-action="sync-data">Sync</button>
         <button class="nav-btn system-admin-only" type="button" data-page="system-admin">System Admin</button>
         <button class="nav-btn pos-only active" type="button" data-page="cashier">Cashier</button>
-        <button class="nav-btn pos-only" type="button" data-action="open-qr-display">QR Display</button>
+        <button class="nav-btn pos-only qr-display-only" type="button" data-action="open-qr-display">QR Display</button>
         <button class="nav-btn pos-only" type="button" data-page="stock">Stock</button>
         <button class="nav-btn pos-only can-view-analytics-only" type="button" data-page="analytics">Analytics</button>
         <button class="nav-btn pos-only" type="button" data-page="history">History</button>
@@ -841,6 +847,18 @@
             </section>
 
             <section class="settings-section" id="settings-display">
+              <div class="asset-box pwa-install-box">
+                <div>
+                  <strong>Install app (PWA)</strong>
+                  <p class="muted">Install Conlecta once on this device. On desktop or Mac, QR Display opens in a separate window from the same app.</p>
+                  <p class="muted pwa-mobile-note" id="pwa-mobile-note" hidden>QR Display is not available on Android or iOS. Use desktop or Mac for customer screen setup.</p>
+                </div>
+                <p class="muted" id="pwa-install-status">Checking install support...</p>
+                <div class="button-row">
+                  <button class="btn primary" type="button" id="pwa-install-app" data-action="install-pwa" hidden>Install Conlecta App</button>
+                  <button class="btn ghost qr-display-only" type="button" data-action="open-qr-display">Open QR Display Window</button>
+                </div>
+              </div>
               <h2>QR Display</h2>
               <label class="field">
                 <span>Theme</span>
@@ -896,7 +914,6 @@
                 </div>
                 <div class="asset-list" id="video-asset-list"></div>
               </div>
-              <button class="btn ghost" type="button" data-action="open-qr-display">Open QR Display New Tab</button>
             </section>
 
             <section class="settings-section" id="settings-email">
@@ -1071,10 +1088,11 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="/pwa.js?v=2"></script>
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=8"></script>
   <script src="/image-crop.js?v=2"></script>
-  <script src="/app.js?v=18"></script>
+  <script src="/app.js?v=20"></script>
   <script src="/qris-frame-admin.js?v=9"></script>
 </body>
 </html>
