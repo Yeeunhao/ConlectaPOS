@@ -3037,6 +3037,18 @@ function parseHistoryDate(value) {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
+function formatPaymentAt(value) {
+  const text = String(value || "").trim();
+  if (!text) return "-";
+  const raw = text.includes(" - ") ? text.split(" - ").pop().trim() : text;
+  const normalized = raw.replace("T", " ").split(".")[0].split("+")[0].replace(/Z$/, "").trim();
+  return normalized || "-";
+}
+
+function historyTipTotal(record) {
+  return (record.items || []).reduce((sum, item) => sum + Math.max(0, Number(item.tip_fixed || 0)), 0);
+}
+
 function parseDiscountMeta(raw) {
   const meta = { pct: 0, cart: 0, line: 0, gross: 0 };
   const text = String(raw || "").trim();
@@ -3290,6 +3302,7 @@ function analyticsSummary(records, rows) {
   const totalCost = totalVendorCost + totalQrisCost;
   const totalProfit = totalRevenue - totalCost;
   const totalQty = rows.reduce((sum, row) => sum + row.qty, 0);
+  const totalTip = records.reduce((sum, record) => sum + historyTipTotal(record), 0);
   const cash = records.filter((record) => displayPaymentMethod(record) === "Cash").length;
   const qris = records.length - cash;
   return {
@@ -3299,6 +3312,7 @@ function analyticsSummary(records, rows) {
     totalCost,
     totalProfit,
     totalQty,
+    totalTip,
     cash,
     qris,
     transactions: records.length,
@@ -3323,6 +3337,7 @@ function renderAnalytics() {
     ["QRIS Cost", formatRp(summary.totalQrisCost)],
     ["Total Cost", formatRp(summary.totalCost)],
     ["Profit", formatRp(summary.totalProfit)],
+    ["Total Tip", formatRp(summary.totalTip)],
     ["Margin", formatPct(summary.margin)],
     ["Units", summary.totalQty.toLocaleString("id-ID")],
     ["Transactions", summary.transactions],
@@ -3398,6 +3413,7 @@ function exportAnalyticsData() {
     ["qris_cost", rawNumber(summary.totalQrisCost, 0)],
     ["total_cost", rawNumber(summary.totalCost, 0)],
     ["profit", rawNumber(summary.totalProfit, 0)],
+    ["total_tip", rawNumber(summary.totalTip, 0)],
     ["margin_pct", rawNumber(summary.margin)],
     ["units", rawNumber(summary.totalQty, 0)],
     ["transactions", rawNumber(summary.transactions, 0)],
@@ -3430,13 +3446,14 @@ function renderHistory() {
   renderHistoryCashiers();
   const body = $("#history-body");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="11" class="muted">No transactions found</td></tr>`;
+    body.innerHTML = `<tr><td colspan="12" class="muted">No transactions found</td></tr>`;
     return;
   }
   body.innerHTML = rows.map((record) => `
     ${(() => {
       const method = displayPaymentMethod(record);
       const isCash = method === "Cash";
+      const tipTotal = historyTipTotal(record);
       return `
     <tr>
       <td class="mono">${escapeHtml(record.txn_id || "-")}</td>
@@ -3444,11 +3461,12 @@ function renderHistory() {
       <td>${escapeHtml(method)}</td>
       <td>${escapeHtml(record.customer_name || record.customer || "-")}</td>
       <td class="amount">${formatRp(record.amount)}</td>
+      <td class="amount">${tipTotal ? formatRp(tipTotal) : "-"}</td>
       <td class="amount">${escapeHtml(discountText(record))}</td>
       <td class="amount">${isCash ? formatRp(record.cash_received) : "-"}</td>
       <td class="amount">${isCash ? formatRp(record.change) : "-"}</td>
       <td>${escapeHtml(record.cashier_name || "-")}</td>
-      <td>${escapeHtml(record.updated_at_display || record.updated_at || "-")}</td>
+      <td>${escapeHtml(formatPaymentAt(record.updated_at_display || record.updated_at))}</td>
       <td><button class="btn ghost" type="button" data-action="open-detail" data-txn="${escapeAttr(record.txn_id)}">View</button></td>
     </tr>
       `;
@@ -3473,11 +3491,13 @@ function renderHistoryStats(records = filteredHistory()) {
   const cash = all.filter((record) => displayPaymentMethod(record) === "Cash").length;
   const qris = all.filter((record) => displayPaymentMethod(record) !== "Cash").length;
   const fee = all.reduce((sum, record) => sum + recordPaymentFee(record), 0);
+  const tip = all.reduce((sum, record) => sum + historyTipTotal(record), 0);
   const net = paidGross - fee;
   const stats = [
     ["Transactions", all.length],
     ["Gross Revenue", formatRp(gross)],
     ["Discount", formatRp(discount)],
+    ["Tip Total", formatRp(tip)],
     ["QRIS Fee", formatRp(fee)],
     ["Net", formatRp(net)],
     ["Cash", cash],

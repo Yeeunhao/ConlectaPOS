@@ -4981,7 +4981,7 @@ def make_history_export_pdf(records, title="Invoice History", merchant_id=None):
         meth_color = "#059669" if meth == PAYMENT_METHOD_CASH else "#6366f1"
         rows.append([
             Paragraph(_pdf_escape(rec.get("txn_id", "")), s_cell),
-            Paragraph(_pdf_escape(rec.get("updated_at_display") or rec.get("updated_at", "")), s_cell),
+            Paragraph(_pdf_escape(payment_at_display(rec.get("updated_at_display") or rec.get("updated_at", ""))), s_cell),
             Paragraph(_pdf_escape(rec.get("customer_name") or rec.get("customer") or ""), s_cell),
             Paragraph(f"<font color='{meth_color}'><b>{_pdf_escape(meth)}</b></font>", s_cell_c),
             Paragraph(_pdf_escape(rec.get("cashier_name", "")), s_cell),
@@ -5143,11 +5143,21 @@ def make_vendor_invoice_pdf(payload):
     return buffer.getvalue()
 
 
-def find_record(txn_id):
-    for record in load_history():
+def find_record(txn_id, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    for record in load_history_for_merchant(mid):
         if str(record.get("txn_id")) == str(txn_id):
             return record
     return None
+
+
+def payment_at_display(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if " - " in text:
+        return text.split(" - ", 1)[-1].strip()
+    return text.replace("T", " ", 1).split(".")[0].split("+")[0].rstrip("Z")
 
 
 def _log_line_timestamp(line):
@@ -5994,14 +6004,24 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 ),
             })
         if path == "/api/receipt.pdf":
+            state = load_state()
+            try:
+                mid, _auth = self.request_merchant_id(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
             txn_id = (query.get("txn_id") or [""])[0]
-            record = find_record(txn_id)
+            record = find_record(txn_id, merchant_id=mid)
             if not record:
                 return self.send_error_json("Transaction not found", 404)
             return self.send_bytes(make_pdf(record, merchant=False), "application/pdf", f"receipt-{txn_id}.pdf")
         if path == "/api/merchant.pdf":
+            state = load_state()
+            try:
+                mid, _auth = self.request_merchant_id(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
             txn_id = (query.get("txn_id") or [""])[0]
-            record = find_record(txn_id)
+            record = find_record(txn_id, merchant_id=mid)
             if not record:
                 return self.send_error_json("Transaction not found", 404)
             return self.send_bytes(make_pdf(record, merchant=True), "application/pdf", f"merchant-{txn_id}.pdf")
