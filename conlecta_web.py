@@ -5921,6 +5921,11 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 ),
             })
         if path == "/api/email-templates":
+            state = load_state()
+            try:
+                self.request_system_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
             return self.send_json({"ok": True, "templates": load_email_templates()})
         if path == "/api/history":
             state = load_state()
@@ -6407,6 +6412,11 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **removed})
         if path == "/api/email-template":
+            state = load_state()
+            try:
+                self.request_system_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
             saved = save_email_template(data.get("key"), data.get("template", {}))
             return self.send_json({"ok": True, "saved": saved, "templates": load_email_templates()})
         if path == "/api/stock/save":

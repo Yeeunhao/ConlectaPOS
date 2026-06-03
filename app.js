@@ -3836,7 +3836,6 @@ function renderSettings() {
   applyBrand();
   renderPaymentPreview();
   renderVideoAssets();
-  renderEmailTemplate();
   renderAdminSettings();
   if (isMerchantAdmin()) {
     setSettingsTab("admin");
@@ -4200,45 +4199,6 @@ async function uploadVideo(file) {
   renderVideoAssets();
   publishDisplayState();
   showToast("Video uploaded");
-}
-
-function renderEmailTemplate() {
-  const key = $("#email-template-key")?.value || "otp";
-  const tpl = state.emailTemplates?.[key] || {};
-  if (!$("#email-subject")) return;
-  $("#email-subject").value = tpl.subject || "";
-  $("#email-primary-color").value = tpl.primary_color || "";
-  $("#email-primary-text").value = tpl.primary_text_color || "";
-  $("#email-bg-color").value = tpl.bg_color || "";
-  $("#email-secondary-color").value = tpl.secondary_color || "";
-  $("#email-logo-path").value = tpl.logo_path || "";
-  $("#email-logo-align").value = tpl.logo_align || "center";
-  $("#email-html-override").value = tpl.html_override || "";
-}
-
-async function loadEmailTemplates() {
-  const result = await api("/api/email-templates");
-  state.emailTemplates = result.templates || {};
-  renderEmailTemplate();
-}
-
-async function saveEmailTemplate() {
-  const key = $("#email-template-key").value;
-  const template = {
-    subject: $("#email-subject").value,
-    primary_color: $("#email-primary-color").value,
-    primary_text_color: $("#email-primary-text").value,
-    bg_color: $("#email-bg-color").value,
-    secondary_color: $("#email-secondary-color").value,
-    logo_path: $("#email-logo-path").value,
-    logo_align: $("#email-logo-align").value,
-    html_override: $("#email-html-override").value,
-  };
-  $("#email-template-status").textContent = "Saving template...";
-  const result = await api("/api/email-template", { method: "POST", body: { key, template } });
-  state.emailTemplates = result.templates || state.emailTemplates;
-  $("#email-template-status").textContent = "Template saved.";
-  showToast("Email template saved");
 }
 
 async function saveSettings() {
@@ -5037,9 +4997,6 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   applyServerSettings(result.settings || {});
   state.version = result.version || state.version || {};
   state.systemAdmin = result.system_admin || state.systemAdmin || null;
-  if (!Object.keys(state.emailTemplates || {}).length) {
-    loadEmailTemplates().catch(() => null);
-  }
   setDisplayEvent(result.display_event || null);
   state.session = result.session || { sales: 0, revenue: 0 };
   state.logs = result.logs || [];
@@ -5274,10 +5231,6 @@ async function handleAction(action, target) {
       await playVideoNow(target);
     } else if (action === "remove-video") {
       await removeVideo(target);
-    } else if (action === "load-email-template") {
-      await loadEmailTemplates();
-    } else if (action === "save-email-template") {
-      await saveEmailTemplate();
     } else if (action === "unlock-log") {
       state.logAdminPassword = $("#log-admin-password").value;
       const result = await api("/api/logs/read", { method: "POST", body: { admin_password: state.logAdminPassword } });
@@ -5546,7 +5499,6 @@ function bindEvents() {
         showToast(err.message, "error");
       });
   });
-  $("#email-template-key").addEventListener("change", renderEmailTemplate);
   $("#log-search").addEventListener("input", renderLogs);
 
   ["pointerdown", "keydown", "input", "touchstart"].forEach((eventName) => {

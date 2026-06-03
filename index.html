@@ -818,7 +818,6 @@
             <button class="tab active" type="button" data-settings-tab="qris">QRIS</button>
             <button class="tab merchant-admin-only" type="button" data-settings-tab="admin">Admin Setting</button>
             <button class="tab" type="button" data-settings-tab="display">Display</button>
-            <button class="tab" type="button" data-settings-tab="email">Email</button>
           </nav>
 
           <div class="panel settings-panel">
@@ -945,33 +944,6 @@
                 <div class="asset-list" id="video-asset-list"></div>
               </div>
               <button class="btn ghost" type="button" data-action="open-qr-display">Open QR Display New Tab</button>
-            </section>
-
-            <section class="settings-section" id="settings-email">
-              <h2>Email Templates</h2>
-              <p class="muted">Template OTP dan receipt dipakai untuk email user.</p>
-              <label class="field">
-                <span>Template</span>
-                <select id="email-template-key">
-                  <option value="otp">OTP Login</option>
-                  <option value="receipt">Receipt Email</option>
-                </select>
-              </label>
-              <label class="field"><span>Subject</span><input id="email-subject" type="text"></label>
-              <div class="register-grid">
-                <label class="field"><span>Primary Color</span><input id="email-primary-color" type="text"></label>
-                <label class="field"><span>Primary Text</span><input id="email-primary-text" type="text"></label>
-                <label class="field"><span>Background</span><input id="email-bg-color" type="text"></label>
-                <label class="field"><span>Secondary Color</span><input id="email-secondary-color" type="text"></label>
-                <label class="field"><span>Logo Path</span><input id="email-logo-path" type="text"></label>
-                <label class="field"><span>Logo Align</span><input id="email-logo-align" type="text"></label>
-              </div>
-              <label class="field"><span>HTML Override</span><textarea id="email-html-override" rows="8"></textarea></label>
-              <div class="button-row">
-                <button class="btn ghost" type="button" data-action="load-email-template">Load Template</button>
-                <button class="btn primary" type="button" data-action="save-email-template">Save Template</button>
-              </div>
-              <p class="auth-status" id="email-template-status"></p>
             </section>
 
           </div>
@@ -1122,7 +1094,7 @@
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=8"></script>
   <script src="/image-crop.js?v=2"></script>
-  <script src="/app.js?v=24"></script>
+  <script src="/app.js?v=25"></script>
   <script src="/qris-frame-admin.js?v=9"></script>
 </body>
 </html>
