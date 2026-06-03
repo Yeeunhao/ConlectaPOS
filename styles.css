@@ -1705,6 +1705,20 @@ textarea:focus {
   font-weight: 900;
 }
 
+.qty-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px;
+  text-align: center;
+  outline: 0;
+  border-radius: 0;
+}
+
+.qty-input:focus {
+  border-color: rgba(103, 232, 249, 0.52);
+  box-shadow: 0 0 0 2px rgba(103, 232, 249, 0.12), inset 0 0 18px rgba(103, 232, 249, 0.08);
+}
+
 .checkout-form {
   display: grid;
   gap: 14px;

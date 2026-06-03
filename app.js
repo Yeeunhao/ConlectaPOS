@@ -466,6 +466,11 @@ function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, Number(value || 0)));
 }
 
+function parseQtyValue(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return Number.parseInt(digits || "0", 10) || 0;
+}
+
 function cartRaw(name) {
   const raw = state.cart[name];
   if (!raw) return { qty: 0, free: false, disc_pct: 0, disc_fixed: 0, tip_fixed: 0 };
@@ -2188,18 +2193,37 @@ function reconcileCartWithStock() {
   });
 }
 
-function setCartQty(name, qty) {
+function productCardElement(name) {
+  const safe = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(name) : name.replace(/"/g, '\\"');
+  return document.querySelector(`.product-card[data-name="${safe}"]`);
+}
+
+function patchCatalogQty(name, qty) {
+  const card = productCardElement(name);
+  if (!card) return;
+  card.classList.toggle("in-cart", qty > 0);
+  const input = card.querySelector("[data-qty-input]");
+  if (input && document.activeElement !== input) {
+    input.value = String(qty);
+  }
+}
+
+function setCartQty(name, qty, { renderCatalogView = true } = {}) {
   if (state.activeQr) {
     showToast("Dismiss QR dulu sebelum ubah cart", "error");
-    return;
+    return false;
   }
   const product = state.products.find((item) => item.name === name);
-  if (!product) return;
-  const next = Math.max(0, Math.min(Number(product.stock || 0), Number(qty || 0)));
+  if (!product) return false;
+  const wantedQty = Number(qty);
+  const safeQty = Number.isFinite(wantedQty) ? Math.floor(wantedQty) : 0;
+  const next = Math.max(0, Math.min(Number(product.stock || 0), safeQty));
   setCartRaw(name, { qty: next });
-  renderCatalog();
+  if (renderCatalogView) renderCatalog();
+  else patchCatalogQty(name, next);
   renderCart();
   updateTotals();
+  return next;
 }
 
 function changeCartQty(name, delta) {
@@ -2211,6 +2235,30 @@ function changeCartQty(name, delta) {
     return;
   }
   setCartQty(name, cur + delta);
+}
+
+function setCartQtyFromInput(input, { commit = false } = {}) {
+  const name = input.dataset.name || "";
+  const product = state.products.find((item) => item.name === name);
+  if (!product) return;
+  const current = cartRaw(name).qty;
+  if (state.activeQr) {
+    input.value = String(current);
+    showToast("Dismiss QR dulu sebelum ubah cart", "error");
+    return;
+  }
+  const stock = Number(product.stock || 0);
+  const typed = parseQtyValue(input.value);
+  const next = Math.max(0, Math.min(stock, typed));
+  if (typed > stock) input.value = String(next);
+  const saved = setCartQty(name, next, { renderCatalogView: commit });
+  if (saved === false) {
+    input.value = String(current);
+    return;
+  }
+  if (commit) {
+    input.value = String(saved || 0);
+  }
 }
 
 function toggleFreeItem(name, checked) {
@@ -2341,7 +2389,7 @@ function renderCatalog() {
     const stock = Number(item.stock || 0);
     const stockClass = stock <= 0 ? "out" : stock <= 5 ? "low" : "";
     return `
-      <article class="product-card ${qty ? "in-cart" : ""}">
+      <article class="product-card ${qty ? "in-cart" : ""}" data-name="${escapeAttr(item.name)}">
         <div class="product-media">
           ${src ? `<img src="${escapeAttr(src)}" alt="">` : `<div class="product-fallback">${escapeHtml(productInitial(item.name))}</div>`}
         </div>
@@ -2352,7 +2400,7 @@ function renderCatalog() {
         </div>
         <div class="qty-control">
           <button type="button" data-action="cart-dec" data-name="${escapeAttr(item.name)}">-</button>
-          <span class="qty-count">${qty}</span>
+          <input class="qty-count qty-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${qty}" aria-label="Jumlah ${escapeAttr(item.name)}" data-qty-input data-name="${escapeAttr(item.name)}">
           <button type="button" data-action="cart-inc" data-name="${escapeAttr(item.name)}">+</button>
         </div>
         <label class="free-toggle">
@@ -3433,12 +3481,14 @@ function analyticsItemCosts(record, productMap = new Map()) {
     const storedTotalCost = Number(item.total_cost || 0);
     const vendorCost = (capital * qty) || Math.max(0, storedTotalCost - qrisCost);
     const totalCost = vendorCost + qrisCost;
+    const tip = Math.max(0, Number(item.tip_fixed || item.tip_amount || 0));
     return {
       item,
       name,
       qty,
       subtotal,
       gross,
+      tip,
       vendorCost,
       qrisCost,
       totalCost,
@@ -3462,6 +3512,7 @@ function analyticsRows(records = analyticsFilteredHistory()) {
         vendorCost: 0,
         qrisCost: 0,
         cost: 0,
+        tip: 0,
         profit: 0,
         transactions: new Set(),
       };
@@ -3471,6 +3522,7 @@ function analyticsRows(records = analyticsFilteredHistory()) {
       row.vendorCost += costLine.vendorCost;
       row.qrisCost += costLine.qrisCost;
       row.cost += costLine.totalCost;
+      row.tip += costLine.tip;
       row.profit += costLine.profit;
       row.transactions.add(record.txn_id || record.qr_id || `${name}-${row.qty}`);
       rows.set(name, row);
@@ -3489,6 +3541,7 @@ function metricValue(row, metric = state.analyticsMetric) {
   if (metric === "vendor_cost") return row.vendorCost;
   if (metric === "qris_cost") return row.qrisCost;
   if (metric === "cost") return row.cost;
+  if (metric === "tip") return row.tip;
   if (metric === "margin") return row.margin;
   return row.profit;
 }
@@ -3500,6 +3553,7 @@ function metricLabel(metric = state.analyticsMetric) {
     vendor_cost: "Vendor Cost",
     qris_cost: "QRIS Cost",
     cost: "Total Cost",
+    tip: "Total Tip",
     qty: "Qty Sold",
     margin: "Margin %",
   }[metric] || "Profit";
@@ -3621,6 +3675,7 @@ function renderAnalytics() {
             <span>${formatRp(row.revenue)} revenue</span>
             <span>${formatRp(row.vendorCost)} vendor</span>
             <span>${formatRp(row.qrisCost)} QRIS</span>
+            <span>${formatRp(row.tip)} tip</span>
             <span>${formatRp(row.profit)} profit</span>
             <span>${formatPct(row.margin)} margin</span>
           </div>
@@ -3641,11 +3696,12 @@ function renderAnalytics() {
       <td class="amount">${formatRp(row.vendorCost)}</td>
       <td class="amount">${formatRp(row.qrisCost)}</td>
       <td class="amount">${formatRp(row.cost)}</td>
+      <td class="amount">${formatRp(row.tip)}</td>
       <td class="amount">${formatRp(row.profit)}</td>
       <td class="amount">${formatPct(row.margin)}</td>
       <td class="amount">${row.transactions}</td>
     </tr>
-  `).join("") : `<tr><td colspan="9" class="muted">No analytics rows</td></tr>`;
+  `).join("") : `<tr><td colspan="10" class="muted">No analytics rows</td></tr>`;
 }
 
 function csvCell(value) {
@@ -3680,7 +3736,7 @@ function exportAnalyticsData() {
     ["cash_transactions", rawNumber(summary.cash, 0)],
     ["qris_transactions", rawNumber(summary.qris, 0)],
     [],
-    ["item", "qty", "revenue", "vendor_modal_cost", "qris_cost", "total_cost", "profit", "margin_pct", "transactions"],
+    ["item", "qty", "revenue", "vendor_modal_cost", "qris_cost", "total_cost", "tip", "profit", "margin_pct", "transactions"],
     ...sorted.map((row) => [
       row.name,
       rawNumber(row.qty, 0),
@@ -3688,6 +3744,7 @@ function exportAnalyticsData() {
       rawNumber(row.vendorCost, 0),
       rawNumber(row.qrisCost, 0),
       rawNumber(row.cost, 0),
+      rawNumber(row.tip, 0),
       rawNumber(row.profit, 0),
       rawNumber(row.margin),
       rawNumber(row.transactions, 0),
@@ -5375,6 +5432,11 @@ function bindEvents() {
     }
   });
   document.addEventListener("input", (event) => {
+    const qtyInput = event.target.closest("[data-qty-input]");
+    if (qtyInput) {
+      setCartQtyFromInput(qtyInput, { commit: false });
+      return;
+    }
     const tipInput = event.target.closest("[data-tip-field]");
     if (tipInput) {
       setLineTip(tipInput.dataset.name, parseMoney(tipInput.value), { repaint: false });
@@ -5399,6 +5461,11 @@ function bindEvents() {
     }
   });
   document.addEventListener("focusout", (event) => {
+    const qtyInput = event.target.closest?.("[data-qty-input]");
+    if (qtyInput) {
+      setCartQtyFromInput(qtyInput, { commit: true });
+      return;
+    }
     const tipInput = event.target.closest?.("[data-tip-field]");
     if (tipInput) {
       const row = tipInput.closest(".cart-item");
@@ -5429,7 +5496,21 @@ function bindEvents() {
       updateTotals();
     });
   }, true);
+  document.addEventListener("keydown", (event) => {
+    const qtyInput = event.target.closest?.("[data-qty-input]");
+    if (!qtyInput) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      setCartQtyFromInput(qtyInput, { commit: true });
+      qtyInput.blur();
+    }
+  });
   document.addEventListener("change", (event) => {
+    const qtyInput = event.target.closest?.("[data-qty-input]");
+    if (qtyInput) {
+      setCartQtyFromInput(qtyInput, { commit: true });
+      return;
+    }
     if (event.target.closest("#system-txn-merchant")) {
       state.systemTxnMerchantId = event.target.value;
       state.systemTransactions = [];
