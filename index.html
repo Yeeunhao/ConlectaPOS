@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=8">
+  <link rel="stylesheet" href="/styles.css?v=9">
   <link rel="stylesheet" href="/theme-pack.css?v=10">
 </head>
 <body data-theme="crystal_bloom">
@@ -36,6 +36,53 @@
     <div class="particle p12"></div>
     <div id="particles-container"></div>
   </div>
+
+  <section id="first-login-splash" class="first-login-splash" aria-label="Welcome to Conlecta" hidden>
+    <div class="splash-celestial-bg" aria-hidden="true"></div>
+    <div class="splash-stardust" aria-hidden="true"></div>
+    <div class="splash-orbit-glow" aria-hidden="true"></div>
+    <div class="splash-petal-field" id="splash-petal-field" aria-hidden="true"></div>
+
+    <div class="splash-controls">
+      <button class="splash-control splash-sound-btn" id="login-splash-sound" type="button" aria-label="Enable startup sound" title="Enable startup sound">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 9v6h4l5 4V5L8 9H4z"></path>
+          <path d="M16 9.5a4 4 0 0 1 0 5"></path>
+          <path d="M18.5 7a7.5 7.5 0 0 1 0 10"></path>
+        </svg>
+      </button>
+      <button class="splash-control splash-skip-btn" id="login-splash-skip" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="m5 4 10 8-10 8V4z"></path>
+          <path d="M19 5v14"></path>
+        </svg>
+        <span>Skip</span>
+      </button>
+    </div>
+
+    <div class="splash-flower" aria-hidden="true">
+      <div class="splash-flower-aura"></div>
+      <div class="splash-flower-stem"></div>
+      <div class="splash-flower-bloom">
+        <span class="splash-flower-petal fp1"></span>
+        <span class="splash-flower-petal fp2"></span>
+        <span class="splash-flower-petal fp3"></span>
+        <span class="splash-flower-petal fp4"></span>
+        <span class="splash-flower-petal fp5"></span>
+        <span class="splash-flower-petal fp6"></span>
+        <span class="splash-flower-petal fp7"></span>
+        <span class="splash-flower-petal fp8"></span>
+        <span class="splash-flower-core"></span>
+      </div>
+    </div>
+
+    <div class="splash-logo-stage">
+      <div class="splash-logo-halo" aria-hidden="true"></div>
+      <img class="splash-brand-mark conlecta-identity-logo" src="/assets/ConlectaPosLogo.png" alt="Conlecta">
+      <h1>Conlecta</h1>
+      <p>Welcome to Conlecta</p>
+    </div>
+  </section>
 
   <section id="auth-screen" class="auth-screen">
     <div class="auth-card">
@@ -1075,7 +1122,7 @@
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=8"></script>
   <script src="/image-crop.js?v=2"></script>
-  <script src="/app.js?v=23"></script>
+  <script src="/app.js?v=24"></script>
   <script src="/qris-frame-admin.js?v=9"></script>
 </body>
 </html>

@@ -108,6 +108,19 @@ let loadingDepth = 0;
 let loadingProgressTimer = null;
 let loadingProgressValue = 0;
 let loadingBootMode = false;
+const LOGIN_SPLASH_STORAGE_PREFIX = "conlecta_first_login_splash_seen";
+const LOGIN_SPLASH_TOTAL_MS = 7800;
+const LOGIN_SPLASH_LOGO_MS = 4550;
+const LOGIN_SPLASH_EXIT_MS = 900;
+const LOGIN_SPLASH_PETAL_COUNT = 30;
+const LOGIN_SPLASH_SPARKLE_COUNT = 36;
+let loginSplashPendingKey = "";
+let loginSplashResolve = null;
+let loginSplashTimers = [];
+let loginSplashAudioContext = null;
+let loginSplashSoundArmed = false;
+let loginSplashLogoRevealed = false;
+let loginSplashChimePlayed = false;
 
 const BOOT_LOADING_STEPS = [
   { key: "session", label: "Mengecek session user..." },
@@ -716,6 +729,251 @@ async function withLoading(message, task) {
   } finally {
     hideLoading();
   }
+}
+
+function waitMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loginSplashStorageKey(auth = state.auth) {
+  const accountId = String(auth?.id || "account").trim() || "account";
+  const deviceId = String(auth?.device_id || getDeviceId() || "device").trim() || "device";
+  const stamp = String(auth?.login_ts || auth?.log_start_ts || auth?.session_day || "session").trim() || "session";
+  return `${LOGIN_SPLASH_STORAGE_PREFIX}:${deviceId}:${accountId}:${stamp}`;
+}
+
+function hasSeenLoginSplash(key) {
+  if (!key) return true;
+  try {
+    return sessionStorage.getItem(key) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function markLoginSplashSeen(key = loginSplashPendingKey) {
+  if (!key) return;
+  try {
+    sessionStorage.setItem(key, "1");
+  } catch {
+    // If sessionStorage is unavailable, the splash is skipped on the next load.
+  }
+}
+
+function prepareLoginSplashForBootstrap() {
+  loginSplashPendingKey = "";
+  if (!state.auth) {
+    document.body.classList.remove("login-splash-lock");
+    return false;
+  }
+  const key = loginSplashStorageKey(state.auth);
+  if (hasSeenLoginSplash(key)) {
+    document.body.classList.remove("login-splash-lock");
+    return false;
+  }
+  loginSplashPendingKey = key;
+  document.body.classList.add("login-splash-lock");
+  return true;
+}
+
+function clearLoginSplashTimers() {
+  loginSplashTimers.forEach((timer) => clearTimeout(timer));
+  loginSplashTimers = [];
+}
+
+function settleLoginSplash(reason = "complete") {
+  if (!loginSplashResolve) return;
+  const resolve = loginSplashResolve;
+  loginSplashResolve = null;
+  resolve(reason);
+}
+
+function cancelLoginSplash() {
+  clearLoginSplashTimers();
+  loginSplashResolve = null;
+  loginSplashPendingKey = "";
+  loginSplashLogoRevealed = false;
+  loginSplashSoundArmed = false;
+  loginSplashChimePlayed = false;
+  document.body.classList.remove("login-splash-lock");
+  const splash = $("#first-login-splash");
+  if (splash) {
+    splash.hidden = true;
+    splash.classList.remove("is-playing", "is-leaving");
+  }
+}
+
+function buildLoginSplashField() {
+  const field = $("#splash-petal-field");
+  if (!field) return;
+  if (field.dataset.readyFor === loginSplashPendingKey) return;
+  field.innerHTML = "";
+  const tones = ["#f8fbff", "#bfe9ff", "#c4b5fd", "#ffd6f0", "#dbeafe"];
+
+  for (let i = 0; i < LOGIN_SPLASH_PETAL_COUNT; i += 1) {
+    const petal = document.createElement("span");
+    petal.className = "splash-falling-petal";
+    petal.style.setProperty("--x", `${Math.round(Math.random() * 100)}%`);
+    petal.style.setProperty("--size", `${Math.round(Math.random() * 9 + 8)}px`);
+    petal.style.setProperty("--delay", `${(Math.random() * 3.8 + 1.8).toFixed(2)}s`);
+    petal.style.setProperty("--duration", `${(Math.random() * 4.4 + 6.8).toFixed(2)}s`);
+    petal.style.setProperty("--drift", `${Math.round(Math.random() * 220 - 110)}px`);
+    petal.style.setProperty("--rotate", `${Math.round(Math.random() * 280 - 140)}deg`);
+    petal.style.setProperty("--alpha", `${(Math.random() * 0.32 + 0.34).toFixed(2)}`);
+    field.appendChild(petal);
+  }
+
+  for (let i = 0; i < LOGIN_SPLASH_SPARKLE_COUNT; i += 1) {
+    const sparkle = document.createElement("span");
+    sparkle.className = "splash-sparkle";
+    sparkle.style.setProperty("--x", `${Math.round(Math.random() * 100)}%`);
+    sparkle.style.setProperty("--y", `${Math.round(Math.random() * 82 + 4)}%`);
+    sparkle.style.setProperty("--size", `${Math.round(Math.random() * 3 + 2)}px`);
+    sparkle.style.setProperty("--delay", `${(Math.random() * 5.2 + 0.2).toFixed(2)}s`);
+    sparkle.style.setProperty("--duration", `${(Math.random() * 2.4 + 2.2).toFixed(2)}s`);
+    sparkle.style.setProperty("--tone", tones[Math.floor(Math.random() * tones.length)]);
+    field.appendChild(sparkle);
+  }
+
+  field.dataset.readyFor = loginSplashPendingKey;
+}
+
+function ensureLoginSplashAudioContext() {
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) return null;
+  if (!loginSplashAudioContext) loginSplashAudioContext = new AudioCtor();
+  return loginSplashAudioContext;
+}
+
+function scheduleSplashTone(ctx, destination, frequency, start, duration, peak, type = "sine") {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), start + 0.035);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(gain);
+  gain.connect(destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.08);
+}
+
+async function playLoginSplashChime({ force = false } = {}) {
+  if (loginSplashChimePlayed && !force) return true;
+  const ctx = ensureLoginSplashAudioContext();
+  if (!ctx) return false;
+  if (ctx.state === "suspended") await ctx.resume();
+  if (ctx.state === "suspended") throw new Error("Startup sound blocked.");
+
+  const now = ctx.currentTime + 0.03;
+  const master = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  const delay = ctx.createDelay(1.2);
+  const feedback = ctx.createGain();
+
+  master.gain.setValueAtTime(0.0001, now);
+  master.gain.exponentialRampToValueAtTime(0.42, now + 0.08);
+  master.gain.exponentialRampToValueAtTime(0.0001, now + 3.45);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(6200, now);
+  delay.delayTime.setValueAtTime(0.18, now);
+  feedback.gain.setValueAtTime(0.22, now);
+
+  master.connect(filter);
+  filter.connect(ctx.destination);
+  filter.connect(delay);
+  delay.connect(feedback);
+  feedback.connect(delay);
+  delay.connect(ctx.destination);
+
+  [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
+    scheduleSplashTone(ctx, master, frequency, now + index * 0.02, 3.1, 0.018, "sine");
+  });
+  [1046.5, 1567.98, 2093].forEach((frequency, index) => {
+    scheduleSplashTone(ctx, master, frequency, now + 0.12 + index * 0.015, 1.65, 0.11 - index * 0.024, "triangle");
+  });
+  [587.33, 739.99, 880, 1174.66, 1396.91].forEach((frequency, index) => {
+    scheduleSplashTone(ctx, master, frequency, now + 0.58 + index * 0.13, 0.72, 0.052, "sine");
+  });
+  [1760, 2217.46, 2637.02].forEach((frequency, index) => {
+    scheduleSplashTone(ctx, master, frequency, now + 2.42 + index * 0.11, 0.46, 0.044, "sine");
+  });
+
+  loginSplashChimePlayed = true;
+  return true;
+}
+
+async function armLoginSplashSound() {
+  loginSplashSoundArmed = true;
+  const button = $("#login-splash-sound");
+  if (button) {
+    button.classList.add("is-on");
+    button.setAttribute("aria-label", "Startup sound enabled");
+    button.title = "Startup sound enabled";
+  }
+  const ctx = ensureLoginSplashAudioContext();
+  if (ctx?.state === "suspended") await ctx.resume();
+  if (loginSplashLogoRevealed) {
+    loginSplashChimePlayed = false;
+    await playLoginSplashChime({ force: true });
+  }
+}
+
+function skipLoginSplash() {
+  settleLoginSplash("skip");
+}
+
+async function revealLoginSplashLogoSound() {
+  loginSplashLogoRevealed = true;
+  try {
+    await playLoginSplashChime();
+    $("#login-splash-sound")?.classList.add("is-on");
+  } catch {
+    if (loginSplashSoundArmed) showToast("Tap sound again to enable chime", "error", 2200);
+  }
+}
+
+async function runLoginSplashIfNeeded() {
+  const splash = $("#first-login-splash");
+  if (!loginSplashPendingKey || !state.auth || !splash) {
+    document.body.classList.remove("login-splash-lock");
+    return false;
+  }
+
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const logoDelay = reduceMotion ? 180 : LOGIN_SPLASH_LOGO_MS;
+  const totalDelay = reduceMotion ? 1350 : LOGIN_SPLASH_TOTAL_MS;
+
+  buildLoginSplashField();
+  clearLoginSplashTimers();
+  loginSplashLogoRevealed = false;
+  loginSplashSoundArmed = false;
+  loginSplashChimePlayed = false;
+  $("#login-splash-sound")?.classList.remove("is-on");
+  splash.hidden = false;
+  splash.classList.remove("is-leaving");
+  splash.classList.remove("is-playing");
+  splash.getBoundingClientRect();
+  splash.classList.add("is-playing");
+
+  const reason = await new Promise((resolve) => {
+    loginSplashResolve = resolve;
+    loginSplashTimers.push(setTimeout(() => revealLoginSplashLogoSound().catch(() => null), logoDelay));
+    loginSplashTimers.push(setTimeout(() => settleLoginSplash("complete"), totalDelay));
+  });
+
+  clearLoginSplashTimers();
+  markLoginSplashSeen();
+  document.body.classList.remove("login-splash-lock");
+  splash.classList.remove("is-playing");
+  splash.classList.add("is-leaving");
+  await waitMs(reason === "skip" ? 420 : LOGIN_SPLASH_EXIT_MS);
+  splash.hidden = true;
+  splash.classList.remove("is-leaving");
+  loginSplashPendingKey = "";
+  loginSplashLogoRevealed = false;
+  return true;
 }
 
 function filenameFromDisposition(disposition, fallback) {
@@ -1486,6 +1744,7 @@ function startStockPolling() {
 
 function applyLoggedOutState(message = "") {
   authEpoch += 1;
+  cancelLoginSplash();
   stopCashierNoticeHeartbeat(state.activePaymentModalTxn, { notify: true });
   requestQrDisplayClose();
   state.auth = null;
@@ -1813,6 +2072,7 @@ function showLogoutModal() {
 
 async function logout() {
   authEpoch += 1;
+  cancelLoginSplash();
   requestQrDisplayClose();
   clearDisplayLocalCache();
   await withLoading("Menutup sesi...", async () => {
@@ -4764,6 +5024,7 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   if (state.auth) {
     lastActivityTs = authActivityMs(state.auth) || lastActivityTs || Date.now();
   }
+  if (bootProgress) prepareLoginSplashForBootstrap();
   const bootProducts = Array.isArray(result.products) ? result.products : [];
   state.products = bootProducts;
   if (bootProgress) updateBootLoading("vendor", 48);
@@ -5071,6 +5332,10 @@ function buildAmbientParticles() {
 }
 
 function bindEvents() {
+  $("#login-splash-skip")?.addEventListener("click", skipLoginSplash);
+  $("#login-splash-sound")?.addEventListener("click", () => {
+    armLoginSplashSound().catch(() => showToast("Sound unavailable in this browser", "error", 2200));
+  });
   $("#login-form").addEventListener("submit", (event) => loginSubmit(event).catch((err) => {
     $("#login-status").textContent = err.message;
   }));
@@ -5353,10 +5618,11 @@ async function init() {
   updateClock();
   setInterval(updateClock, 1000);
   await withLoading("Mengecek session user...", () => reloadBootstrap({ bootProgress: true }));
+  const showedLoginSplash = await runLoginSplashIfNeeded();
   try {
     if (sessionStorage.getItem("conlecta_fresh_login")) {
       sessionStorage.removeItem("conlecta_fresh_login");
-      showToast("Login berhasil");
+      if (!showedLoginSplash) showToast("Login berhasil");
     }
   } catch {
     // Ignore storage failures on the post-login toast.

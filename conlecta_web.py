@@ -6606,6 +6606,7 @@ def _pdf_deps_ready():
 
 
 def run(host="127.0.0.1", port=8765):
+    skip_oauth_warmup = os.environ.get("CONLECTA_SKIP_OAUTH_WARMUP") == "1"
     if _email_deps_ready():
         log.info("Gmail/receipt email dependencies: OK")
     else:
@@ -6620,7 +6621,7 @@ def run(host="127.0.0.1", port=8765):
             "PDF export disabled on this VPS. Install with: "
             "pip install -r requirements.txt  (then restart the server)"
         )
-    if _email_deps_ready():
+    if _email_deps_ready() and not skip_oauth_warmup:
         def _warm_oauth_tokens():
             try:
                 warm_up_google_tokens()
@@ -6628,6 +6629,8 @@ def run(host="127.0.0.1", port=8765):
             except Exception as exc:
                 log.warning("Google OAuth warm-up failed: %s", exc)
         threading.Thread(target=_warm_oauth_tokens, daemon=True, name="oauth-warmup").start()
+    elif skip_oauth_warmup:
+        log.info("Google OAuth warm-up skipped for this run")
     server = ThreadingHTTPServer((host, port), ConlectaWebHandler)
     log.info("Conlecta web app running at http://%s:%s", host, port)
     try:
