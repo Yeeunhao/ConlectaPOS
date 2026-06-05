@@ -74,6 +74,7 @@ const state = {
   systemDisbursementBank: "",
   systemDisbursementAccount: "",
   systemDisbursementAmount: "",
+  language: "en",
 };
 
 const qrChannel = "BroadcastChannel" in window ? new BroadcastChannel("conlecta-qr") : null;
@@ -151,6 +152,227 @@ const BOOT_LOADING_STEPS = [
   { key: "history", label: "Memuat history terbaru..." },
   { key: "ready", label: "Mohon tunggu..." },
 ];
+const LANGUAGE_STORAGE_KEY = "conlecta_ui_language";
+const LANGUAGE_NAMES = {
+  en: "English",
+  id: "Indonesia",
+  zh: "中文",
+};
+const LANGUAGE_HTML_LANG = {
+  en: "en",
+  id: "id",
+  zh: "zh-Hans",
+};
+const I18N = {
+  "Language": { en: "Language", id: "Bahasa", zh: "语言" },
+  "Welcome to Conlecta": { en: "Welcome to Conlecta", id: "Selamat datang di Conlecta", zh: "欢迎使用 Conlecta" },
+  "Secure Conlecta access": { en: "Secure Conlecta access", id: "Akses Conlecta aman", zh: "安全访问 Conlecta" },
+  "Cashier, stock, QRIS payment, history, PDF, settings, and logs in one web workspace.": { en: "Cashier, stock, QRIS payment, history, PDF, settings, and logs in one web workspace.", id: "Kasir, stok, pembayaran QRIS, riwayat, PDF, pengaturan, dan log dalam satu workspace web.", zh: "收银、库存、QRIS 支付、历史记录、PDF、设置和日志集中在一个网页工作区。" },
+  "Welcome back": { en: "Welcome back", id: "Selamat datang kembali", zh: "欢迎回来" },
+  "Enter your account password to continue.": { en: "Enter your account password to continue.", id: "Masukkan password akun untuk melanjutkan.", zh: "请输入账户密码以继续。" },
+  "Email or Username": { en: "Email or Username", id: "Email atau Username", zh: "邮箱或用户名" },
+  "Checking user session...": { en: "Checking user session...", id: "Mengecek session user...", zh: "正在检查用户会话..." },
+  "Loading items from database...": { en: "Loading items from database...", id: "Loading item from Database...", zh: "正在从数据库加载商品..." },
+  "Loading vendors from database...": { en: "Loading vendors from database...", id: "Memuat vendor dari database...", zh: "正在从数据库加载供应商..." },
+  "Loading latest history...": { en: "Loading latest history...", id: "Memuat history terbaru...", zh: "正在加载最新历史..." },
+  "Please wait...": { en: "Please wait...", id: "Mohon tunggu...", zh: "请稍候..." },
+  "Password": { en: "Password", id: "Password", zh: "密码" },
+  "Show password": { en: "Show password", id: "Tampilkan password", zh: "显示密码" },
+  "Login": { en: "Login", id: "Masuk", zh: "登录" },
+  "Enter PIN": { en: "Enter PIN", id: "Masukkan PIN", zh: "输入 PIN" },
+  "Enter your 6-digit PIN.": { en: "Enter your 6-digit PIN.", id: "Masukkan 6 digit PIN.", zh: "请输入 6 位 PIN。" },
+  "6 digit PIN code": { en: "6 digit PIN code", id: "Kode PIN 6 digit", zh: "6 位 PIN 码" },
+  "Forgot PIN": { en: "Forgot PIN", id: "Lupa PIN", zh: "忘记 PIN" },
+  "Back to login": { en: "Back to login", id: "Kembali ke login", zh: "返回登录" },
+  "Register PIN": { en: "Register PIN", id: "Daftar PIN", zh: "注册 PIN" },
+  "Create a 6-digit PIN for the next login.": { en: "Create a 6-digit PIN for the next login.", id: "Buat PIN 6 angka untuk login berikutnya.", zh: "创建 6 位 PIN 用于下次登录。" },
+  "Step 1 of 2": { en: "Step 1 of 2", id: "Langkah 1 dari 2", zh: "第 1 步，共 2 步" },
+  "Step 2 of 2": { en: "Step 2 of 2", id: "Langkah 2 dari 2", zh: "第 2 步，共 2 步" },
+  "Create PIN": { en: "Create PIN", id: "Buat PIN", zh: "创建 PIN" },
+  "Continue": { en: "Continue", id: "Lanjutkan", zh: "继续" },
+  "Confirm PIN": { en: "Confirm PIN", id: "Konfirmasi PIN", zh: "确认 PIN" },
+  "Save": { en: "Save", id: "Simpan", zh: "保存" },
+  "Back": { en: "Back", id: "Kembali", zh: "返回" },
+  "Verify OTP": { en: "Verify OTP", id: "Verifikasi OTP", zh: "验证 OTP" },
+  "OTP sent to your email.": { en: "OTP sent to your email.", id: "OTP dikirim ke email Anda.", zh: "OTP 已发送到您的邮箱。" },
+  "OTP is valid for 60 seconds.": { en: "OTP is valid for 60 seconds.", id: "OTP berlaku 60 detik.", zh: "OTP 有效期为 60 秒。" },
+  "6 digit OTP code": { en: "6 digit OTP code", id: "Kode OTP 6 digit", zh: "6 位 OTP 码" },
+  "Resend OTP": { en: "Resend OTP", id: "Kirim ulang OTP", zh: "重新发送 OTP" },
+  "Point of Sale": { en: "Point of Sale", id: "Point of Sale", zh: "销售终端" },
+  "Cashier": { en: "Cashier", id: "Kasir", zh: "收银" },
+  "QR Display": { en: "QR Display", id: "Tampilan QR", zh: "二维码显示" },
+  "Stock": { en: "Stock", id: "Stok", zh: "库存" },
+  "Analytics": { en: "Analytics", id: "Analitik", zh: "分析" },
+  "History": { en: "History", id: "Riwayat", zh: "历史" },
+  "Disbursement": { en: "Disbursement", id: "Disbursement", zh: "打款" },
+  "Settings": { en: "Settings", id: "Pengaturan", zh: "设置" },
+  "Log": { en: "Log", id: "Log", zh: "日志" },
+  "Logout": { en: "Logout", id: "Keluar", zh: "退出" },
+  "Current session": { en: "Current session", id: "Sesi saat ini", zh: "当前会话" },
+  "Refresh Data": { en: "Refresh Data", id: "Refresh Data", zh: "刷新数据" },
+  "Sync": { en: "Sync", id: "Sinkron", zh: "同步" },
+  "Total Due": { en: "Total Due", id: "Total Tagihan", zh: "应付总额" },
+  "Catalog": { en: "Catalog", id: "Katalog", zh: "目录" },
+  "Tap item controls to update cart": { en: "Tap item controls to update cart", id: "Tap kontrol item untuk update cart", zh: "点击商品控件更新购物车" },
+  "All": { en: "All", id: "Semua", zh: "全部" },
+  "In cart": { en: "In cart", id: "Di cart", zh: "购物车内" },
+  "Search item...": { en: "Search item...", id: "Cari item...", zh: "搜索商品..." },
+  "Checkout": { en: "Checkout", id: "Checkout", zh: "结账" },
+  "Customer Name": { en: "Customer Name", id: "Nama Customer", zh: "客户姓名" },
+  "Customer Email (optional)": { en: "Customer Email (optional)", id: "Email Customer (opsional)", zh: "客户邮箱（可选）" },
+  "Cash Received": { en: "Cash Received", id: "Uang Diterima", zh: "收到现金" },
+  "Blank = QRIS": { en: "Blank = QRIS", id: "Kosong = QRIS", zh: "留空 = QRIS" },
+  "Cart items": { en: "Cart items", id: "Item cart", zh: "购物车商品" },
+  "Clear cart": { en: "Clear cart", id: "Bersihkan cart", zh: "清空购物车" },
+  "Payment total": { en: "Payment total", id: "Total pembayaran", zh: "支付总额" },
+  "Generate QRIS payment": { en: "Generate QRIS payment", id: "Buat pembayaran QRIS", zh: "生成 QRIS 支付" },
+  "Check Status": { en: "Check Status", id: "Cek Status", zh: "检查状态" },
+  "Dismiss QR": { en: "Dismiss QR", id: "Tutup QR", zh: "关闭二维码" },
+  "F2 search - F5 pay/generate QR - Esc dismiss": { en: "F2 search - F5 pay/generate QR - Esc dismiss", id: "F2 cari - F5 bayar/buat QR - Esc tutup", zh: "F2 搜索 - F5 支付/生成二维码 - Esc 关闭" },
+  "Conlecta Settings": { en: "Conlecta Settings", id: "Pengaturan Conlecta", zh: "Conlecta 设置" },
+  "Save Settings": { en: "Save Settings", id: "Simpan Pengaturan", zh: "保存设置" },
+  "Admin Setting": { en: "Admin Setting", id: "Pengaturan Admin", zh: "管理员设置" },
+  "Display": { en: "Display", id: "Tampilan", zh: "显示" },
+  "QRIS Environment": { en: "QRIS Environment", id: "Environment QRIS", zh: "QRIS 环境" },
+  "QRIS is processed through the payment server.": { en: "QRIS is processed through the payment server.", id: "QRIS diproses lewat server pembayaran.", zh: "QRIS 通过支付服务器处理。" },
+  "Env variable": { en: "Env variable", id: "Variabel env", zh: "环境变量" },
+  "Payment env": { en: "Payment env", id: "Env pembayaran", zh: "支付环境" },
+  "Not checked yet": { en: "Not checked yet", id: "Belum dicek", zh: "尚未检查" },
+  "Check Env": { en: "Check Env", id: "Cek Env", zh: "检查环境" },
+  "Merchant Setting": { en: "Merchant Setting", id: "Pengaturan Merchant", zh: "商户设置" },
+  "Save Merchant": { en: "Save Merchant", id: "Simpan Merchant", zh: "保存商户" },
+  "Merchant Logo": { en: "Merchant Logo", id: "Logo Merchant", zh: "商户 Logo" },
+  "Used for POS header and QR Display. Login/PIN/OTP remains locked to Conlecta Identity.": { en: "Used for POS header and QR Display. Login/PIN/OTP remains locked to Conlecta Identity.", id: "Dipakai untuk header POS dan QR Display. Login/PIN/OTP tetap memakai identitas Conlecta.", zh: "用于 POS 页眉和二维码显示。登录/PIN/OTP 仍使用 Conlecta 标识。" },
+  "Upload Logo": { en: "Upload Logo", id: "Upload Logo", zh: "上传 Logo" },
+  "Merchant ID": { en: "Merchant ID", id: "ID Merchant", zh: "商户 ID" },
+  "Merchant Name": { en: "Merchant Name", id: "Nama Merchant", zh: "商户名称" },
+  "Address": { en: "Address", id: "Alamat", zh: "地址" },
+  "Postcode": { en: "Postcode", id: "Kode Pos", zh: "邮编" },
+  "Allow stock CRUD": { en: "Allow stock CRUD", id: "Izinkan CRUD stok", zh: "允许库存增删改查" },
+  "Allow analytics menu": { en: "Allow analytics menu", id: "Izinkan menu analitik", zh: "允许分析菜单" },
+  "Accounts": { en: "Accounts", id: "Akun", zh: "账户" },
+  "Create Account": { en: "Create Account", id: "Buat Akun", zh: "创建账户" },
+  "Account Name": { en: "Account Name", id: "Nama Akun", zh: "账户名称" },
+  "Email": { en: "Email", id: "Email", zh: "邮箱" },
+  "Merchant Admin": { en: "Merchant Admin", id: "Admin Merchant", zh: "商户管理员" },
+  "Admin": { en: "Admin", id: "Admin", zh: "管理员" },
+  "Email account": { en: "email account", id: "email akun", zh: "邮箱账户" },
+  "This account": { en: "this account", id: "akun ini", zh: "此账户" },
+  "Verifying password...": { en: "Verifying password...", id: "Memverifikasi password...", zh: "正在验证密码..." },
+  "Verifying OTP...": { en: "Verifying OTP...", id: "Memverifikasi OTP...", zh: "正在验证 OTP..." },
+  "Verifying PIN...": { en: "Verifying PIN...", id: "Memverifikasi PIN...", zh: "正在验证 PIN..." },
+  "Enter a 6-digit OTP.": { en: "Enter a 6-digit OTP.", id: "Masukkan 6 digit OTP.", zh: "请输入 6 位 OTP。" },
+  "Enter a 6-digit PIN.": { en: "Enter a 6-digit PIN.", id: "Masukkan PIN 6 angka.", zh: "请输入 6 位 PIN。" },
+  "PIN mismatch.": { en: "PIN mismatch.", id: "Konfirmasi PIN tidak sama.", zh: "PIN 不一致。" },
+  "Create a new PIN after OTP is verified.": { en: "Create a new PIN after OTP is verified.", id: "Buat PIN baru setelah OTP berhasil.", zh: "OTP 验证成功后创建新 PIN。" },
+  "Login successful": { en: "Login successful", id: "Login berhasil", zh: "登录成功" },
+  "Sending reset PIN OTP...": { en: "Sending reset PIN OTP...", id: "Mengirim OTP reset PIN...", zh: "正在发送重置 PIN 的 OTP..." },
+  "Reset PIN OTP sent to": { en: "Reset PIN OTP sent to", id: "OTP reset PIN dikirim ke", zh: "重置 PIN 的 OTP 已发送至" },
+  "Resending OTP...": { en: "Resending OTP...", id: "Mengirim ulang OTP...", zh: "正在重新发送 OTP..." },
+  "New OTP sent.": { en: "New OTP sent.", id: "OTP baru dikirim.", zh: "新的 OTP 已发送。" },
+  "OTP valid seconds": { en: "OTP is valid for {seconds} seconds.", id: "OTP berlaku {seconds} detik.", zh: "OTP 有效期为 {seconds} 秒。" },
+  "OTP expired resend seconds": { en: "OTP expired. Resend available in {seconds} seconds.", id: "OTP expired. Resend tersedia dalam {seconds} detik.", zh: "OTP 已过期。{seconds} 秒后可重新发送。" },
+  "OTP expired resend available": { en: "OTP expired. Resend OTP is available.", id: "OTP expired. Resend OTP tersedia.", zh: "OTP 已过期。可以重新发送 OTP。" },
+  "OTP expired login again": { en: "OTP expired. Please login again.", id: "OTP expired. Silakan login ulang.", zh: "OTP 已过期。请重新登录。" },
+  "Resend already used": { en: "Resend already used", id: "Resend sudah dipakai", zh: "重新发送次数已用完" },
+  "OTP expired resend OTP": { en: "OTP expired. Please resend OTP.", id: "OTP expired. Silakan resend OTP.", zh: "OTP 已过期。请重新发送 OTP。" },
+  "Wait seconds before resend OTP": { en: "Wait {seconds} seconds before resending OTP.", id: "Tunggu {seconds} detik sebelum resend OTP.", zh: "请等待 {seconds} 秒后重新发送 OTP。" },
+  "OTP sent to admin email.": { en: "OTP sent to the admin email.", id: "OTP dikirim ke email admin.", zh: "OTP 已发送到管理员邮箱。" },
+  "Select a bank from the dropdown.": { en: "Select a bank from the dropdown.", id: "Pilih bank dari dropdown.", zh: "请从下拉列表选择银行。" },
+  "Account number is not valid yet.": { en: "Account number is not valid yet.", id: "Nomor rekening belum valid.", zh: "账号尚未有效。" },
+  "Minimum disbursement is Rp 10.000.": { en: "Minimum disbursement is Rp 10.000.", id: "Minimal disbursement Rp 10.000.", zh: "最低打款金额为 Rp 10.000。" },
+  "Disbursement amount exceeds merchant balance.": { en: "Disbursement amount exceeds merchant balance.", id: "Nominal disbursement melebihi merchant balance.", zh: "打款金额超过商户余额。" },
+  "Inquiry the account before submitting.": { en: "Inquiry the account before submitting.", id: "Inquiry rekening dulu sebelum submit.", zh: "提交前请先查询账户。" },
+  "PIN must be 6 digits.": { en: "PIN must be 6 digits.", id: "PIN wajib 6 angka.", zh: "PIN 必须为 6 位数字。" },
+  "OTP must be 6 digits.": { en: "OTP must be 6 digits.", id: "OTP wajib 6 angka.", zh: "OTP 必须为 6 位数字。" },
+  "Beneficiary verified": { en: "Beneficiary verified", id: "Beneficiary verified", zh: "收款人已验证" },
+  "Disbursement request created": { en: "Disbursement request created", id: "Disbursement request dibuat", zh: "打款申请已创建" },
+  "Theme": { en: "Theme", id: "Tema", zh: "主题" },
+  "Marquee Line 1": { en: "Marquee Line 1", id: "Marquee Baris 1", zh: "滚动文字第 1 行" },
+  "Marquee Line 2": { en: "Marquee Line 2", id: "Marquee Baris 2", zh: "滚动文字第 2 行" },
+  "Marquee Line 3": { en: "Marquee Line 3", id: "Marquee Baris 3", zh: "滚动文字第 3 行" },
+  "Payment display images": { en: "Payment display images", id: "Gambar display pembayaran", zh: "支付显示图片" },
+  "Shown below QR Display total when QR is not active.": { en: "Shown below QR Display total when QR is not active.", id: "Tampil di bawah total QR Display saat QR belum aktif.", zh: "二维码未激活时显示在 QR Display 总额下方。" },
+  "Choose Pictures": { en: "Choose Pictures", id: "Pilih Gambar", zh: "选择图片" },
+  "Use Sample Icons": { en: "Use Sample Icons", id: "Pakai Ikon Sample", zh: "使用示例图标" },
+  "Clear Custom": { en: "Clear Custom", id: "Hapus Custom", zh: "清除自定义" },
+  "Video playlist": { en: "Video playlist", id: "Playlist video", zh: "视频播放列表" },
+  "Per account playlist. Played alternately on QR Display standby. Top order plays first.": { en: "Per account playlist. Played alternately on QR Display standby. Top order plays first.", id: "Per account playlist. Diputar bergantian di QR Display saat standby. Urutan atas = main lebih dulu.", zh: "每个账户独立播放列表。QR Display 待机时轮播，顶部优先播放。" },
+  "Upload Video": { en: "Upload Video", id: "Upload Video", zh: "上传视频" },
+  "Disable default sample video": { en: "Disable default sample video", id: "Matikan sample video default", zh: "禁用默认示例视频" },
+  "Scan Assets": { en: "Scan Assets", id: "Scan Assets", zh: "扫描资源" },
+  "Open QR Display New Tab": { en: "Open QR Display New Tab", id: "Buka QR Display Tab Baru", zh: "在新标签打开 QR Display" },
+  "QRIS Disbursement": { en: "QRIS Disbursement", id: "Disbursement QRIS", zh: "QRIS 打款" },
+  "Request Disbursement": { en: "Request Disbursement", id: "Request Disbursement", zh: "申请打款" },
+  "History Disbursement": { en: "History Disbursement", id: "History Disbursement", zh: "打款历史" },
+  "Transfer QRIS Proceeds": { en: "Transfer QRIS Proceeds", id: "Transfer Hasil QRIS", zh: "转出 QRIS 收款" },
+  "Bank": { en: "Bank", id: "Bank", zh: "银行" },
+  "Search bank name...": { en: "Search bank name...", id: "Cari nama bank...", zh: "搜索银行名称..." },
+  "Account Number": { en: "Account Number", id: "Nomor Rekening", zh: "账号" },
+  "Account No.": { en: "Account No.", id: "No. Rekening", zh: "账号" },
+  "Inquiry Account": { en: "Inquiry Account", id: "Inquiry Rekening", zh: "查询账户" },
+  "Beneficiary": { en: "Beneficiary", id: "Beneficiary", zh: "收款人" },
+  "Not inquired yet": { en: "Not inquired yet", id: "Belum inquiry", zh: "尚未查询" },
+  "Request Amount": { en: "Request Amount", id: "Nominal Request", zh: "申请金额" },
+  "Merchant Balance": { en: "Merchant Balance", id: "Saldo Merchant", zh: "商户余额" },
+  "Admin Fee": { en: "Admin Fee", id: "Biaya Admin", zh: "管理费" },
+  "Minimum": { en: "Minimum", id: "Minimum", zh: "最低金额" },
+  "Transfer Amount": { en: "Transfer Amount", id: "Nominal Transfer", zh: "转账金额" },
+  "Submit Request": { en: "Submit Request", id: "Submit Request", zh: "提交申请" },
+  "Balance": { en: "Balance", id: "Saldo", zh: "余额" },
+  "Total QRIS Gross": { en: "Total QRIS Gross", id: "Total QRIS Gross", zh: "QRIS 总收入" },
+  "QRIS Fee": { en: "QRIS Fee", id: "Biaya QRIS", zh: "QRIS 费用" },
+  "Total QRIS Net": { en: "Total QRIS Net", id: "Total QRIS Net", zh: "QRIS 净额" },
+  "Reserved Pending/Success": { en: "Reserved Pending/Success", id: "Reserved Pending/Success", zh: "已保留待处理/成功" },
+  "Admin Fee per Request": { en: "Admin Fee per Request", id: "Biaya admin per request", zh: "每笔管理费" },
+  "Minimum Disbursement": { en: "Minimum Disbursement", id: "Minimum disbursement", zh: "最低打款金额" },
+  "Disbursement will take up to 3 business days and may be faster.": { en: "Disbursement will take up to 3 business days and may be faster.", id: "Disbursement akan makan waktu maksimal 3 hari kerja dan bisa lebih cepat.", zh: "打款最多需要 3 个工作日，也可能更快完成。" },
+  "From": { en: "From", id: "Dari", zh: "开始" },
+  "To": { en: "To", id: "Sampai", zh: "结束" },
+  "Amount After Fee": { en: "Amount After Fee", id: "Nominal Setelah Fee", zh: "扣费后金额" },
+  "Search": { en: "Search", id: "Cari", zh: "搜索" },
+  "Reset": { en: "Reset", id: "Reset", zh: "重置" },
+  "Request ID": { en: "Request ID", id: "ID Request", zh: "申请 ID" },
+  "Timestamp": { en: "Timestamp", id: "Waktu", zh: "时间戳" },
+  "Total Disbursement": { en: "Total Disbursement", id: "Total Disbursement", zh: "打款总额" },
+  "Recipient": { en: "Recipient", id: "Penerima", zh: "收款人" },
+  "Requester": { en: "Requester", id: "Requester", zh: "申请人" },
+  "Status": { en: "Status", id: "Status", zh: "状态" },
+  "Confirm Disbursement": { en: "Confirm Disbursement", id: "Konfirmasi Disbursement", zh: "确认打款" },
+  "Review Request": { en: "Review Request", id: "Review Request", zh: "审核申请" },
+  "Total Merchant Balance": { en: "Total Merchant Balance", id: "Total Saldo Merchant", zh: "商户总余额" },
+  "Disbursement Amount": { en: "Disbursement Amount", id: "Nominal Disbursement", zh: "打款金额" },
+  "Balance Merchant After": { en: "Merchant Balance After", id: "Saldo Merchant Setelahnya", zh: "打款后商户余额" },
+  "Cancel": { en: "Cancel", id: "Batal", zh: "取消" },
+  "Merchant Admin Credential": { en: "Merchant Admin Credential", id: "Credential Admin Merchant", zh: "商户管理员凭证" },
+  "Verify Disbursement": { en: "Verify Disbursement", id: "Verifikasi Disbursement", zh: "验证打款" },
+  "Enter the 6-digit admin PIN.": { en: "Enter the 6-digit admin PIN.", id: "Masukkan 6 digit PIN admin.", zh: "请输入 6 位管理员 PIN。" },
+  "Send OTP": { en: "Send OTP", id: "Kirim OTP", zh: "发送 OTP" },
+  "Success": { en: "Success", id: "Sukses", zh: "成功" },
+  "Pending": { en: "Pending", id: "Pending", zh: "待处理" },
+  "Failed": { en: "Failed", id: "Gagal", zh: "失败" },
+  "Payment Success": { en: "Payment Success", id: "Pembayaran Berhasil", zh: "支付成功" },
+  "Cash Paid": { en: "Cash Paid", id: "Tunai Dibayar", zh: "已付现金" },
+  "Change": { en: "Change", id: "Kembalian", zh: "找零" },
+  "Amount": { en: "Amount", id: "Nominal", zh: "金额" },
+  "Close": { en: "Close", id: "Tutup", zh: "关闭" },
+  "Receipt PDF": { en: "Receipt PDF", id: "PDF Struk", zh: "收据 PDF" },
+  "Refresh": { en: "Refresh", id: "Refresh", zh: "刷新" },
+  "Export": { en: "Export", id: "Export", zh: "导出" },
+  "Clear": { en: "Clear", id: "Clear", zh: "清除" },
+  "Free": { en: "FREE", id: "GRATIS", zh: "免费" },
+  "No products found": { en: "No products found", id: "Produk tidak ditemukan", zh: "未找到商品" },
+  "Cart empty": { en: "Cart empty", id: "Keranjang kosong", zh: "购物车为空" },
+  "Cart empty - choose products from catalog": { en: "Cart empty - choose products from catalog", id: "Keranjang kosong - pilih produk di katalog", zh: "购物车为空 - 请从目录选择商品" },
+  "Quantity": { en: "Quantity", id: "Jumlah", zh: "数量" },
+  "Decrease": { en: "Decrease", id: "Kurangi", zh: "减少" },
+  "Increase": { en: "Increase", id: "Tambah", zh: "增加" },
+  "Session Log": { en: "Session Log", id: "Log Sesi", zh: "会话日志" },
+};
+let i18nAliasMap = null;
+let languageObserver = null;
+let languageApplying = false;
+let languageScheduled = false;
 let displayPublishQueued = false;
 let hasBootstrapped = false;
 let authEpoch = 0;
@@ -176,6 +398,167 @@ function accountScopedStorageKey(name, accountId = "") {
   const aid = String(accountId || state.auth?.id || "").trim();
   if (aid) return `${name}:${getDeviceId()}:${aid}`;
   return deviceStorageKey(name);
+}
+
+function normalizeI18nText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function buildI18nAliasMap() {
+  const map = new Map();
+  Object.entries(I18N).forEach(([key, values]) => {
+    map.set(normalizeI18nText(key), key);
+    Object.values(values || {}).forEach((value) => {
+      const normalized = normalizeI18nText(value);
+      if (normalized) map.set(normalized, key);
+    });
+  });
+  return map;
+}
+
+function i18nKeyFor(value) {
+  if (!i18nAliasMap) i18nAliasMap = buildI18nAliasMap();
+  return i18nAliasMap.get(normalizeI18nText(value)) || "";
+}
+
+function t(value, params = {}) {
+  const key = I18N[value] ? value : i18nKeyFor(value);
+  let text = (key && (I18N[key]?.[state.language] || I18N[key]?.en)) || String(value || "");
+  Object.entries(params || {}).forEach(([param, replacement]) => {
+    text = text.replaceAll(`{${param}}`, String(replacement ?? ""));
+  });
+  return text;
+}
+
+function readLanguagePreference() {
+  try {
+    const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (Object.prototype.hasOwnProperty.call(LANGUAGE_NAMES, stored)) return stored;
+  } catch {
+    // Browser storage can be unavailable; English remains the default.
+  }
+  return "en";
+}
+
+function syncLanguageControls() {
+  $$("[data-language-select]").forEach((select) => {
+    if (select.value !== state.language) select.value = state.language;
+  });
+  document.documentElement.lang = LANGUAGE_HTML_LANG[state.language] || "en";
+}
+
+function shouldSkipTranslationElement(el) {
+  if (!el) return true;
+  return Boolean(el.closest([
+    "script",
+    "style",
+    "textarea",
+    "select",
+    "option",
+    "code",
+    "pre",
+      "#stock-list",
+      "#vendor-list",
+    ".product-name",
+    ".js-brand-name",
+    ".brand-name",
+    "[data-i18n-skip]",
+  ].join(",")));
+}
+
+function translateTextNode(node) {
+  if (!node?.nodeValue || shouldSkipTranslationElement(node.parentElement)) return;
+  const raw = node.nodeValue;
+  const leading = raw.match(/^\s*/)?.[0] || "";
+  const trailing = raw.match(/\s*$/)?.[0] || "";
+  const trimmed = normalizeI18nText(raw);
+  if (!trimmed) return;
+  const key = i18nKeyFor(trimmed);
+  if (!key) return;
+  const next = t(key);
+  if (next && next !== trimmed) node.nodeValue = `${leading}${next}${trailing}`;
+}
+
+function translateAttributes(root) {
+  const elements = [];
+  if (root?.nodeType === Node.ELEMENT_NODE) elements.push(root);
+  elements.push(...(root?.querySelectorAll?.("[placeholder], [title], [aria-label]") || []));
+  elements.forEach((el) => {
+    if (shouldSkipTranslationElement(el)) return;
+    ["placeholder", "title", "aria-label"].forEach((attr) => {
+      const value = el.getAttribute?.(attr);
+      const key = i18nKeyFor(value);
+      if (key) el.setAttribute(attr, t(key));
+    });
+  });
+}
+
+function applyLanguage(root = document.body) {
+  if (!root) return;
+  languageApplying = true;
+  syncLanguageControls();
+  const walkerRoot = root.nodeType === Node.DOCUMENT_NODE ? root.body : root;
+  if (walkerRoot?.nodeType === Node.TEXT_NODE) {
+    translateTextNode(walkerRoot);
+  } else if (walkerRoot) {
+    const walker = document.createTreeWalker(walkerRoot, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      translateTextNode(node);
+      node = walker.nextNode();
+    }
+    translateAttributes(walkerRoot);
+  }
+  languageApplying = false;
+}
+
+function scheduleApplyLanguage(root = document.body) {
+  if (languageApplying || languageScheduled) return;
+  languageScheduled = true;
+  requestAnimationFrame(() => {
+    languageScheduled = false;
+    applyLanguage(root);
+  });
+}
+
+function setLanguagePreference(lang, { persist = true } = {}) {
+  const next = Object.prototype.hasOwnProperty.call(LANGUAGE_NAMES, lang) ? lang : "en";
+  state.language = next;
+  if (persist) {
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
+    } catch {
+      // Ignore storage failures; current tab still updates.
+    }
+  }
+  applyLanguage(document.body);
+  if (state.auth) {
+    $("#user-pill").textContent = `${authRoleLabel()}: ${state.auth.name || state.auth.username || t("Cashier")}`;
+    $("#cashier-name").textContent = `${t("Cashier")}: ${state.auth?.name || t("Cashier")}`;
+  }
+  if ($("#product-grid")) renderCatalog();
+  if ($("#cart-list")) renderCart();
+  if ($("#pay-button")) updateTotals({ publishDisplay: false });
+  if (state.pendingLogin?.account_id) renderOtpCountdown();
+  if (state.pendingDisbursement?.pending_id) renderDisbursementOtpCountdown();
+}
+
+function bootstrapLanguage() {
+  state.language = readLanguagePreference();
+  syncLanguageControls();
+  applyLanguage(document.body);
+  if (languageObserver) languageObserver.disconnect();
+  languageObserver = new MutationObserver((mutations) => {
+    if (languageApplying) return;
+    if (mutations.some((mutation) => mutation.addedNodes.length || mutation.type === "characterData")) {
+      scheduleApplyLanguage(document.body);
+    }
+  });
+  languageObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
 }
 
 function writeDisableDefaultSplashPreference(enabled) {
@@ -544,9 +927,9 @@ function canViewAnalytics() {
 }
 
 function authRoleLabel() {
-  if (isSystemAdmin()) return "Admin";
-  if (isMerchantAdmin()) return "Merchant Admin";
-  return "Kasir";
+  if (isSystemAdmin()) return t("Admin");
+  if (isMerchantAdmin()) return t("Merchant Admin");
+  return t("Cashier");
 }
 
 function applyRolePermissions() {
@@ -629,7 +1012,7 @@ async function api(path, options = {}) {
 function showToast(message, type = "success", duration = 3200) {
   const toast = $("#toast");
   if (!toast) return;
-  toast.textContent = message;
+  toast.textContent = t(message);
   toast.className = "toast show " + type;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("show"), duration);
@@ -643,7 +1026,7 @@ function bootStepsSnapshot(activeKey = "") {
       if (index < activeIndex) status = "done";
       else if (index === activeIndex) status = "active";
     }
-    return { label: step.label, status };
+    return { label: t(step.label), status };
   });
 }
 
@@ -661,7 +1044,7 @@ function renderLoadingSteps(steps = []) {
       : status === "active"
         ? '<span class="spinner">⟳</span>'
         : "·";
-    return `<div class="loading-line ${status}"><span>${icon}</span><span>${escapeHtml(step.label)}</span></div>`;
+    return `<div class="loading-line ${status}"><span>${icon}</span><span>${escapeHtml(t(step.label))}</span></div>`;
   }).join("");
 }
 
@@ -694,7 +1077,7 @@ function startLoadingProgressAnimation() {
 
 function paintLoadingUi(message = "Mohon tunggu...", { boot = false, steps = [], percent = null } = {}) {
   const subtitle = $("#loading-subtitle");
-  if (subtitle) subtitle.textContent = message;
+  if (subtitle) subtitle.textContent = t(message);
   if (boot) {
     loadingBootMode = true;
     renderLoadingSteps(steps.length ? steps : [{ label: message, status: "active" }]);
@@ -1261,9 +1644,9 @@ function renderAuth() {
   $("#app").classList.toggle("system-admin-mode", systemMode);
   $(".brand").dataset.page = systemMode ? "system-admin" : "cashier";
   $("#user-pill").textContent = state.auth
-    ? `${authRoleLabel()}: ${state.auth.name || state.auth.username || "Cashier"}`
-    : "Kasir: -";
-  $("#cashier-name").textContent = `Kasir: ${state.auth?.name || "Cashier"}`;
+    ? `${authRoleLabel()}: ${state.auth.name || state.auth.username || t("Cashier")}`
+    : `${t("Cashier")}: -`;
+  $("#cashier-name").textContent = `${t("Cashier")}: ${state.auth?.name || t("Cashier")}`;
   if (locked) {
     applyAuthTheme();
     stopSessionTimer();
@@ -1306,14 +1689,14 @@ function resetAuthForms({ clearCredentials = false, updateRoute = true } = {}) {
   $("#otp-status").textContent = "";
   $("#pin-status").textContent = "";
   $("#pin-register-status").textContent = "";
-  $("#otp-target").textContent = "OTP sent to your email.";
-  $("#pin-target").textContent = "Masukkan 6 digit PIN.";
-  $("#pin-register-target").textContent = "Buat PIN 6 angka untuk login berikutnya.";
-  $("#otp-countdown").textContent = "OTP berlaku 60 detik.";
+  $("#otp-target").textContent = t("OTP sent to your email.");
+  $("#pin-target").textContent = t("Enter your 6-digit PIN.");
+  $("#pin-register-target").textContent = t("Create a 6-digit PIN for the next login.");
+  $("#otp-countdown").textContent = t("OTP is valid for 60 seconds.");
   const resend = $("#otp-resend");
   if (resend) {
     resend.disabled = true;
-    resend.textContent = "Resend OTP";
+    resend.textContent = t("Resend OTP");
   }
   if (clearCredentials) {
     $("#login-id").value = "";
@@ -1552,7 +1935,7 @@ function setPinRegisterStep(step) {
   $("#pin-register-step1")?.classList.toggle("hidden", pinRegisterStep !== 1);
   $("#pin-register-step2")?.classList.toggle("hidden", pinRegisterStep !== 2);
   const indicator = $("#pin-step-indicator");
-  if (indicator) indicator.textContent = `Langkah ${pinRegisterStep} dari 2`;
+  if (indicator) indicator.textContent = t(pinRegisterStep === 1 ? "Step 1 of 2" : "Step 2 of 2");
   $("#pin-register-status").textContent = "";
   if (pinRegisterStep === 1) {
     focusDigitInput(pinNewInputs());
@@ -1565,7 +1948,7 @@ function pinRegisterContinue() {
   const pin = getPinRegisterCode();
   if (pin.length !== 6) {
     markDigitError(pinNewInputs());
-    $("#pin-register-status").textContent = "Masukkan PIN 6 angka.";
+    $("#pin-register-status").textContent = t("Enter a 6-digit PIN.");
     focusDigitInput(pinNewInputs());
     return;
   }
@@ -1599,7 +1982,7 @@ function maybeAutoRegisterPin() {
   if (pin.length !== 6 || confirm.length !== 6 || !state.pendingLogin?.account_id) return;
   if (pin !== confirm) {
     markDigitError(pinConfirmInputs());
-    $("#pin-register-status").textContent = "Konfirmasi PIN tidak sama.";
+    $("#pin-register-status").textContent = t("PIN mismatch.");
     setDigitCode(pinConfirmInputs(), "#pin-confirm-code", "");
     focusDigitInput(pinConfirmInputs());
     return;
@@ -1702,19 +2085,19 @@ function renderOtpCountdown() {
   const resendRemaining = Number(pending.resendRemaining || 0);
   const resend = $("#otp-resend");
   if (expiresLeft > 0) {
-    $("#otp-countdown").textContent = `OTP berlaku ${expiresLeft} detik.`;
+    $("#otp-countdown").textContent = t("OTP valid seconds", { seconds: expiresLeft });
   } else if (resendRemaining > 0) {
     $("#otp-countdown").textContent = resendLeft > 0
-      ? `OTP expired. Resend tersedia dalam ${resendLeft} detik.`
-      : "OTP expired. Resend OTP tersedia.";
+      ? t("OTP expired resend seconds", { seconds: resendLeft })
+      : t("OTP expired resend available");
   } else {
-    $("#otp-countdown").textContent = "OTP expired. Silakan login ulang.";
+    $("#otp-countdown").textContent = t("OTP expired login again");
   }
   if (resend) {
     resend.disabled = resendRemaining <= 0 || resendLeft > 0;
     resend.textContent = resendRemaining <= 0
-      ? "Resend sudah dipakai"
-      : (resendLeft > 0 ? `Resend OTP (${resendLeft}s)` : "Resend OTP");
+      ? t("Resend already used")
+      : (resendLeft > 0 ? `${t("Resend OTP")} (${resendLeft}s)` : t("Resend OTP"));
   }
 }
 
@@ -1901,7 +2284,7 @@ function noteActivity() {
 
 async function loginSubmit(event) {
   event.preventDefault();
-  $("#login-status").textContent = "Memverifikasi password...";
+  $("#login-status").textContent = t("Verifying password...");
   $("#otp-status").textContent = "";
   $("#pin-status").textContent = "";
   $("#pin-register-status").textContent = "";
@@ -1915,7 +2298,7 @@ async function loginSubmit(event) {
   const pending = result.pending || {};
   if (pending.mode === "otp") {
     applyPendingOtp(pending);
-    $("#otp-target").textContent = `OTP dikirim ke ${pending.email || "email akun"}.`;
+    $("#otp-target").textContent = `${t("OTP sent to your email.")} ${pending.email || t("Email account")}`;
     $("#login-status").textContent = "";
     clearOtpCode(false);
     showLoginStep("otp");
@@ -1925,12 +2308,12 @@ async function loginSubmit(event) {
   applyPendingLogin(pending);
   $("#login-status").textContent = "";
   if (pending.mode === "register_pin") {
-    $("#pin-register-target").textContent = `Register PIN untuk ${pending.account_name || pending.username || "akun ini"}.`;
+    $("#pin-register-target").textContent = `${t("Register PIN")}: ${pending.account_name || pending.username || t("This account")}.`;
     clearPinRegisterCode(false);
     showLoginStep("pin-register");
     focusDigitInput(pinNewInputs());
   } else {
-    $("#pin-target").textContent = `Masukkan PIN untuk ${pending.account_name || pending.username || "akun ini"}.`;
+    $("#pin-target").textContent = `${t("Enter PIN")}: ${pending.account_name || pending.username || t("This account")}.`;
     clearPinCode(false);
     showLoginStep("pin");
     focusDigitInput(pinInputs());
@@ -1959,11 +2342,11 @@ async function otpSubmit(event) {
   }
   const otp = getOtpCode();
   if (otp.length !== 6) {
-    $("#otp-status").textContent = "Masukkan 6 digit OTP.";
+    $("#otp-status").textContent = t("Enter a 6-digit OTP.");
     focusOtpInput();
     return;
   }
-  $("#otp-status").textContent = "Memverifikasi OTP...";
+  $("#otp-status").textContent = t("Verifying OTP...");
   otpVerifying = true;
   let result;
   try {
@@ -1986,7 +2369,7 @@ async function otpSubmit(event) {
   if (result.pending) {
     applyPendingLogin(result.pending);
     clearPinRegisterCode(false);
-    $("#pin-register-target").textContent = "Buat PIN baru setelah OTP berhasil.";
+    $("#pin-register-target").textContent = t("Create a new PIN after OTP is verified.");
     showLoginStep("pin-register");
     focusDigitInput(pinNewInputs());
     return;
@@ -2003,12 +2386,12 @@ async function pinSubmit(event) {
   }
   const pin = getPinCode();
   if (pin.length !== 6) {
-    $("#pin-status").textContent = "PIN wajib 6 angka.";
+    $("#pin-status").textContent = t("Enter a 6-digit PIN.");
     focusDigitInput(pinInputs());
     return;
   }
   pinVerifying = true;
-  $("#pin-status").textContent = "Memverifikasi PIN...";
+  $("#pin-status").textContent = t("Verifying PIN...");
   try {
     const result = await api("/api/auth/verify-pin", {
       method: "POST",
@@ -2040,17 +2423,17 @@ async function registerPinSubmit(event) {
   const confirm = getPinConfirmCode();
   if (pin.length !== 6) {
     setPinRegisterStep(1);
-    $("#pin-register-status").textContent = "Masukkan PIN 6 angka.";
+    $("#pin-register-status").textContent = t("Enter a 6-digit PIN.");
     return;
   }
   if (confirm.length !== 6) {
-    $("#pin-register-status").textContent = "Konfirmasi PIN 6 angka.";
+    $("#pin-register-status").textContent = t("Confirm PIN");
     focusDigitInput(pinConfirmInputs());
     return;
   }
   if (pin !== confirm) {
     markDigitError(pinConfirmInputs());
-    $("#pin-register-status").textContent = "Konfirmasi PIN tidak sama.";
+    $("#pin-register-status").textContent = t("PIN mismatch.");
     return;
   }
   pinRegistering = true;
@@ -2077,13 +2460,13 @@ async function forgotPin() {
     showLoginStep("login");
     return;
   }
-  $("#pin-status").textContent = "Mengirim OTP reset PIN...";
+  $("#pin-status").textContent = t("Sending reset PIN OTP...");
   const result = await api("/api/auth/forgot-pin", {
     method: "POST",
     body: { account_id: state.pendingLogin.account_id },
   });
   applyPendingOtp(result.pending);
-  $("#otp-target").textContent = `OTP reset PIN dikirim ke ${result.pending?.email || "email akun"}.`;
+  $("#otp-target").textContent = `${t("Reset PIN OTP sent to")} ${result.pending?.email || t("Email account")}.`;
   $("#pin-status").textContent = "";
   clearOtpCode(false);
   showLoginStep("otp");
@@ -2095,7 +2478,7 @@ async function resendOtp() {
     showLoginStep("login");
     return;
   }
-  $("#otp-status").textContent = "Mengirim ulang OTP...";
+  $("#otp-status").textContent = t("Resending OTP...");
   try {
     const result = await api("/api/auth/resend-otp", {
       method: "POST",
@@ -2103,7 +2486,7 @@ async function resendOtp() {
     });
     applyPendingOtp(result.pending);
     clearOtpCode(false);
-    $("#otp-status").textContent = result.message || "OTP baru dikirim.";
+    $("#otp-status").textContent = result.message || t("New OTP sent.");
     focusOtpInput();
   } catch (err) {
     renderOtpCountdown();
@@ -2354,7 +2737,7 @@ function patchCartItemLine(name) {
   if (line) line.innerHTML = cartPricingHtml(item);
   const title = row.querySelector(".cart-item-name");
   if (title) {
-    title.innerHTML = `${escapeHtml(item.name)}${item.free ? ' <span class="cart-free-badge">FREE</span>' : ""}`;
+    title.innerHTML = `<span data-i18n-skip>${escapeHtml(item.name)}</span>${item.free ? ` <span class="cart-free-badge">${escapeHtml(t("Free"))}</span>` : ""}`;
   }
 }
 
@@ -2428,7 +2811,7 @@ function setLineTip(name, value, { repaint = false } = {}) {
 function cartPricingHtml(item) {
   const gross = Number(item.gross || 0);
   if (item.line_discount && gross) {
-    const label = item.free ? "FREE" : formatRp(item.subtotal);
+    const label = item.free ? t("Free") : formatRp(item.subtotal);
     return `<span class="price-strike">${formatRp(gross)}</span> <strong>${label}</strong>`;
   }
   return `${item.qty} x ${formatRp(item.unit_price)} = ${formatRp(item.subtotal)}`;
@@ -2442,7 +2825,7 @@ function renderCatalog() {
   if (state.filter === "cart") products = products.filter((item) => cartRaw(item.name).qty > 0);
 
   if (!products.length) {
-    grid.innerHTML = `<div class="empty-state">No products found</div>`;
+    grid.innerHTML = `<div class="empty-state">${escapeHtml(t("No products found"))}</div>`;
     return;
   }
 
@@ -2460,16 +2843,16 @@ function renderCatalog() {
         <div>
           <div class="product-name">${escapeHtml(item.name)}</div>
           <div class="product-price">${formatRp(item.price)}</div>
-          <div class="product-stock ${stockClass}">Stok: ${stock}</div>
+          <div class="product-stock ${stockClass}">${escapeHtml(t("Stock"))}: ${stock}</div>
         </div>
         <div class="qty-control">
           <button type="button" data-action="cart-dec" data-name="${escapeAttr(item.name)}">-</button>
-          <input class="qty-count qty-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${qty}" aria-label="Jumlah ${escapeAttr(item.name)}" data-qty-input data-name="${escapeAttr(item.name)}">
+          <input class="qty-count qty-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${qty}" aria-label="${escapeAttr(t("Quantity"))} ${escapeAttr(item.name)}" data-qty-input data-name="${escapeAttr(item.name)}">
           <button type="button" data-action="cart-inc" data-name="${escapeAttr(item.name)}">+</button>
         </div>
         <label class="free-toggle">
           <input type="checkbox" data-action="toggle-free" data-name="${escapeAttr(item.name)}" ${raw.free ? "checked" : ""}>
-          <span>FREE</span>
+          <span>${escapeHtml(t("Free"))}</span>
         </label>
       </article>
     `;
@@ -2481,20 +2864,20 @@ function renderCart() {
   const list = $("#cart-list");
   const entries = cartEntries();
   if (!entries.length) {
-    list.innerHTML = `<div class="empty-state">Keranjang kosong - pilih produk di katalog</div>`;
+    list.innerHTML = `<div class="empty-state">${escapeHtml(t("Cart empty - choose products from catalog"))}</div>`;
     return;
   }
   list.innerHTML = entries.map((item) => `
     <article class="cart-item" data-name="${escapeAttr(item.name)}">
       <div class="cart-item-head">
         <div class="cart-item-main">
-          <strong class="cart-item-name">${escapeHtml(item.name)}${item.free ? ' <span class="cart-free-badge">FREE</span>' : ""}</strong>
+          <strong class="cart-item-name"><span data-i18n-skip>${escapeHtml(item.name)}</span>${item.free ? ` <span class="cart-free-badge">${escapeHtml(t("Free"))}</span>` : ""}</strong>
           <div class="cart-item-line">${cartPricingHtml(item)}</div>
         </div>
         <div class="cart-controls">
-          <button class="mini-btn" type="button" data-action="cart-dec" data-name="${escapeAttr(item.name)}" aria-label="Kurangi">-</button>
+          <button class="mini-btn" type="button" data-action="cart-dec" data-name="${escapeAttr(item.name)}" aria-label="${escapeAttr(t("Decrease"))}">-</button>
           <span>${item.qty}</span>
-          <button class="mini-btn add" type="button" data-action="cart-inc" data-name="${escapeAttr(item.name)}" aria-label="Tambah">+</button>
+          <button class="mini-btn add" type="button" data-action="cart-inc" data-name="${escapeAttr(item.name)}" aria-label="${escapeAttr(t("Increase"))}">+</button>
         </div>
       </div>
       <div class="cart-item-adjust">
@@ -2664,7 +3047,7 @@ function checkoutPayload(method) {
 }
 async function payCash() {
   if (!cartEntries().length) {
-    showToast("Keranjang kosong", "error");
+    showToast("Cart empty", "error");
     return;
   }
   const total = cartTotal();
@@ -2784,7 +3167,7 @@ function publishDisplayState(opts = {}) {
 
 async function generateQR() {
   if (!cartEntries().length) {
-    showToast("Keranjang kosong", "error");
+    showToast("Cart empty", "error");
     return;
   }
 
@@ -4208,9 +4591,9 @@ function renderDisbursementOtpCountdown() {
   if (!pending || !countdown || !resend) return;
   const remaining = Math.max(0, Math.ceil((Number(pending.otpExpiresAt || 0) - Date.now()) / 1000));
   const resendIn = Math.max(0, Math.ceil((Number(pending.canResendAt || 0) - Date.now()) / 1000));
-  countdown.textContent = remaining > 0 ? `OTP berlaku ${remaining} detik.` : "OTP expired. Silakan resend OTP.";
+  countdown.textContent = remaining > 0 ? t("OTP valid seconds", { seconds: remaining }) : t("OTP expired resend OTP");
   resend.disabled = remaining > 0 || resendIn > 0;
-  if (remaining <= 0 && resendIn > 0) countdown.textContent = `Tunggu ${resendIn} detik sebelum resend OTP.`;
+  if (remaining <= 0 && resendIn > 0) countdown.textContent = t("Wait seconds before resend OTP", { seconds: resendIn });
 }
 
 function applyPendingDisbursement(pending) {
@@ -4224,7 +4607,7 @@ function applyPendingDisbursement(pending) {
   $("#disbursement-pin-step").hidden = true;
   $("#disbursement-otp-step").hidden = false;
   setDisbursementOtpCode("");
-  $("#disb-credential-status").textContent = "OTP dikirim ke email admin.";
+  $("#disb-credential-status").textContent = t("OTP sent to admin email.");
   stopDisbursementOtpTimer();
   renderDisbursementOtpCountdown();
   disbursementOtpTimer = setInterval(renderDisbursementOtpCountdown, 1000);
@@ -4491,6 +4874,7 @@ async function downloadSystemDisbursementPdf(requestId) {
 function renderSettings() {
   const s = state.settings || {};
   $("#set-active-theme").value = deviceThemeId() || s.active_theme || DEFAULT_THEME;
+  syncLanguageControls();
   const marquee = s.marquee_msgs || [];
   $$(".marquee-input").forEach((input, index) => { input.value = marquee[index] || ""; });
   applyBrand();
@@ -6221,6 +6605,10 @@ function bindEvents() {
     }
   });
   document.addEventListener("change", (event) => {
+    if (event.target.matches?.("[data-language-select]")) {
+      setLanguagePreference(event.target.value);
+      return;
+    }
     const qtyInput = event.target.closest?.("[data-qty-input]");
     if (qtyInput) {
       setCartQtyFromInput(qtyInput, { commit: true });
@@ -6357,6 +6745,7 @@ function bindEvents() {
 async function init() {
   buildAmbientParticles();
   bindEvents();
+  bootstrapLanguage();
   window.state = state;
   window.api = api;
   window.showToast = showToast;
@@ -6370,7 +6759,7 @@ async function init() {
   try {
     if (sessionStorage.getItem("conlecta_fresh_login")) {
       sessionStorage.removeItem("conlecta_fresh_login");
-      if (!showedLoginSplash) showToast("Login berhasil");
+      if (!showedLoginSplash) showToast(t("Login successful"));
     }
   } catch {
     // Ignore storage failures on the post-login toast.

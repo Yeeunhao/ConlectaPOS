@@ -7,7 +7,9 @@ client_secret.json
 
 web_state.json
 pos_settings.json
-
+run_conlecta_local.py
+token.json
+oauth_token.json
 logs/
 venv/
 __pycache__/

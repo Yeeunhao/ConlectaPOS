@@ -7,6 +7,7 @@ const qrState = {
   version: {},
   merchantId: "",
   accountId: "",
+  language: "en",
 };
 
 const qrChannel = "BroadcastChannel" in window ? new BroadcastChannel("conlecta-qr") : null;
@@ -24,6 +25,56 @@ const CASH_CHANGE_OVERLAY_MS = 6000;
 const DISPLAY_EVENT_TTL_MS = 6000;
 const QR_RENDER_SIZE = 512;
 const DEFAULT_BRAND_LOGO = "/assets/ConlectaPosLogo.png";
+const DISPLAY_LANGUAGE_STORAGE_KEY = "conlecta_ui_language";
+const DISPLAY_LANGUAGES = {
+  en: "English",
+  id: "Indonesia",
+  zh: "中文",
+};
+const DISPLAY_HTML_LANG = {
+  en: "en",
+  id: "id",
+  zh: "zh-Hans",
+};
+const DISPLAY_I18N = {
+  "Payment Display": { en: "Payment Display", id: "Tampilan Pembayaran", zh: "支付显示" },
+  "Processing": { en: "Processing", id: "Memproses", zh: "处理中" },
+  "Secure Conlecta access": { en: "Secure Conlecta access", id: "Akses Conlecta aman", zh: "安全访问 Conlecta" },
+  "Checking user session...": { en: "Checking user session...", id: "Mengecek session user...", zh: "正在检查用户会话..." },
+  "Please wait...": { en: "Please wait...", id: "Mohon tunggu...", zh: "请稍候..." },
+  "Point of Sale": { en: "Point of Sale", id: "Point of Sale", zh: "销售终端" },
+  "Payment": { en: "Payment", id: "Pembayaran", zh: "支付" },
+  "Payment Update": { en: "Payment Update", id: "Update Pembayaran", zh: "支付更新" },
+  "Payment Success": { en: "Payment Success", id: "Pembayaran Berhasil", zh: "支付成功" },
+  "Payment completed.": { en: "Payment completed.", id: "Pembayaran selesai.", zh: "支付已完成。" },
+  "QRIS Canceled": { en: "QRIS Canceled", id: "QRIS Dibatalkan", zh: "QRIS 已取消" },
+  "QR Request Closed": { en: "QR Request Closed", id: "Permintaan QR Ditutup", zh: "二维码请求已关闭" },
+  "The cashier closed QRIS. Please wait for a new QR.": { en: "The cashier closed QRIS. Please wait for a new QR.", id: "Kasir menutup QRIS. Silakan tunggu QR baru.", zh: "收银员已关闭 QRIS。请等待新的二维码。" },
+  "Cash Payment": { en: "Cash Payment", id: "Pembayaran Tunai", zh: "现金支付" },
+  "QRIS Success": { en: "QRIS Success", id: "QRIS Berhasil", zh: "QRIS 成功" },
+  "Payment Successful": { en: "Payment Successful", id: "Pembayaran Sukses", zh: "支付成功" },
+  "Cash payment summary": { en: "Total {total} - Paid {cash}", id: "Total {total} - Bayar {cash}", zh: "总计 {total} - 已付 {cash}" },
+  "QRIS payment received": { en: "Payment {amount} received.", id: "Pembayaran {amount} diterima.", zh: "已收到付款 {amount}。" },
+  "Change": { en: "Change", id: "Kembalian", zh: "找零" },
+  "Item": { en: "Item", id: "Item", zh: "商品" },
+  "Qty": { en: "Qty", id: "Qty", zh: "数量" },
+  "Price": { en: "Price", id: "Harga", zh: "价格" },
+  "Total Payment": { en: "Total Payment", id: "Total Pembayaran", zh: "支付总额" },
+  "Cash Received": { en: "Cash Received", id: "Uang Diterima", zh: "收到现金" },
+  "Total": { en: "Total", id: "Total", zh: "总计" },
+  "Waiting for order": { en: "Waiting for order", id: "Menunggu order", zh: "等待订单" },
+  "No line items": { en: "No line items", id: "Belum ada item", zh: "暂无商品" },
+  "Waiting for cash payment confirmation...": { en: "Waiting for cash payment confirmation...", id: "Menunggu konfirmasi pembayaran tunai...", zh: "正在等待现金支付确认..." },
+  "Waiting for cashier payment success confirmation.": { en: "Waiting for cashier payment success confirmation.", id: "Menunggu kasir klik OK pada notifikasi payment success.", zh: "等待收银员确认支付成功通知。" },
+  "Checking cashier payment success notification...": { en: "Checking cashier payment success notification...", id: "Mengecek notifikasi payment success di cashier...", zh: "正在检查收银员端的支付成功通知..." },
+  "Cashier payment success notification was not detected. Display will clear automatically if no notification appears.": { en: "Cashier payment success notification was not detected. Display will clear automatically if no notification appears.", id: "Cek cashier: notif Payment Success tidak terdeteksi. Jika notif tidak ada, display dibersihkan otomatis.", zh: "未检测到收银员端的支付成功通知。如没有通知，显示将自动清除。" },
+  "CONLECTA POS - QRIS available - Secure and fast payment": { en: "CONLECTA POS - QRIS available - Secure and fast payment", id: "CONLECTA POS - QRIS tersedia - Pembayaran aman dan cepat", zh: "CONLECTA POS - 支持 QRIS - 安全快捷支付" },
+  "Conlecta Version": { en: "Conlecta Version", id: "Versi Conlecta", zh: "Conlecta 版本" },
+  "Online": { en: "ONLINE", id: "ONLINE", zh: "在线" },
+  "Free": { en: "FREE", id: "GRATIS", zh: "免费" },
+  "QRIS payment code": { en: "QRIS payment code", id: "Kode pembayaran QRIS", zh: "QRIS 支付码" },
+};
+let displayI18nAliasMap = null;
 
 function displayBrandLogoUrl(settings = qrState.settings) {
   return String(settings?.brand_logo_url || "").trim() || DEFAULT_BRAND_LOGO;
@@ -67,6 +118,115 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value);
+}
+
+function normalizeDisplayI18nText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function buildDisplayI18nAliasMap() {
+  const map = new Map();
+  Object.entries(DISPLAY_I18N).forEach(([key, values]) => {
+    map.set(normalizeDisplayI18nText(key), key);
+    Object.values(values || {}).forEach((value) => {
+      const normalized = normalizeDisplayI18nText(value);
+      if (normalized) map.set(normalized, key);
+    });
+  });
+  return map;
+}
+
+function displayI18nKeyFor(value) {
+  if (!displayI18nAliasMap) displayI18nAliasMap = buildDisplayI18nAliasMap();
+  return displayI18nAliasMap.get(normalizeDisplayI18nText(value)) || "";
+}
+
+function displayText(value, params = {}) {
+  const key = DISPLAY_I18N[value] ? value : displayI18nKeyFor(value);
+  let text = (key && (DISPLAY_I18N[key]?.[qrState.language] || DISPLAY_I18N[key]?.en)) || String(value || "");
+  Object.entries(params || {}).forEach(([param, replacement]) => {
+    text = text.replaceAll(`{${param}}`, String(replacement ?? ""));
+  });
+  return text;
+}
+
+function readDisplayLanguagePreference() {
+  try {
+    const stored = localStorage.getItem(DISPLAY_LANGUAGE_STORAGE_KEY);
+    if (Object.prototype.hasOwnProperty.call(DISPLAY_LANGUAGES, stored)) return stored;
+  } catch {
+    // Keep the QR display usable if localStorage is blocked.
+  }
+  return "en";
+}
+
+function shouldSkipDisplayTranslationElement(el) {
+  if (!el) return true;
+  return Boolean(el.closest([
+    "script",
+    "style",
+    "textarea",
+    "select",
+    "option",
+    "code",
+    "pre",
+    "img",
+    "video",
+    "#display-shop",
+    "#display-bottom-shop",
+    "#display-bottom-address",
+    "#display-marquee",
+    ".payment-logo-cell",
+    "#display-items .display-item span:first-child",
+    "[data-i18n-skip]",
+  ].join(",")));
+}
+
+function translateDisplayTextNode(node) {
+  if (!node?.nodeValue || shouldSkipDisplayTranslationElement(node.parentElement)) return;
+  const raw = node.nodeValue;
+  const leading = raw.match(/^\s*/)?.[0] || "";
+  const trailing = raw.match(/\s*$/)?.[0] || "";
+  const trimmed = normalizeDisplayI18nText(raw);
+  if (!trimmed) return;
+  const key = displayI18nKeyFor(trimmed);
+  if (key) node.nodeValue = `${leading}${displayText(key)}${trailing}`;
+}
+
+function translateDisplayAttributes(root) {
+  const elements = [];
+  if (root?.nodeType === Node.ELEMENT_NODE) elements.push(root);
+  elements.push(...(root?.querySelectorAll?.("[placeholder], [title], [aria-label], [alt]") || []));
+  elements.forEach((el) => {
+    if (shouldSkipDisplayTranslationElement(el)) return;
+    ["placeholder", "title", "aria-label", "alt"].forEach((attr) => {
+      const value = el.getAttribute?.(attr);
+      const key = displayI18nKeyFor(value);
+      if (key) el.setAttribute(attr, displayText(key));
+    });
+  });
+}
+
+function applyDisplayLanguage(root = document.body) {
+  if (!root) return;
+  document.documentElement.lang = DISPLAY_HTML_LANG[qrState.language] || "en";
+  const walkerRoot = root.nodeType === Node.DOCUMENT_NODE ? root.body : root;
+  if (walkerRoot?.nodeType === Node.TEXT_NODE) {
+    translateDisplayTextNode(walkerRoot);
+  } else if (walkerRoot) {
+    const walker = document.createTreeWalker(walkerRoot, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      translateDisplayTextNode(node);
+      node = walker.nextNode();
+    }
+    translateDisplayAttributes(walkerRoot);
+  }
+}
+
+function bootstrapDisplayLanguage() {
+  qrState.language = readDisplayLanguagePreference();
+  applyDisplayLanguage(document.body);
 }
 
 function formatRp(value) {
@@ -168,9 +328,9 @@ function successNeedsCashierAck(event) {
 
 function cashierValidationMessage(event) {
   if (!successNeedsCashierAck(event)) return "";
-  if (cashierNoticeMatches(event)) return "Menunggu kasir klik OK pada notifikasi payment success.";
-  if (displayEventAgeMs(event) < CASHIER_NOTICE_GRACE_MS) return "Mengecek notifikasi payment success di cashier...";
-  return "Cek cashier: notif Payment Success tidak terdeteksi. Jika notif tidak ada, display dibersihkan otomatis.";
+  if (cashierNoticeMatches(event)) return displayText("Waiting for cashier payment success confirmation.");
+  if (displayEventAgeMs(event) < CASHIER_NOTICE_GRACE_MS) return displayText("Checking cashier payment success notification...");
+  return displayText("Cashier payment success notification was not detected. Display will clear automatically if no notification appears.");
 }
 
 async function acknowledgeDisplayEvent(event, reason = "qr_display_orphan") {
@@ -408,31 +568,34 @@ function displayEventCopy(event) {
   const isQrisSuccess = type === "success" && !isCashPayment(event);
   if (isDismissed) {
     return {
-      kicker: "QRIS Dibatalkan",
-      title: "Permintaan QR Ditutup",
-      message: event.message || "Kasir menutup QRIS. Silakan tunggu QR baru.",
+      kicker: displayText("QRIS Canceled"),
+      title: displayText("QR Request Closed"),
+      message: event.message || displayText("The cashier closed QRIS. Please wait for a new QR."),
       tone: "dismiss",
     };
   }
   if (isCashSuccess) {
     return {
-      kicker: "Pembayaran Tunai",
-      title: "Pembayaran Berhasil",
-      message: event.message || `Total ${formatRp(event.amount)} · Bayar ${formatRp(event.cash_received || event.amount)}`,
+      kicker: displayText("Cash Payment"),
+      title: displayText("Payment Success"),
+      message: event.message || displayText("Cash payment summary", {
+        total: formatRp(event.amount),
+        cash: formatRp(event.cash_received || event.amount),
+      }),
       tone: "cash-success",
     };
   }
   if (isQrisSuccess) {
     return {
-      kicker: "QRIS Berhasil",
-      title: "Pembayaran Sukses",
-      message: event.message || `Pembayaran ${formatRp(event.amount)} diterima.`,
+      kicker: displayText("QRIS Success"),
+      title: displayText("Payment Successful"),
+      message: event.message || displayText("QRIS payment received", { amount: formatRp(event.amount) }),
       tone: "qris-success",
     };
   }
   return {
-    kicker: event.title || "Payment",
-    title: event.title || "Payment Update",
+    kicker: event.title || displayText("Payment"),
+    title: event.title || displayText("Payment Update"),
     message: event.message || "",
     tone: "info",
   };
@@ -465,7 +628,7 @@ function updateClock() {
 
 function renderVersion() {
   const version = qrState.version || {};
-  $("#display-version-label").textContent = version.label || "Conlecta Version";
+  $("#display-version-label").textContent = version.label || displayText("Conlecta Version");
 }
 
 const DISPLAY_DEFAULT_THEME = "crystal_bloom";
@@ -595,7 +758,7 @@ function applyBrand() {
   const theme = applyDisplayTheme(displaySession.theme || settings.active_theme);
   const signature = displaySettingsSignature({ ...settings, active_theme: theme });
   const shop = settings.shop_name || "Conlecta";
-  const address = [settings.shop_address, settings.shop_postcode].filter(Boolean).join(" | ") || "Point of Sale";
+  const address = [settings.shop_address, settings.shop_postcode].filter(Boolean).join(" | ") || displayText("Point of Sale");
   if (signature !== lastBrandSignature) {
     lastBrandSignature = signature;
     applyDisplayQrisFrame(settings);
@@ -607,7 +770,7 @@ function applyBrand() {
   $("#display-hero-title").textContent = "";
   const marquee = settings.marquee_msgs?.length
     ? settings.marquee_msgs.join("  -  ")
-    : "CONLECTA POS - QRIS tersedia - Pembayaran aman dan cepat";
+    : displayText("CONLECTA POS - QRIS available - Secure and fast payment");
   $("#display-marquee").textContent = marquee;
   applyVideoPlaylist();
 }
@@ -641,7 +804,7 @@ function paymentLogoLabel(src) {
     images: "Mandiri",
     shopee_pay_logo_png_seeklogo_406839: "ShopeePay",
   };
-  return known[key] || base.replace(/[_-]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()) || "Payment";
+  return known[key] || base.replace(/[_-]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()) || displayText("Payment");
 }
 
 function linePriceHtml(item) {
@@ -652,7 +815,7 @@ function linePriceHtml(item) {
   const tip = Number(item.tip_fixed || 0);
   const discount = Number(item.line_discount || Math.max(0, gross - Math.max(0, subtotal - tip)));
   if (discount && gross) {
-    return `<span class="price-strike">${formatRp(gross)}</span> ${item.free ? "FREE" : formatRp(subtotal)}`;
+    return `<span class="price-strike">${formatRp(gross)}</span> ${item.free ? displayText("Free") : formatRp(subtotal)}`;
   }
   return formatRp(subtotal || unit * qty);
 }
@@ -902,11 +1065,11 @@ function renderDisplay() {
     applyDisplayNotificationState(event);
     if (isCashSuccess) {
       $("#display-stage-event-kicker").textContent = copy.kicker;
-      $("#display-stage-event-title").textContent = "Kembalian";
+      $("#display-stage-event-title").textContent = displayText("Change");
       $("#display-stage-event-message").textContent = copy.message;
       $("#display-stage-event-total").textContent = formatRp(event.change || 0);
       $("#display-event-kicker").textContent = copy.kicker;
-      $("#display-event-title").textContent = "Kembalian";
+      $("#display-event-title").textContent = displayText("Change");
       $("#display-event-message").textContent = copy.message;
       $("#display-event-total").textContent = formatRp(event.change || 0);
     } else {
@@ -960,10 +1123,10 @@ function renderDisplay() {
   if (!items.length) {
     $("#display-status").textContent = "";
     $("#display-total").textContent = event ? formatRp(event.amount) : formatRp(preview.amount || 0);
-    $("#display-items").innerHTML = `<div class="empty-state">Waiting for order</div>`;
+    $("#display-items").innerHTML = `<div class="empty-state">${escapeHtml(displayText("Waiting for order"))}</div>`;
     $("#display-payment-logos").hidden = hasEvent || hasActiveQr;
     $("#display-hint").textContent = cashLive.active && cashLive.cash > 0 && !hasEvent && !hasActiveQr
-      ? "Menunggu konfirmasi pembayaran tunai..."
+      ? displayText("Waiting for cash payment confirmation...")
       : cashierValidationMessage(event);
     return;
   }
@@ -972,15 +1135,15 @@ function renderDisplay() {
   $("#display-total").textContent = formatRp(view.amount);
   $("#display-items").innerHTML = items.map((item) => `
     <div class="display-item">
-      <span>${escapeHtml(item.item_name || item.name || "")}${item.free ? " [FREE]" : ""}</span>
+      <span>${escapeHtml(item.item_name || item.name || "")}${item.free ? ` [${escapeHtml(displayText("Free"))}]` : ""}</span>
       <span>x${escapeHtml(item.qty || 0)}</span>
       <span class="line-price">${linePriceHtml(item)}</span>
     </div>
-  `).join("") || `<div class="empty-state">No line items</div>`;
+  `).join("") || `<div class="empty-state">${escapeHtml(displayText("No line items"))}</div>`;
 
   $("#display-payment-logos").hidden = hasActiveQr || hasEvent;
   $("#display-hint").textContent = cashLive.active && cashLive.cash > 0 && !hasEvent && !hasActiveQr
-    ? "Menunggu konfirmasi pembayaran tunai..."
+    ? displayText("Waiting for cash payment confirmation...")
     : "";
 }
 
@@ -1083,7 +1246,7 @@ function startSplash() {
   const steps = $("#display-splash-steps");
   let value = 0;
   const bootLines = [
-    { label: "Mengecek session user...", status: "active" },
+    { label: displayText("Checking user session..."), status: "active" },
   ];
   const paintSteps = (lines) => {
     if (!steps) return;
@@ -1103,15 +1266,15 @@ function startSplash() {
     if (percent) percent.textContent = `${Math.round(value)}%`;
     if (value >= 35 && value < 70) {
       paintSteps([
-        { label: "Mengecek session user...", status: "done" },
-        { label: "Mohon tunggu...", status: "active" },
+        { label: displayText("Checking user session..."), status: "done" },
+        { label: displayText("Please wait..."), status: "active" },
       ]);
     }
     if (value >= 100) {
       clearInterval(timer);
       paintSteps([
-        { label: "Mengecek session user...", status: "done" },
-        { label: "Mohon tunggu...", status: "done" },
+        { label: displayText("Checking user session..."), status: "done" },
+        { label: displayText("Please wait..."), status: "done" },
       ]);
       splash?.classList.add("hide");
     }
@@ -1145,6 +1308,14 @@ window.addEventListener("storage", (event) => {
     shutdownDisplay();
     return;
   }
+  if (event.key === DISPLAY_LANGUAGE_STORAGE_KEY) {
+    qrState.language = readDisplayLanguagePreference();
+    lastPaymentLogoSignature = "";
+    lastBrandSignature = "";
+    applyDisplayLanguage(document.body);
+    scheduleRenderDisplay();
+    return;
+  }
   if (!storageEventMatchesDisplaySession(event.key)) return;
   reloadDisplayFromLocalStorage();
   scheduleRenderDisplay();
@@ -1173,6 +1344,7 @@ function shutdownDisplay() {
   document.body.innerHTML = "";
 }
 
+bootstrapDisplayLanguage();
 bootstrapDisplaySession();
 setupVideoPlaylistPlayer();
 qrState.settings = readLocalSettings();

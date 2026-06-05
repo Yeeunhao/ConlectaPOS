@@ -783,6 +783,44 @@ body.login-splash-lock #app {
   animation: cardEnter 0.5s ease both;
 }
 
+.language-picker {
+  display: inline-grid;
+  gap: 5px;
+}
+
+.language-picker span {
+  color: var(--text3);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.language-picker select {
+  min-height: 34px;
+  width: auto;
+  min-width: 132px;
+  padding: 6px 28px 6px 10px;
+  border-radius: 999px;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(7, 10, 22, 0.72);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.auth-language-picker {
+  position: absolute;
+  z-index: 4;
+  top: 18px;
+  right: 18px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(7, 10, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+}
+
 .auth-card::before {
   content: "";
   position: absolute;
@@ -798,6 +836,11 @@ body.login-splash-lock #app {
 .auth-card > * {
   position: relative;
   z-index: 1;
+}
+
+.auth-card > .auth-language-picker {
+  position: absolute;
+  z-index: 4;
 }
 
 @keyframes cardEnter {
@@ -2630,6 +2673,10 @@ textarea:focus {
 .settings-section.active {
   display: grid;
   gap: 14px;
+}
+
+.settings-language-field {
+  max-width: 260px;
 }
 
 .info-list {
@@ -4733,6 +4780,16 @@ body[data-theme="midnight_teal"] {
     width: 100%;
     min-height: auto;
     grid-template-columns: 1fr;
+  }
+
+  .auth-language-picker {
+    top: 12px;
+    right: 12px;
+    padding: 7px 8px;
+  }
+
+  .language-picker select {
+    min-width: 118px;
   }
 
   .auth-copy {
