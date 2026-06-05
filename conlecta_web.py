@@ -2567,10 +2567,30 @@ def merchant_admin_accounts_payload(merchant_id=None):
             "email": acc.get("email", ""),
             "username": acc.get("username", ""),
             "admin_account": _normalize_admin_account(acc.get("admin_account")),
+            "has_pin": bool(acc.get("pin")),
             "merchant_id": mid,
         }
         for acc in accounts
     ]
+
+
+def merchant_admin_reset_account_pin(account_id, merchant_id=None, auth=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    acc = _find_account_by_id(account_id)
+    if not acc:
+        return False, "Account tidak ditemukan."
+    if normalize_merchant_id(acc.get("merchant_id")) != mid:
+        return False, "Account tidak berada di merchant ini."
+    _set_account_pin(acc["row_index"], "")
+    _clear_pending_auth(acc["id"])
+    _clear_pending_otp(acc["id"], acc.get("row_index"))
+    log.info(
+        "Merchant admin reset PIN: target=%s merchant=%s admin=%s",
+        acc["id"],
+        mid,
+        (auth or {}).get("email") or (auth or {}).get("id") or "-",
+    )
+    return True, "PIN reset. User can register a new PIN on next login."
 
 
 def save_merchant_admin_settings(data, merchant_id=None):
@@ -7202,6 +7222,21 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             except PermissionError as exc:
                 return self.send_error_json(exc, 403)
             ok, msg = merchant_admin_update_account(data.get("account_id"), data, mid)
+            if not ok:
+                return self.send_error_json(msg, 400)
+            return self.send_json({
+                "ok": True,
+                "message": msg,
+                "accounts": merchant_admin_accounts_payload(mid),
+            })
+        if path == "/api/merchant-admin/account/reset-pin":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            ok, msg = merchant_admin_reset_account_pin(data.get("account_id"), mid, auth)
             if not ok:
                 return self.send_error_json(msg, 400)
             return self.send_json({

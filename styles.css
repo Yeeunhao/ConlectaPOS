@@ -3385,6 +3385,28 @@ body[data-theme="midnight_teal"] {
   background: rgba(100, 116, 139, 0.12);
 }
 
+.system-account-pin {
+  justify-self: start;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.system-account-pin.has-pin {
+  color: var(--cyan);
+  background: rgba(91, 212, 255, 0.12);
+  border-color: rgba(91, 212, 255, 0.22);
+}
+
+.system-account-pin.needs-pin {
+  color: var(--gold);
+  background: rgba(231, 195, 111, 0.12);
+  border-color: rgba(231, 195, 111, 0.24);
+}
+
 .system-version-grid .wide {
   grid-column: span 2;
 }

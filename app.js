@@ -183,6 +183,12 @@ const I18N = {
   "Enter your 6-digit PIN.": { en: "Enter your 6-digit PIN.", id: "Masukkan 6 digit PIN.", zh: "请输入 6 位 PIN。" },
   "6 digit PIN code": { en: "6 digit PIN code", id: "Kode PIN 6 digit", zh: "6 位 PIN 码" },
   "Forgot PIN": { en: "Forgot PIN", id: "Lupa PIN", zh: "忘记 PIN" },
+  "Reset PIN": { en: "Reset PIN", id: "Reset PIN", zh: "重置 PIN" },
+  "PIN set": { en: "PIN set", id: "PIN aktif", zh: "PIN 已设置" },
+  "PIN reset required": { en: "PIN reset required", id: "Perlu daftar PIN", zh: "需要重新设置 PIN" },
+  "Reset PIN for account": { en: "Reset PIN for {name}? The user can register a new PIN on the next login without OTP.", id: "Reset PIN untuk {name}? User bisa daftar PIN baru saat login berikutnya tanpa OTP.", zh: "要重置 {name} 的 PIN 吗？用户下次登录时无需 OTP 即可设置新的 PIN。" },
+  "Resetting PIN...": { en: "Resetting PIN...", id: "Mereset PIN...", zh: "正在重置 PIN..." },
+  "PIN reset. User can register a new PIN on next login.": { en: "PIN reset. User can register a new PIN on next login.", id: "PIN direset. User bisa daftar PIN baru saat login berikutnya.", zh: "PIN 已重置。用户下次登录时可以设置新的 PIN。" },
   "Back to login": { en: "Back to login", id: "Kembali ke login", zh: "返回登录" },
   "Register PIN": { en: "Register PIN", id: "Daftar PIN", zh: "注册 PIN" },
   "Create a 6-digit PIN for the next login.": { en: "Create a 6-digit PIN for the next login.", id: "Buat PIN 6 angka untuk login berikutnya.", zh: "创建 6 位 PIN 用于下次登录。" },
@@ -5306,13 +5312,15 @@ function renderMerchantAccountList() {
     return;
   }
   list.innerHTML = accounts.map((account) => `
-    <div class="system-account-row" data-admin-account-id="${escapeAttr(account.id)}">
+    <div class="system-account-row" data-admin-account-id="${escapeAttr(account.id)}" data-admin-account-name="${escapeAttr(account.name || account.username || account.email || account.id)}">
       <label class="field"><span>Name</span><input data-admin-account-field="name" value="${escapeAttr(account.name || "")}"></label>
       <label class="field"><span>Email</span><input data-admin-account-field="email" type="email" value="${escapeAttr(account.email || "")}"></label>
       <label class="field"><span>New Password</span><input data-admin-account-field="password" type="password" placeholder="Keep current"></label>
       <label class="check-row inline-check"><input data-admin-account-field="admin_account" type="checkbox" ${account.admin_account ? "checked" : ""}><span>Merchant Admin</span></label>
       <span class="system-account-role ${account.admin_account ? "is-admin" : "is-cashier"}">${account.admin_account ? "Admin" : "Cashier"}</span>
-      <button class="btn ghost" type="button" data-action="save-admin-account">Save</button>
+      <span class="system-account-pin ${account.has_pin ? "has-pin" : "needs-pin"}">${escapeHtml(t(account.has_pin ? "PIN set" : "PIN reset required"))}</span>
+      <button class="btn ghost" type="button" data-action="save-admin-account">${escapeHtml(t("Save"))}</button>
+      <button class="btn danger-soft" type="button" data-action="reset-admin-account-pin">${escapeHtml(t("Reset PIN"))}</button>
     </div>
   `).join("");
 }
@@ -5435,6 +5443,25 @@ async function saveMerchantAdminAccount(target) {
   }
   renderMerchantAccountList();
   showToast(result.message || `Account updated (${isAdmin ? "Merchant Admin" : "Cashier"})`);
+}
+
+async function resetMerchantAdminAccountPin(target) {
+  if (!assertMerchantAdmin("reset PIN account")) return;
+  const row = target.closest("[data-admin-account-id]");
+  if (!row) return;
+  const accountName = row.dataset.adminAccountName || row.dataset.adminAccountId || t("This account");
+  const ok = window.confirm(t("Reset PIN for account", { name: accountName }));
+  if (!ok) return;
+  const result = await api("/api/merchant-admin/account/reset-pin", {
+    method: "POST",
+    loading: t("Resetting PIN..."),
+    body: {
+      account_id: row.dataset.adminAccountId,
+    },
+  });
+  state.merchantAccounts = Array.isArray(result.accounts) ? result.accounts : state.merchantAccounts;
+  renderMerchantAccountList();
+  showToast(result.message || "PIN reset. User can register a new PIN on next login.");
 }
 
 async function cropImageFile(file, preset, title) {
@@ -6295,6 +6322,8 @@ async function handleAction(action, target) {
       await saveAdminSettings();
     } else if (action === "save-admin-account") {
       await saveMerchantAdminAccount(target);
+    } else if (action === "reset-admin-account-pin") {
+      await resetMerchantAdminAccountPin(target);
     } else if (action === "register-admin-account") {
       await registerAdminAccount();
     } else if (action === "check-qris-env") {
