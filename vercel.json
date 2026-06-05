@@ -1,6 +1,10 @@
 {
   "routes": [
     {
+      "src": "/api/disbursement/check-beneficiary",
+      "dest": "http://34.128.90.163:8000/disbursement/check-beneficiary"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "http://34.128.90.163:8765/api/$1"
     },

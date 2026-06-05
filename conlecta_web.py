@@ -273,7 +273,8 @@ YUDBIDJ1|490|Bank Neo Commerce (BNC)|BNC
 DISBURSEMENT_BANKS = [
     {
         "swift_code": parts[0].strip(),
-        "code": parts[1].strip(),
+        "number_code": parts[1].strip(),
+        "code": parts[0].strip() or parts[1].strip(),
         "full_name": parts[2].strip(),
         "short_name": parts[3].strip(),
     }
@@ -2668,8 +2669,20 @@ def disbursement_bank_options():
 
 def disbursement_bank_for(code, bank_name=""):
     wanted_code = str(code or "").strip()
+    wanted_number = wanted_code.lstrip("0") if wanted_code.isdigit() else wanted_code
     wanted_name = str(bank_name or "").strip().lower()
-    candidates = [bank for bank in DISBURSEMENT_BANKS if str(bank.get("code") or "") == wanted_code]
+    candidates = []
+    for bank in DISBURSEMENT_BANKS:
+        bank_number = str(bank.get("number_code") or "")
+        values = {
+            str(bank.get("code") or ""),
+            str(bank.get("swift_code") or ""),
+            bank_number,
+        }
+        if bank_number.isdigit():
+            values.add(bank_number.lstrip("0"))
+        if wanted_code in values or wanted_number in values:
+            candidates.append(bank)
     if wanted_name:
         for bank in candidates:
             names = {

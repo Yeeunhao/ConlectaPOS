@@ -4003,7 +4003,7 @@ function renderDisbursementBankOptions() {
   const q = input.value.trim().toLowerCase();
   const focused = document.activeElement === input;
   const banks = (state.disbursementBanks || []).filter((bank) => {
-    const text = `${bank.short_name || ""} ${bank.full_name || ""} ${bank.code || ""}`.toLowerCase();
+    const text = `${bank.short_name || ""} ${bank.full_name || ""} ${bank.code || ""} ${bank.swift_code || ""} ${bank.number_code || ""}`.toLowerCase();
     return !q || text.includes(q);
   }).slice(0, 14);
   if (!focused && !q) {
@@ -4190,17 +4190,26 @@ async function checkDisbursementBeneficiary() {
     method: "POST",
     body: {
       bank_code: bank.code,
-      bank_name: bank.short_name || bank.full_name,
       bank_account_number: accountNumber,
     },
     loading: "Inquiry rekening...",
   });
+  const providerData = result.data || result.result || result.raw?.data || {};
+  const beneficiaryName = result.beneficiary_name
+    || providerData.bank_account_name
+    || providerData.account_name
+    || providerData.beneficiary_name
+    || "Verified Beneficiary";
+  const providerBankName = result.bank_name
+    || providerData.bank_name
+    || bank.short_name
+    || bank.full_name;
   state.disbursementBeneficiary = {
     bank_code: bank.code,
-    bank_name: bank.short_name || bank.full_name,
-    bank_account_number: result.bank_account_number || accountNumber,
-    beneficiary_name: result.beneficiary_name || "Verified Beneficiary",
-    raw: result.raw || {},
+    bank_name: providerBankName,
+    bank_account_number: result.bank_account_number || providerData.bank_account_number || accountNumber,
+    beneficiary_name: beneficiaryName,
+    raw: result.raw || result,
   };
   renderDisbursementBeneficiary();
   showToast("Beneficiary verified");
