@@ -359,6 +359,35 @@ def ensure_schema():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS disbursement_requests (
+            request_id VARCHAR(100) PRIMARY KEY,
+            merchant_id VARCHAR(100) REFERENCES merchants(merchant_id) ON DELETE SET NULL,
+            merchant_name VARCHAR(255),
+            request_account_id VARCHAR(100),
+            request_name VARCHAR(255),
+            request_email VARCHAR(255),
+            bank_code VARCHAR(20),
+            bank_name VARCHAR(255),
+            bank_swift_code VARCHAR(30),
+            bank_account_number VARCHAR(80),
+            beneficiary_name VARCHAR(255),
+            gross_amount NUMERIC(18,2) DEFAULT 0,
+            admin_fee NUMERIC(18,2) DEFAULT 0,
+            net_amount NUMERIC(18,2) DEFAULT 0,
+            balance_before NUMERIC(18,2) DEFAULT 0,
+            balance_after NUMERIC(18,2) DEFAULT 0,
+            status VARCHAR(40) DEFAULT 'Pending',
+            status_note TEXT,
+            beneficiary_raw JSONB,
+            processed_by_account_id VARCHAR(100),
+            processed_by_name VARCHAR(255),
+            processed_by_email VARCHAR(255),
+            processed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
         "ALTER TABLE conlecta_account ADD COLUMN IF NOT EXISTS last_activity_ts TIMESTAMP",
         "ALTER TABLE conlecta_account ADD COLUMN IF NOT EXISTS pin VARCHAR(20)",
         "ALTER TABLE conlecta_account ADD COLUMN IF NOT EXISTS admin_account BOOLEAN DEFAULT FALSE",
@@ -370,11 +399,21 @@ def ensure_schema():
         "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS gross_amount NUMERIC(18,2) DEFAULT 0",
         "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS source_line_no INTEGER",
         "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(18,2) DEFAULT 0",
+        "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS merchant_name VARCHAR(255)",
+        "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS bank_swift_code VARCHAR(30)",
+        "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS beneficiary_raw JSONB",
+        "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS status_note TEXT",
+        "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS processed_by_account_id VARCHAR(100)",
+        "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS processed_by_name VARCHAR(255)",
+        "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS processed_by_email VARCHAR(255)",
+        "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP",
         "CREATE INDEX IF NOT EXISTS idx_vendors_merchant ON vendors(merchant_id)",
         "CREATE INDEX IF NOT EXISTS idx_vendors_legacy ON vendors(merchant_id, legacy_vendor_id)",
         "CREATE INDEX IF NOT EXISTS idx_stock_items_merchant ON stock_items(merchant_id)",
         "CREATE INDEX IF NOT EXISTS idx_transactions_merchant_updated ON transactions(merchant_id, updated_at DESC)",
         "CREATE INDEX IF NOT EXISTS idx_transaction_items_txn ON transaction_items(transaction_id)",
+        "CREATE INDEX IF NOT EXISTS idx_disbursement_merchant_created ON disbursement_requests(merchant_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_disbursement_status ON disbursement_requests(status)",
     ]
     with connect() as conn:
         with conn.cursor() as cur:
@@ -1108,6 +1147,151 @@ def load_history(merchant_id=None):
             "items": items_by_txn.get(row["transaction_id"], []),
         })
     return result
+
+
+def _disbursement_from_row(row):
+    if not row:
+        return None
+    return {
+        "request_id": row.get("request_id") or "",
+        "merchant_id": row.get("merchant_id") or "",
+        "merchant_name": row.get("merchant_name") or "",
+        "request_account_id": row.get("request_account_id") or "",
+        "request_name": row.get("request_name") or "",
+        "request_email": row.get("request_email") or "",
+        "bank_code": row.get("bank_code") or "",
+        "bank_name": row.get("bank_name") or "",
+        "bank_swift_code": row.get("bank_swift_code") or "",
+        "bank_account_number": row.get("bank_account_number") or "",
+        "beneficiary_name": row.get("beneficiary_name") or "",
+        "gross_amount": _money(row.get("gross_amount")),
+        "admin_fee": _money(row.get("admin_fee")),
+        "net_amount": _money(row.get("net_amount")),
+        "balance_before": _money(row.get("balance_before")),
+        "balance_after": _money(row.get("balance_after")),
+        "status": row.get("status") or "Pending",
+        "status_note": row.get("status_note") or "",
+        "beneficiary_raw": dict(row.get("beneficiary_raw") or {}),
+        "processed_by_account_id": row.get("processed_by_account_id") or "",
+        "processed_by_name": row.get("processed_by_name") or "",
+        "processed_by_email": row.get("processed_by_email") or "",
+        "processed_at": _iso(row.get("processed_at")),
+        "created_at": _iso(row.get("created_at")),
+        "updated_at": _iso(row.get("updated_at")),
+    }
+
+
+def save_disbursement_request(record):
+    data = dict(record or {})
+    request_id = str(data.get("request_id") or "").strip()
+    if not request_id:
+        raise ValueError("request_id wajib diisi.")
+    mid = normalize_merchant_id(data.get("merchant_id"))
+    ensure_merchant(mid, data.get("merchant_name"))
+    with connect(row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO disbursement_requests (
+                    request_id, merchant_id, merchant_name, request_account_id,
+                    request_name, request_email, bank_code, bank_name, bank_swift_code,
+                    bank_account_number, beneficiary_name, gross_amount, admin_fee,
+                    net_amount, balance_before, balance_after, status, status_note,
+                    beneficiary_raw, updated_at
+                ) VALUES (
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP
+                )
+                RETURNING *
+                """,
+                (
+                    request_id,
+                    mid,
+                    str(data.get("merchant_name") or "").strip(),
+                    str(data.get("request_account_id") or "").strip(),
+                    str(data.get("request_name") or "").strip(),
+                    str(data.get("request_email") or "").strip(),
+                    str(data.get("bank_code") or "").strip(),
+                    str(data.get("bank_name") or "").strip(),
+                    str(data.get("bank_swift_code") or "").strip(),
+                    str(data.get("bank_account_number") or "").strip(),
+                    str(data.get("beneficiary_name") or "").strip(),
+                    _int_money(data.get("gross_amount")),
+                    _int_money(data.get("admin_fee")),
+                    _int_money(data.get("net_amount")),
+                    _int_money(data.get("balance_before")),
+                    _int_money(data.get("balance_after")),
+                    str(data.get("status") or "Pending").strip() or "Pending",
+                    str(data.get("status_note") or "").strip(),
+                    Jsonb(data.get("beneficiary_raw") or {}),
+                ),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return _disbursement_from_row(row)
+
+
+def load_disbursement_requests(merchant_id=None, all_merchants=False):
+    with connect(row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            if all_merchants:
+                cur.execute(
+                    "SELECT * FROM disbursement_requests ORDER BY created_at DESC, updated_at DESC"
+                )
+            else:
+                mid = normalize_merchant_id(merchant_id)
+                cur.execute(
+                    """
+                    SELECT * FROM disbursement_requests
+                    WHERE merchant_id=%s
+                    ORDER BY created_at DESC, updated_at DESC
+                    """,
+                    (mid,),
+                )
+            return [_disbursement_from_row(row) for row in cur.fetchall()]
+
+
+def find_disbursement_request(request_id):
+    rid = str(request_id or "").strip()
+    if not rid:
+        return None
+    with connect(row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM disbursement_requests WHERE request_id=%s LIMIT 1", (rid,))
+            return _disbursement_from_row(cur.fetchone())
+
+
+def update_disbursement_status(request_id, status, processor=None, note=""):
+    rid = str(request_id or "").strip()
+    if not rid:
+        return None
+    processor = dict(processor or {})
+    with connect(row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE disbursement_requests SET
+                    status=%s,
+                    status_note=%s,
+                    processed_by_account_id=%s,
+                    processed_by_name=%s,
+                    processed_by_email=%s,
+                    processed_at=CURRENT_TIMESTAMP,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE request_id=%s AND lower(status)='pending'
+                RETURNING *
+                """,
+                (
+                    str(status or "").strip() or "Pending",
+                    str(note or "").strip(),
+                    str(processor.get("id") or "").strip(),
+                    str(processor.get("name") or processor.get("username") or "").strip(),
+                    str(processor.get("email") or "").strip(),
+                    rid,
+                ),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return _disbursement_from_row(row)
 
 
 def load_version(default_info):

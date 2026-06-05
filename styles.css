@@ -3393,6 +3393,186 @@ body[data-theme="midnight_teal"] {
   max-height: calc(100vh - 300px);
 }
 
+.disbursement-tabs {
+  margin: 0 0 14px;
+}
+
+.disbursement-section {
+  display: none;
+}
+
+.disbursement-section.active {
+  display: block;
+}
+
+.disbursement-request-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(280px, 0.65fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.disbursement-form {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.bank-combobox {
+  position: relative;
+  z-index: 3;
+}
+
+.bank-options {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  max-height: 280px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(13, 17, 40, 0.98);
+  box-shadow: var(--shadow);
+}
+
+.bank-options[hidden] {
+  display: none;
+}
+
+.bank-options button {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bank-options button:hover {
+  background: rgba(103, 232, 249, 0.11);
+}
+
+.bank-options small,
+.empty-bank-option {
+  color: var(--text3);
+  font-size: 12px;
+}
+
+.empty-bank-option {
+  padding: 10px;
+}
+
+.beneficiary-result,
+.disbursement-note {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.beneficiary-result.verified {
+  border-color: rgba(52, 211, 153, 0.42);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.beneficiary-result span,
+.disbursement-fee-box span {
+  color: var(--text3);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.beneficiary-result strong,
+.disbursement-fee-box strong {
+  color: var(--cyan);
+  font-family: var(--mono);
+}
+
+.beneficiary-result small {
+  color: var(--text2);
+}
+
+.disbursement-fee-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.disbursement-fee-box div {
+  display: grid;
+  gap: 5px;
+  padding: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.disbursement-info-list div {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.disbursement-note {
+  margin-bottom: 14px;
+  color: var(--gold);
+  border-color: rgba(231, 195, 111, 0.28);
+  background: rgba(231, 195, 111, 0.08);
+}
+
+.disbursement-table {
+  min-width: 980px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: var(--text2);
+  background: rgba(148, 163, 184, 0.1);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.status-pill.pending {
+  color: var(--gold);
+  border-color: rgba(231, 195, 111, 0.32);
+  background: rgba(231, 195, 111, 0.12);
+}
+
+.status-pill.success {
+  color: var(--green);
+  border-color: rgba(52, 211, 153, 0.32);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.status-pill.failed {
+  color: var(--red);
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.disbursement-credential-step {
+  display: grid;
+  gap: 12px;
+}
+
+.disbursement-credential-step[hidden] {
+  display: none;
+}
+
 .system-txn-form {
   display: grid;
   gap: 14px;
@@ -4571,6 +4751,7 @@ body[data-theme="midnight_teal"] {
   .system-admin-grid,
   .system-transaction-filter,
   .system-transaction-grid,
+  .disbursement-request-grid,
   .system-detail-grid,
   .system-account-create,
   .system-version-grid,
@@ -4626,6 +4807,10 @@ body[data-theme="midnight_teal"] {
 
   .stats-grid.compact {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .disbursement-fee-box {
+    grid-template-columns: 1fr;
   }
 
   .asset-row {

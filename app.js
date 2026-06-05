@@ -56,6 +56,24 @@ const state = {
   systemTxnProducts: [],
   selectedSystemTxnId: "",
   merchantAccounts: [],
+  disbursementTab: "request",
+  disbursementSummary: {},
+  disbursementRequests: [],
+  disbursementBanks: [],
+  disbursementBeneficiary: null,
+  disbursementDraft: null,
+  pendingDisbursement: null,
+  disbursementHistoryFrom: "",
+  disbursementHistoryTo: "",
+  disbursementHistoryBank: "",
+  disbursementHistoryAccount: "",
+  disbursementHistoryAmount: "",
+  systemDisbursements: [],
+  systemDisbursementFrom: "",
+  systemDisbursementTo: "",
+  systemDisbursementBank: "",
+  systemDisbursementAccount: "",
+  systemDisbursementAmount: "",
 };
 
 const qrChannel = "BroadcastChannel" in window ? new BroadcastChannel("conlecta-qr") : null;
@@ -73,11 +91,14 @@ const CLOSED_QR_STORAGE_KEY = "conlecta_closed_qr_ids";
 const CLOSED_QR_LIMIT = 300;
 const ACTIVE_QR_TTL_MS = 30 * 60 * 1000;
 const QRIS_FEE_RATE = 0.007;
+const DISBURSEMENT_ADMIN_FEE = 2000;
+const DISBURSEMENT_MIN_AMOUNT = 10000;
 const ROUTE_PAGE_MAP = {
   "/cashier": "cashier",
   "/stock": "stock",
   "/analytics": "analytics",
   "/history": "history",
+  "/disbursement": "disbursement",
   "/settings": "settings",
   "/log": "log",
   "/system-admin": "system-admin",
@@ -96,6 +117,7 @@ let stockPollInFlight = false;
 let dailySessionTimer = null;
 let dismissCooldownTimer = null;
 let otpVerifying = false;
+let disbursementOtpTimer = null;
 let pinVerifying = false;
 let pinRegistering = false;
 let pinRegisterStep = 1;
@@ -1219,6 +1241,7 @@ function applyRouteAfterBootstrap() {
   const page = requestedPage
     && !(path === "/system-admin" && !isSystemAdmin())
     && !(requestedPage === "analytics" && !canViewAnalytics())
+    && !(requestedPage === "disbursement" && !isMerchantAdmin())
     ? requestedPage
     : defaultAuthedPage();
   showPage(page, { updateRoute: false });
@@ -2069,6 +2092,8 @@ function toggleLoginPassword() {
 function showLogoutModal() {
   $("#payment-modal").hidden = true;
   $("#detail-modal").hidden = true;
+  $("#disbursement-confirm-modal").hidden = true;
+  $("#disbursement-credential-modal").hidden = true;
   $("#qr-modal").hidden = true;
   $("#dismiss-modal").hidden = true;
   $("#logout-modal").hidden = false;
@@ -2118,6 +2143,10 @@ function showPage(name, { sync = true, updateRoute = true } = {}) {
     showToast("Analytics hanya untuk merchant admin dengan permission aktif.", "error");
     name = "cashier";
   }
+  if (!isSystemAdmin() && name === "disbursement" && !isMerchantAdmin()) {
+    showToast("Disbursement hanya untuk merchant admin.", "error");
+    name = "cashier";
+  }
   $$(".page").forEach((page) => page.classList.toggle("active", page.id === `page-${name}`));
   $$(".nav-btn[data-page]").forEach((btn) => btn.classList.toggle("active", btn.dataset.page === name));
   if (state.auth && updateRoute) setRoute(routeForPage(name));
@@ -2125,6 +2154,7 @@ function showPage(name, { sync = true, updateRoute = true } = {}) {
   if (name === "stock") renderStock();
   if (name === "analytics") renderAnalytics();
   if (name === "history") renderHistory();
+  if (name === "disbursement") renderDisbursement();
   if (name === "settings") renderSettings();
   if (name === "log") renderLogs();
   if (sync && state.auth) {
@@ -3031,6 +3061,8 @@ function closeModal(force = false) {
   if (!force && !$("#qr-modal").hidden && state.activeQr) return;
   const paymentWasOpen = !$("#payment-modal").hidden;
   const paymentTxn = state.activePaymentModalTxn || $("#modal-txn").textContent;
+  const disbursementCredentialModal = $("#disbursement-credential-modal");
+  const disbursementCredentialWasOpen = Boolean(disbursementCredentialModal && !disbursementCredentialModal.hidden);
   if (paymentWasOpen) {
     markPaymentModalAcknowledged(paymentTxn);
     stopCashierNoticeHeartbeat(paymentTxn);
@@ -3042,10 +3074,16 @@ function closeModal(force = false) {
       publishDisplayState();
     }
   }
+  if (disbursementCredentialWasOpen) {
+    state.pendingDisbursement = null;
+    stopDisbursementOtpTimer();
+  }
   state.activePaymentModalTxn = "";
   $("#modal-backdrop").hidden = true;
   $("#payment-modal").hidden = true;
   $("#detail-modal").hidden = true;
+  $("#disbursement-confirm-modal").hidden = true;
+  $("#disbursement-credential-modal").hidden = true;
   $("#qr-modal").hidden = true;
   $("#dismiss-modal").hidden = true;
   $("#logout-modal").hidden = true;
@@ -3833,6 +3871,8 @@ function openDetail(txnId) {
   $("#qr-modal").hidden = true;
   $("#dismiss-modal").hidden = true;
   $("#logout-modal").hidden = true;
+  $("#disbursement-confirm-modal").hidden = true;
+  $("#disbursement-credential-modal").hidden = true;
   $("#detail-modal").hidden = false;
   $("#detail-title").textContent = record.txn_id || "Transaction";
   const method = displayPaymentMethod(record);
@@ -3883,6 +3923,499 @@ async function exportHistoryPdf() {
     message: "Menyiapkan history invoice...",
   });
   showToast("History invoice downloaded");
+}
+
+function disbursementSummary() {
+  return {
+    balance: 0,
+    qris_gross: 0,
+    qris_fee: 0,
+    qris_net: 0,
+    pending_amount: 0,
+    success_net_amount: 0,
+    reserved_amount: 0,
+    admin_fee: DISBURSEMENT_ADMIN_FEE,
+    minimum_amount: DISBURSEMENT_MIN_AMOUNT,
+    ...(state.disbursementSummary || {}),
+  };
+}
+
+function normalizeAccountNumber(value) {
+  return String(value || "").replace(/\D+/g, "");
+}
+
+function disbursementBankByCode(code, name = "") {
+  const wantedCode = String(code || "").trim();
+  const wantedName = String(name || "").trim().toLowerCase();
+  const candidates = (state.disbursementBanks || []).filter((bank) => String(bank.code || "") === wantedCode);
+  if (wantedName) {
+    const named = candidates.find((bank) => [bank.short_name, bank.full_name].some((item) => String(item || "").trim().toLowerCase() === wantedName));
+    if (named) return named;
+  }
+  return candidates[0] || null;
+}
+
+function setDisbursementTab(tab) {
+  state.disbursementTab = ["request", "history"].includes(tab) ? tab : "request";
+  $$(".disbursement-section").forEach((section) => {
+    section.classList.toggle("active", section.id === `disbursement-section-${state.disbursementTab}`);
+  });
+  $$(".disbursement-tabs .seg").forEach((button) => {
+    button.classList.toggle("active", button.dataset.disbursementTab === state.disbursementTab);
+  });
+  renderDisbursement();
+}
+
+function renderDisbursementStats() {
+  const s = disbursementSummary();
+  const stats = [
+    ["Merchant Balance", formatRp(s.balance)],
+    ["QRIS Gross", formatRp(s.qris_gross)],
+    ["QRIS Fee", formatRp(s.qris_fee)],
+    ["QRIS Net", formatRp(s.qris_net)],
+    ["Pending", formatRp(s.pending_amount)],
+    ["Disbursed", formatRp(s.success_net_amount)],
+  ];
+  const target = $("#disbursement-stats");
+  if (target) {
+    target.innerHTML = stats.map(([label, value]) => `<div class="stat-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  }
+}
+
+function renderDisbursementInfo() {
+  const s = disbursementSummary();
+  const list = $("#disbursement-info-list");
+  if (!list) return;
+  list.innerHTML = `
+    <div><span>Total QRIS Gross</span><strong>${formatRp(s.qris_gross)}</strong></div>
+    <div><span>QRIS Fee</span><strong>${formatRp(s.qris_fee)}</strong></div>
+    <div><span>Total QRIS Net</span><strong>${formatRp(s.qris_net)}</strong></div>
+    <div><span>Reserved Pending/Success</span><strong>${formatRp(s.reserved_amount)}</strong></div>
+    <div><span>Admin Fee per Request</span><strong>${formatRp(s.admin_fee)}</strong></div>
+    <div><span>Minimum Disbursement</span><strong>${formatRp(s.minimum_amount)}</strong></div>
+  `;
+}
+
+function renderDisbursementBankOptions() {
+  const input = $("#disb-bank-search");
+  const options = $("#disb-bank-options");
+  if (!input || !options) return;
+  const q = input.value.trim().toLowerCase();
+  const focused = document.activeElement === input;
+  const banks = (state.disbursementBanks || []).filter((bank) => {
+    const text = `${bank.short_name || ""} ${bank.full_name || ""} ${bank.code || ""}`.toLowerCase();
+    return !q || text.includes(q);
+  }).slice(0, 14);
+  if (!focused && !q) {
+    options.innerHTML = "";
+    options.hidden = true;
+    return;
+  }
+  options.hidden = false;
+  options.innerHTML = banks.length ? banks.map((bank) => `
+    <button type="button" data-action="select-disbursement-bank" data-bank-code="${escapeAttr(bank.code)}" data-bank-name="${escapeAttr(bank.short_name || bank.full_name)}">
+      <strong>${escapeHtml(bank.short_name || bank.full_name)}</strong>
+      <small>${escapeHtml(bank.full_name || "")}</small>
+    </button>
+  `).join("") : `<div class="empty-bank-option">Bank tidak ditemukan</div>`;
+}
+
+function renderDisbursementBeneficiary() {
+  const box = $("#disb-beneficiary-result");
+  if (!box) return;
+  const b = state.disbursementBeneficiary;
+  if (!b) {
+    box.classList.remove("verified");
+    box.innerHTML = `<span>Beneficiary</span><strong>Belum inquiry</strong>`;
+    return;
+  }
+  box.classList.add("verified");
+  box.innerHTML = `
+    <span>Beneficiary Verified</span>
+    <strong>${escapeHtml(b.beneficiary_name || "Verified Beneficiary")}</strong>
+    <small>${escapeHtml(b.bank_name || "")} - ${escapeHtml(b.bank_account_number || "")}</small>
+  `;
+}
+
+function updateDisbursementAmountPreview({ clampMax = false } = {}) {
+  const input = $("#disb-amount");
+  const s = disbursementSummary();
+  if (!input) return 0;
+  let amount = parseMoney(input.value);
+  if (clampMax && amount > Number(s.balance || 0)) {
+    amount = Number(s.balance || 0);
+    input.value = amount ? formatPlainNumber(amount) : "";
+  } else if (input.value) {
+    input.value = amount ? formatPlainNumber(amount) : "";
+  }
+  const fee = Number(s.admin_fee || DISBURSEMENT_ADMIN_FEE);
+  const net = Math.max(0, amount - fee);
+  if ($("#disb-balance-label")) $("#disb-balance-label").textContent = formatRp(s.balance);
+  if ($("#disb-admin-fee-label")) $("#disb-admin-fee-label").textContent = formatRp(fee);
+  if ($("#disb-minimum-label")) $("#disb-minimum-label").textContent = formatRp(s.minimum_amount || DISBURSEMENT_MIN_AMOUNT);
+  if ($("#disb-net-label")) $("#disb-net-label").textContent = formatRp(net);
+  return amount;
+}
+
+function resetDisbursementBeneficiary() {
+  state.disbursementBeneficiary = null;
+  renderDisbursementBeneficiary();
+}
+
+function collectDisbursementDraft() {
+  const s = disbursementSummary();
+  const bankCode = $("#disb-bank-code")?.value.trim() || "";
+  const bankName = $("#disb-bank-search")?.value.trim() || "";
+  const bank = disbursementBankByCode(bankCode, bankName);
+  const accountNumber = normalizeAccountNumber($("#disb-account-number")?.value || "");
+  const amount = updateDisbursementAmountPreview({ clampMax: true });
+  if (!bank) throw new Error("Pilih bank dari dropdown.");
+  if (accountNumber.length < 5) throw new Error("Nomor rekening belum valid.");
+  if (amount < Number(s.minimum_amount || DISBURSEMENT_MIN_AMOUNT)) throw new Error("Minimal disbursement Rp 10.000.");
+  if (amount > Number(s.balance || 0)) throw new Error("Nominal disbursement melebihi merchant balance.");
+  const beneficiary = state.disbursementBeneficiary;
+  if (!beneficiary || String(beneficiary.bank_code) !== String(bank.code) || String(beneficiary.bank_account_number) !== accountNumber) {
+    throw new Error("Inquiry rekening dulu sebelum submit.");
+  }
+  return {
+    bank_code: bank.code,
+    bank_name: bank.short_name || bank.full_name,
+    bank_account_number: accountNumber,
+    beneficiary_name: beneficiary.beneficiary_name || "",
+    amount,
+  };
+}
+
+function disbursementConfirmRows(draft = state.disbursementDraft) {
+  const s = disbursementSummary();
+  const amount = Number(draft?.amount || 0);
+  const fee = Number(s.admin_fee || DISBURSEMENT_ADMIN_FEE);
+  return [
+    ["Total Merchant Balance", formatRp(s.balance)],
+    ["Admin Fee", formatRp(fee)],
+    ["Disbursement Amount", formatRp(Math.max(0, amount - fee))],
+    ["Balance Merchant After", formatRp(Math.max(0, Number(s.balance || 0) - amount))],
+    ["Bank", draft?.bank_name || "-"],
+    ["No. Rekening", draft?.bank_account_number || "-"],
+    ["Penerima", draft?.beneficiary_name || "-"],
+  ];
+}
+
+function openDisbursementConfirm() {
+  try {
+    state.disbursementDraft = collectDisbursementDraft();
+  } catch (err) {
+    if ($("#disb-status")) $("#disb-status").textContent = err.message;
+    showToast(err.message, "error");
+    return;
+  }
+  $("#payment-modal").hidden = true;
+  $("#detail-modal").hidden = true;
+  $("#qr-modal").hidden = true;
+  $("#dismiss-modal").hidden = true;
+  $("#logout-modal").hidden = true;
+  $("#disbursement-credential-modal").hidden = true;
+  $("#disbursement-confirm-summary").innerHTML = disbursementConfirmRows().map(([label, value]) => `
+    <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
+  `).join("");
+  $("#disbursement-confirm-modal").hidden = false;
+  $("#modal-backdrop").hidden = false;
+}
+
+function openDisbursementCredentials() {
+  if (!state.disbursementDraft) return;
+  $("#disbursement-confirm-modal").hidden = true;
+  $("#disbursement-credential-modal").hidden = false;
+  $("#disbursement-pin-step").hidden = false;
+  $("#disbursement-otp-step").hidden = true;
+  $("#disb-pin").value = "";
+  $("#disb-otp").value = "";
+  $("#disb-credential-status").textContent = "";
+  $("#disbursement-credential-summary").innerHTML = disbursementConfirmRows().slice(0, 4).map(([label, value]) => `
+    <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
+  `).join("");
+  $("#disb-pin")?.focus();
+}
+
+function stopDisbursementOtpTimer() {
+  clearInterval(disbursementOtpTimer);
+  disbursementOtpTimer = null;
+}
+
+function renderDisbursementOtpCountdown() {
+  const pending = state.pendingDisbursement;
+  const countdown = $("#disb-otp-countdown");
+  const resend = $("#disb-otp-resend");
+  if (!pending || !countdown || !resend) return;
+  const remaining = Math.max(0, Math.ceil((Number(pending.otpExpiresAt || 0) - Date.now()) / 1000));
+  const resendIn = Math.max(0, Math.ceil((Number(pending.canResendAt || 0) - Date.now()) / 1000));
+  countdown.textContent = remaining > 0 ? `OTP berlaku ${remaining} detik.` : "OTP expired. Silakan resend OTP.";
+  resend.disabled = remaining > 0 || resendIn > 0;
+  if (remaining <= 0 && resendIn > 0) countdown.textContent = `Tunggu ${resendIn} detik sebelum resend OTP.`;
+}
+
+function applyPendingDisbursement(pending) {
+  const now = Date.now();
+  state.pendingDisbursement = {
+    ...(pending || {}),
+    otpExpiresAt: now + Number(pending?.otp_expires_in || 0) * 1000,
+    canResendAt: now + Number(pending?.can_resend_in || pending?.otp_expires_in || 0) * 1000,
+  };
+  if (pending?.request) state.disbursementDraft = pending.request;
+  $("#disbursement-pin-step").hidden = true;
+  $("#disbursement-otp-step").hidden = false;
+  $("#disb-otp").value = "";
+  $("#disb-credential-status").textContent = "OTP dikirim ke email admin.";
+  stopDisbursementOtpTimer();
+  renderDisbursementOtpCountdown();
+  disbursementOtpTimer = setInterval(renderDisbursementOtpCountdown, 1000);
+  $("#disb-otp")?.focus();
+}
+
+async function checkDisbursementBeneficiary() {
+  if (!assertMerchantAdmin("melakukan inquiry rekening")) return;
+  const bankCode = $("#disb-bank-code")?.value.trim() || "";
+  const bankName = $("#disb-bank-search")?.value.trim() || "";
+  const bank = disbursementBankByCode(bankCode, bankName);
+  const accountNumber = normalizeAccountNumber($("#disb-account-number")?.value || "");
+  if (!bank) {
+    showToast("Pilih bank dari dropdown.", "error");
+    return;
+  }
+  if (accountNumber.length < 5) {
+    showToast("Nomor rekening belum valid.", "error");
+    return;
+  }
+  const result = await api("/api/disbursement/check-beneficiary", {
+    method: "POST",
+    body: {
+      bank_code: bank.code,
+      bank_name: bank.short_name || bank.full_name,
+      bank_account_number: accountNumber,
+    },
+    loading: "Inquiry rekening...",
+  });
+  state.disbursementBeneficiary = {
+    bank_code: bank.code,
+    bank_name: bank.short_name || bank.full_name,
+    bank_account_number: result.bank_account_number || accountNumber,
+    beneficiary_name: result.beneficiary_name || "Verified Beneficiary",
+    raw: result.raw || {},
+  };
+  renderDisbursementBeneficiary();
+  showToast("Beneficiary verified");
+}
+
+async function startDisbursementOtp() {
+  if (!state.disbursementDraft) return;
+  const pin = $("#disb-pin")?.value.trim() || "";
+  if (!/^\d{6}$/.test(pin)) {
+    $("#disb-credential-status").textContent = "PIN wajib 6 angka.";
+    return;
+  }
+  const result = await api("/api/disbursement/credentials/start", {
+    method: "POST",
+    body: { ...state.disbursementDraft, pin },
+    loading: "Verifikasi PIN dan mengirim OTP...",
+  });
+  applyPendingDisbursement(result.pending);
+}
+
+async function resendDisbursementOtp() {
+  if (!state.pendingDisbursement?.pending_id) return;
+  const result = await api("/api/disbursement/credentials/resend", {
+    method: "POST",
+    body: { pending_id: state.pendingDisbursement.pending_id },
+    loading: "Mengirim ulang OTP...",
+  });
+  applyPendingDisbursement(result.pending);
+}
+
+async function confirmDisbursementOtp() {
+  const otp = $("#disb-otp")?.value.trim() || "";
+  if (!/^\d{6}$/.test(otp)) {
+    $("#disb-credential-status").textContent = "OTP wajib 6 angka.";
+    return;
+  }
+  const result = await api("/api/disbursement/confirm", {
+    method: "POST",
+    body: { pending_id: state.pendingDisbursement?.pending_id, otp },
+    loading: "Membuat request disbursement...",
+  });
+  state.disbursementSummary = result.summary || state.disbursementSummary;
+  state.disbursementRequests = result.requests || state.disbursementRequests;
+  state.disbursementBanks = result.banks || state.disbursementBanks;
+  state.pendingDisbursement = null;
+  state.disbursementDraft = null;
+  stopDisbursementOtpTimer();
+  closeModal(true);
+  setDisbursementTab("history");
+  renderDisbursement();
+  showToast("Disbursement request dibuat");
+}
+
+function disbursementRecordDate(record) {
+  return parseHistoryDate(record.created_at_display || record.created_at || record.updated_at_display || record.updated_at);
+}
+
+function filteredDisbursementHistory() {
+  const from = state.disbursementHistoryFrom ? new Date(state.disbursementHistoryFrom) : null;
+  const to = state.disbursementHistoryTo ? new Date(state.disbursementHistoryTo) : null;
+  const bank = state.disbursementHistoryBank.trim().toLowerCase();
+  const account = normalizeAccountNumber(state.disbursementHistoryAccount);
+  const amount = parseMoney(state.disbursementHistoryAmount);
+  return (state.disbursementRequests || []).filter((record) => {
+    const dt = disbursementRecordDate(record);
+    const matchesFrom = !from || (dt && dt >= from);
+    const matchesTo = !to || (dt && dt <= to);
+    const matchesBank = !bank || String(record.bank_name || "").toLowerCase().includes(bank);
+    const matchesAccount = !account || String(record.bank_account_number || "").includes(account);
+    const matchesAmount = !amount || Number(record.net_amount || 0) === amount;
+    return matchesFrom && matchesTo && matchesBank && matchesAccount && matchesAmount;
+  }).sort((a, b) => (disbursementRecordDate(b)?.getTime() || 0) - (disbursementRecordDate(a)?.getTime() || 0));
+}
+
+function renderDisbursementHistory() {
+  const body = $("#disbursement-history-body");
+  if (!body) return;
+  const rows = filteredDisbursementHistory();
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="8" class="muted">Belum ada history disbursement</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map((record) => `
+    <tr>
+      <td class="mono">${escapeHtml(record.request_id || "-")}</td>
+      <td>${escapeHtml(formatPaymentAt(record.created_at_display || record.created_at))}</td>
+      <td class="amount">${formatRp(record.net_amount || 0)}</td>
+      <td>${escapeHtml(record.bank_name || "-")}</td>
+      <td class="mono">${escapeHtml(record.bank_account_number || "-")}</td>
+      <td>${escapeHtml(record.beneficiary_name || "-")}</td>
+      <td>${escapeHtml(record.request_name || "-")}</td>
+      <td><span class="status-pill ${String(record.status || "Pending").toLowerCase()}">${escapeHtml(record.status || "Pending")}</span></td>
+    </tr>
+  `).join("");
+}
+
+function renderDisbursement() {
+  if (!$("#page-disbursement")) return;
+  renderDisbursementStats();
+  renderDisbursementInfo();
+  renderDisbursementBeneficiary();
+  renderDisbursementBankOptions();
+  updateDisbursementAmountPreview({ clampMax: false });
+  $$(".disbursement-section").forEach((section) => {
+    section.classList.toggle("active", section.id === `disbursement-section-${state.disbursementTab}`);
+  });
+  $$(".disbursement-tabs .seg").forEach((button) => {
+    button.classList.toggle("active", button.dataset.disbursementTab === state.disbursementTab);
+  });
+  renderDisbursementHistory();
+}
+
+async function loadDisbursementData({ loading = false } = {}) {
+  if (!isMerchantAdmin() || isSystemAdmin()) return;
+  const result = await api("/api/disbursement", { loading: loading ? "Memuat disbursement..." : false });
+  state.disbursementSummary = result.summary || {};
+  state.disbursementRequests = result.requests || [];
+  state.disbursementBanks = result.banks || state.disbursementBanks || [];
+  renderDisbursement();
+}
+
+function filteredSystemDisbursements() {
+  const from = state.systemDisbursementFrom ? new Date(state.systemDisbursementFrom) : null;
+  const to = state.systemDisbursementTo ? new Date(state.systemDisbursementTo) : null;
+  const bank = state.systemDisbursementBank.trim().toLowerCase();
+  const account = normalizeAccountNumber(state.systemDisbursementAccount);
+  const amount = parseMoney(state.systemDisbursementAmount);
+  return (state.systemDisbursements || []).filter((record) => {
+    const dt = disbursementRecordDate(record);
+    const matchesFrom = !from || (dt && dt >= from);
+    const matchesTo = !to || (dt && dt <= to);
+    const matchesBank = !bank || String(record.bank_name || "").toLowerCase().includes(bank);
+    const matchesAccount = !account || String(record.bank_account_number || "").includes(account);
+    const matchesAmount = !amount || Number(record.net_amount || 0) === amount;
+    return matchesFrom && matchesTo && matchesBank && matchesAccount && matchesAmount;
+  }).sort((a, b) => (disbursementRecordDate(b)?.getTime() || 0) - (disbursementRecordDate(a)?.getTime() || 0));
+}
+
+function renderSystemDisbursements() {
+  const body = $("#system-disbursement-body");
+  if (!body) return;
+  const rows = filteredSystemDisbursements();
+  const pending = rows.filter((record) => String(record.status || "").toLowerCase() === "pending");
+  const success = rows.filter((record) => String(record.status || "").toLowerCase() === "success");
+  const failed = rows.filter((record) => String(record.status || "").toLowerCase() === "failed");
+  $("#system-disbursement-stats").innerHTML = [
+    ["Requests", rows.length],
+    ["Pending", pending.length],
+    ["Success", success.length],
+    ["Failed", failed.length],
+    ["Pending Amount", formatRp(pending.reduce((sum, row) => sum + Number(row.net_amount || 0), 0))],
+    ["Success Amount", formatRp(success.reduce((sum, row) => sum + Number(row.net_amount || 0), 0))],
+  ].map(([label, value]) => `<div class="stat-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="11" class="muted">Tidak ada request disbursement</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map((record) => {
+    const status = String(record.status || "Pending");
+    const pendingStatus = status.toLowerCase() === "pending";
+    return `
+      <tr>
+        <td class="mono">${escapeHtml(record.request_id || "-")}</td>
+        <td>${escapeHtml(formatPaymentAt(record.created_at_display || record.created_at))}</td>
+        <td>${escapeHtml(record.merchant_name || record.merchant_id || "-")}</td>
+        <td>${escapeHtml(record.request_name || "-")}</td>
+        <td>${escapeHtml(record.request_email || "-")}</td>
+        <td>${escapeHtml(record.bank_name || "-")}</td>
+        <td class="mono">${escapeHtml(record.bank_account_number || "-")}</td>
+        <td>${escapeHtml(record.beneficiary_name || "-")}</td>
+        <td class="amount">${formatRp(record.net_amount || 0)}</td>
+        <td><span class="status-pill ${status.toLowerCase()}">${escapeHtml(status)}</span></td>
+        <td>
+          <div class="button-row compact">
+            ${pendingStatus ? `<button class="btn primary" type="button" data-action="approve-system-disbursement" data-request-id="${escapeAttr(record.request_id)}">Approve</button>
+            <button class="btn danger-soft" type="button" data-action="reject-system-disbursement" data-request-id="${escapeAttr(record.request_id)}">Reject</button>` : ""}
+            <button class="btn ghost" type="button" data-action="download-system-disbursement-pdf" data-request-id="${escapeAttr(record.request_id)}">PDF</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function loadSystemDisbursements({ loading = true } = {}) {
+  if (!isSystemAdmin()) return;
+  const result = await api("/api/system-admin/disbursements", { loading: loading ? "Memuat disbursement..." : false });
+  state.systemDisbursements = result.disbursements || [];
+  if (result.banks) state.disbursementBanks = result.banks;
+  renderSystemDisbursements();
+}
+
+async function updateSystemDisbursementStatus(requestId, action) {
+  if (!requestId) return;
+  const approve = action === "approve";
+  const ok = window.confirm(approve ? "Approve disbursement ini?" : "Reject disbursement ini?");
+  if (!ok) return;
+  const note = approve ? "" : (window.prompt("Reason reject/cancel:", "") || "");
+  const result = await api("/api/system-admin/disbursement/status", {
+    method: "POST",
+    body: { request_id: requestId, action, note },
+    loading: approve ? "Approving disbursement..." : "Rejecting disbursement...",
+  });
+  state.systemDisbursements = result.disbursements || state.systemDisbursements;
+  renderSystemDisbursements();
+  showToast(approve ? "Disbursement approved" : "Disbursement rejected");
+}
+
+async function downloadSystemDisbursementPdf(requestId) {
+  if (!requestId) return;
+  await downloadFile(`/api/system-admin/disbursement.pdf?request_id=${encodeURIComponent(requestId)}`, {
+    filename: `disbursement-${requestId}.pdf`,
+    message: "Menyiapkan bukti disbursement...",
+  });
+  showToast("Disbursement PDF downloaded");
 }
 
 function renderSettings() {
@@ -4531,13 +5064,16 @@ function merchantOptions(selectedId) {
 }
 
 function setSystemAdminTab(tab) {
-  state.systemAdminTab = ["transactions", "qris-frame"].includes(tab) ? tab : "merchants";
+  state.systemAdminTab = ["transactions", "disbursements", "qris-frame"].includes(tab) ? tab : "merchants";
   $$(".system-admin-section").forEach((section) => {
     section.classList.toggle("active", section.id === `system-admin-${state.systemAdminTab}`);
   });
   $$(".system-admin-tabs .seg").forEach((button) => {
     button.classList.toggle("active", button.dataset.systemTab === state.systemAdminTab);
   });
+  if (state.systemAdminTab === "disbursements" && !state.systemDisbursements.length) {
+    loadSystemDisbursements({ loading: false }).catch((err) => showToast(err.message, "error"));
+  }
   renderSystemAdmin();
 }
 
@@ -4685,6 +5221,10 @@ function renderSystemAdmin() {
     } else if (typeof window.renderSystemQrisFrame === "function") {
       window.renderSystemQrisFrame();
     }
+    return;
+  }
+  if (state.systemAdminTab === "disbursements") {
+    renderSystemDisbursements();
     return;
   }
   const merchants = systemMerchants();
@@ -5022,6 +5562,8 @@ async function syncMenuData(name) {
     renderAnalytics();
   } else if (name === "history") {
     await refreshHistoryData({ loading: false });
+  } else if (name === "disbursement") {
+    await loadDisbursementData({ loading: false });
   } else if (name === "settings") {
     const result = await api("/api/assets", { loading: false });
     if (result.settings) applyServerSettings(result.settings, result.assets || null);
@@ -5054,6 +5596,7 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   applyServerSettings(result.settings || {});
   state.version = result.version || state.version || {};
   state.systemAdmin = result.system_admin || state.systemAdmin || null;
+  state.systemDisbursements = state.systemAdmin?.disbursements || state.systemDisbursements || [];
   setDisplayEvent(result.display_event || null);
   state.session = result.session || { sales: 0, revenue: 0 };
   state.logs = result.logs || [];
@@ -5071,6 +5614,7 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   renderStock();
   renderAnalytics();
   renderHistory();
+  renderDisbursement();
   renderVendorInvoice();
   renderSettings();
   renderLogs();
@@ -5116,6 +5660,11 @@ async function handleAction(action, target) {
       changeCartQty(target.dataset.name, 1);
     } else if (action === "cart-dec") {
       changeCartQty(target.dataset.name, -1);
+    } else if (action === "select-disbursement-bank") {
+      $("#disb-bank-code").value = target.dataset.bankCode || "";
+      $("#disb-bank-search").value = target.dataset.bankName || "";
+      $("#disb-bank-options").hidden = true;
+      resetDisbursementBeneficiary();
     } else if (action === "clear-cart") {
       clearCart();
     } else if (action === "primary-pay") {
@@ -5188,6 +5737,38 @@ async function handleAction(action, target) {
       renderHistory();
     } else if (action === "export-history-pdf") {
       await exportHistoryPdf();
+    } else if (action === "reload-disbursement") {
+      await loadDisbursementData({ loading: true });
+      showToast("Disbursement refreshed");
+    } else if (action === "check-disbursement-beneficiary") {
+      await checkDisbursementBeneficiary();
+    } else if (action === "submit-disbursement-request") {
+      openDisbursementConfirm();
+    } else if (action === "open-disbursement-credentials") {
+      openDisbursementCredentials();
+    } else if (action === "start-disbursement-otp") {
+      await startDisbursementOtp();
+    } else if (action === "resend-disbursement-otp") {
+      await resendDisbursementOtp();
+    } else if (action === "confirm-disbursement-otp") {
+      await confirmDisbursementOtp();
+    } else if (action === "apply-disbursement-history-filter") {
+      state.disbursementHistoryFrom = $("#disb-history-from")?.value || "";
+      state.disbursementHistoryTo = $("#disb-history-to")?.value || "";
+      state.disbursementHistoryBank = $("#disb-history-bank")?.value || "";
+      state.disbursementHistoryAccount = $("#disb-history-account")?.value || "";
+      state.disbursementHistoryAmount = $("#disb-history-amount")?.value || "";
+      renderDisbursementHistory();
+    } else if (action === "reset-disbursement-history-filter") {
+      state.disbursementHistoryFrom = "";
+      state.disbursementHistoryTo = "";
+      state.disbursementHistoryBank = "";
+      state.disbursementHistoryAccount = "";
+      state.disbursementHistoryAmount = "";
+      ["#disb-history-from", "#disb-history-to", "#disb-history-bank", "#disb-history-account", "#disb-history-amount"].forEach((selector) => {
+        if ($(selector)) $(selector).value = "";
+      });
+      renderDisbursementHistory();
     } else if (action === "open-detail") {
       openDetail(target.dataset.txn);
     } else if (action === "download-receipt") {
@@ -5228,6 +5809,32 @@ async function handleAction(action, target) {
       updateSystemTxnComputed();
     } else if (action === "save-system-transaction") {
       await saveSystemTransaction();
+    } else if (action === "load-system-disbursements") {
+      await loadSystemDisbursements({ loading: true });
+      showToast("Disbursement loaded");
+    } else if (action === "apply-system-disbursement-filter") {
+      state.systemDisbursementFrom = $("#system-disb-from")?.value || "";
+      state.systemDisbursementTo = $("#system-disb-to")?.value || "";
+      state.systemDisbursementBank = $("#system-disb-bank")?.value || "";
+      state.systemDisbursementAccount = $("#system-disb-account")?.value || "";
+      state.systemDisbursementAmount = $("#system-disb-amount")?.value || "";
+      renderSystemDisbursements();
+    } else if (action === "reset-system-disbursement-filter") {
+      state.systemDisbursementFrom = "";
+      state.systemDisbursementTo = "";
+      state.systemDisbursementBank = "";
+      state.systemDisbursementAccount = "";
+      state.systemDisbursementAmount = "";
+      ["#system-disb-from", "#system-disb-to", "#system-disb-bank", "#system-disb-account", "#system-disb-amount"].forEach((selector) => {
+        if ($(selector)) $(selector).value = "";
+      });
+      renderSystemDisbursements();
+    } else if (action === "approve-system-disbursement") {
+      await updateSystemDisbursementStatus(target.dataset.requestId, "approve");
+    } else if (action === "reject-system-disbursement") {
+      await updateSystemDisbursementStatus(target.dataset.requestId, "reject");
+    } else if (action === "download-system-disbursement-pdf") {
+      await downloadSystemDisbursementPdf(target.dataset.requestId);
     } else if (action === "save-settings") {
       await saveSettings();
     } else if (action === "save-admin-settings") {
@@ -5391,6 +5998,11 @@ function bindEvents() {
       setSystemAdminTab(systemTab.dataset.systemTab);
       return;
     }
+    const disbursementTab = event.target.closest("[data-disbursement-tab]");
+    if (disbursementTab) {
+      setDisbursementTab(disbursementTab.dataset.disbursementTab);
+      return;
+    }
     const stockTab = event.target.closest("[data-stock-tab]");
     if (stockTab) {
       setStockTab(stockTab.dataset.stockTab).catch((err) => showToast(err.message, "error"));
@@ -5404,7 +6016,17 @@ function bindEvents() {
     }
   });
 
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest?.(".bank-combobox")) {
+      const options = $("#disb-bank-options");
+      if (options) options.hidden = true;
+    }
+  });
+
   $("#search-input").addEventListener("input", renderCatalog);
+  $("#disb-bank-search")?.addEventListener("focus", () => {
+    renderDisbursementBankOptions();
+  });
   $("#cash-received").addEventListener("input", (event) => {
     const amount = parseMoney(event.target.value);
     event.target.value = amount ? formatPlainNumber(amount) : "";
@@ -5451,6 +6073,29 @@ function bindEvents() {
     }
     if (event.target.closest("#system-txn-search")) {
       renderSystemTransactionList();
+    }
+    if (event.target.closest("#disb-bank-search")) {
+      const input = event.target;
+      const selected = disbursementBankByCode($("#disb-bank-code")?.value, input.value);
+      if (!selected || (selected.short_name || selected.full_name) !== input.value) {
+        if ($("#disb-bank-code")) $("#disb-bank-code").value = "";
+        resetDisbursementBeneficiary();
+      }
+      renderDisbursementBankOptions();
+      return;
+    }
+    if (event.target.closest("#disb-account-number")) {
+      event.target.value = normalizeAccountNumber(event.target.value);
+      resetDisbursementBeneficiary();
+      return;
+    }
+    if (event.target.closest("#disb-amount")) {
+      updateDisbursementAmountPreview({ clampMax: true });
+      return;
+    }
+    if (event.target.closest("#disb-history-amount, #system-disb-amount")) {
+      event.target.value = formatPlainNumber(parseMoney(event.target.value));
+      return;
     }
     const txnInput = event.target.closest(".system-txn-input, #system-txn-cash-received");
     if (txnInput) {

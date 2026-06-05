@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=10">
+  <link rel="stylesheet" href="/styles.css?v=11">
   <link rel="stylesheet" href="/theme-pack.css?v=10">
 </head>
 <body data-theme="crystal_bloom">
@@ -249,6 +249,7 @@
         <button class="nav-btn pos-only" type="button" data-page="stock">Stock</button>
         <button class="nav-btn pos-only can-view-analytics-only" type="button" data-page="analytics">Analytics</button>
         <button class="nav-btn pos-only" type="button" data-page="history">History</button>
+        <button class="nav-btn pos-only merchant-admin-only" type="button" data-page="disbursement">Disbursement</button>
         <button class="nav-btn pos-only" type="button" data-page="settings">Settings</button>
         <button class="nav-btn pos-only" type="button" data-page="log">Log</button>
         <button class="nav-btn danger" type="button" data-action="logout">Logout</button>
@@ -372,6 +373,7 @@
         <div class="system-admin-tabs segmented">
           <button class="seg active" type="button" data-system-tab="merchants">Merchants</button>
           <button class="seg" type="button" data-system-tab="transactions">Transaction Edit</button>
+          <button class="seg" type="button" data-system-tab="disbursements">Disbursement</button>
           <button class="seg" type="button" data-system-tab="qris-frame">QR Frame</button>
         </div>
 
@@ -460,6 +462,48 @@
               <div class="system-transaction-editor" id="system-txn-editor">
                 <div class="empty-state">Filter merchant dulu, lalu pilih transaksi.</div>
               </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="system-admin-section" id="system-admin-disbursements">
+          <section class="panel system-disbursement-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">System Admin</p>
+                <h2>Disbursement Approval</h2>
+              </div>
+              <button class="btn ghost" type="button" data-action="load-system-disbursements">Refresh</button>
+            </div>
+            <div class="panel filter-panel system-disbursement-filter">
+              <label class="field"><span>From</span><input id="system-disb-from" type="datetime-local"></label>
+              <label class="field"><span>To</span><input id="system-disb-to" type="datetime-local"></label>
+              <label class="field"><span>Bank</span><input id="system-disb-bank" type="search" placeholder="Bank"></label>
+              <label class="field"><span>No. Rekening</span><input id="system-disb-account" type="search" placeholder="Nomor rekening"></label>
+              <label class="field"><span>Amount After Fee</span><input id="system-disb-amount" type="text" inputmode="numeric"></label>
+              <button class="btn primary" type="button" data-action="apply-system-disbursement-filter">Search</button>
+              <button class="btn ghost" type="button" data-action="reset-system-disbursement-filter">Reset</button>
+            </div>
+            <div class="stats-grid compact" id="system-disbursement-stats"></div>
+            <div class="table-wrap">
+              <table class="data-table disbursement-table">
+                <thead>
+                  <tr>
+                    <th>Request ID</th>
+                    <th>Timestamp</th>
+                    <th>Merchant</th>
+                    <th>Requester</th>
+                    <th>Email</th>
+                    <th>Bank</th>
+                    <th>No. Rekening</th>
+                    <th>Penerima</th>
+                    <th>Amount After Fee</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="system-disbursement-body"></tbody>
+              </table>
             </div>
           </section>
         </div>
@@ -806,6 +850,117 @@
         </div>
       </section>
 
+      <section class="page" id="page-disbursement" aria-label="Disbursement">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Disbursement</p>
+            <h1>QRIS Disbursement</h1>
+          </div>
+          <button class="btn ghost" type="button" data-action="reload-disbursement">Refresh</button>
+        </div>
+
+        <div class="disbursement-tabs segmented">
+          <button class="seg active" type="button" data-disbursement-tab="request">Request Disbursement</button>
+          <button class="seg" type="button" data-disbursement-tab="history">History Disbursement</button>
+        </div>
+
+        <div class="stats-grid compact" id="disbursement-stats"></div>
+
+        <section class="disbursement-section active" id="disbursement-section-request">
+          <div class="disbursement-request-grid">
+            <form class="panel disbursement-form" id="disbursement-form">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Request</p>
+                  <h2>Transfer Hasil QRIS</h2>
+                </div>
+              </div>
+
+              <label class="field bank-combobox">
+                <span>Bank</span>
+                <input id="disb-bank-search" type="search" autocomplete="off" placeholder="Cari nama bank...">
+                <input id="disb-bank-code" type="hidden">
+                <div class="bank-options" id="disb-bank-options"></div>
+              </label>
+
+              <label class="field">
+                <span>Nomor Rekening</span>
+                <input id="disb-account-number" type="text" inputmode="numeric" autocomplete="off">
+              </label>
+
+              <div class="button-row">
+                <button class="btn ghost" type="button" data-action="check-disbursement-beneficiary">Inquiry Rekening</button>
+              </div>
+
+              <div class="beneficiary-result" id="disb-beneficiary-result">
+                <span>Beneficiary</span>
+                <strong>Belum inquiry</strong>
+              </div>
+
+              <label class="field">
+                <span>Request Amount</span>
+                <span class="money-input">
+                  <b>Rp</b>
+                  <input id="disb-amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0">
+                </span>
+              </label>
+
+              <div class="disbursement-fee-box">
+                <div><span>Merchant Balance</span><strong id="disb-balance-label">Rp 0</strong></div>
+                <div><span>Admin Fee</span><strong id="disb-admin-fee-label">Rp 2.000</strong></div>
+                <div><span>Minimum</span><strong id="disb-minimum-label">Rp 10.000</strong></div>
+                <div><span>Transfer Amount</span><strong id="disb-net-label">Rp 0</strong></div>
+              </div>
+
+              <button class="btn primary wide" type="button" data-action="submit-disbursement-request">Submit Request</button>
+              <p class="auth-status" id="disb-status"></p>
+            </form>
+
+            <section class="panel disbursement-info-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Balance</p>
+                  <h2>Merchant Balance</h2>
+                </div>
+              </div>
+              <div class="info-list disbursement-info-list" id="disbursement-info-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="disbursement-section" id="disbursement-section-history">
+          <div class="panel disbursement-note">
+            <strong>Permintaan disbursement akan diproses dalam waktu maksimal 3 hari kerja dan berpotensi selesai lebih cepat.</strong>
+          </div>
+          <div class="panel filter-panel">
+            <label class="field"><span>From</span><input id="disb-history-from" type="datetime-local"></label>
+            <label class="field"><span>To</span><input id="disb-history-to" type="datetime-local"></label>
+            <label class="field"><span>Bank</span><input id="disb-history-bank" type="search" placeholder="Bank"></label>
+            <label class="field"><span>No. Rekening</span><input id="disb-history-account" type="search" placeholder="Nomor rekening"></label>
+            <label class="field"><span>Amount After Fee</span><input id="disb-history-amount" type="text" inputmode="numeric"></label>
+            <button class="btn primary" type="button" data-action="apply-disbursement-history-filter">Search</button>
+            <button class="btn ghost" type="button" data-action="reset-disbursement-history-filter">Reset</button>
+          </div>
+          <div class="table-wrap panel">
+            <table class="data-table disbursement-table">
+              <thead>
+                <tr>
+                  <th>Request ID</th>
+                  <th>Timestamp</th>
+                  <th>Total Disbursement</th>
+                  <th>Bank</th>
+                  <th>No. Rekening</th>
+                  <th>Penerima</th>
+                  <th>Requester</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="disbursement-history-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
       <section class="page" id="page-settings" aria-label="Settings">
         <div class="page-head">
           <div>
@@ -1055,6 +1210,43 @@
       </div>
     </section>
 
+    <section class="modal detail-modal" id="disbursement-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="disbursement-confirm-title" hidden>
+      <button class="modal-close" type="button" data-action="close-modal" aria-label="Close">x</button>
+      <p class="eyebrow">Confirm Disbursement</p>
+      <h2 id="disbursement-confirm-title">Review Request</h2>
+      <div class="detail-summary" id="disbursement-confirm-summary"></div>
+      <div class="button-row">
+        <button class="btn ghost" type="button" data-action="close-modal">Cancel</button>
+        <button class="btn primary" type="button" data-action="open-disbursement-credentials">Confirm Disbursement</button>
+      </div>
+    </section>
+
+    <section class="modal detail-modal" id="disbursement-credential-modal" role="dialog" aria-modal="true" aria-labelledby="disbursement-credential-title" hidden>
+      <button class="modal-close" type="button" data-action="close-modal" aria-label="Close">x</button>
+      <p class="eyebrow">Merchant Admin Credential</p>
+      <h2 id="disbursement-credential-title">Verifikasi Disbursement</h2>
+      <div class="detail-summary compact" id="disbursement-credential-summary"></div>
+      <div class="disbursement-credential-step" id="disbursement-pin-step">
+        <label class="field">
+          <span>PIN Admin</span>
+          <input id="disb-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+        </label>
+        <button class="btn primary wide" type="button" data-action="start-disbursement-otp">Send OTP</button>
+      </div>
+      <div class="disbursement-credential-step" id="disbursement-otp-step" hidden>
+        <p class="otp-countdown" id="disb-otp-countdown">OTP berlaku 60 detik.</p>
+        <label class="field">
+          <span>OTP</span>
+          <input id="disb-otp" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+        </label>
+        <div class="button-row">
+          <button class="btn primary" type="button" data-action="confirm-disbursement-otp">Confirm Disbursement</button>
+          <button class="btn ghost" id="disb-otp-resend" type="button" data-action="resend-disbursement-otp" disabled>Resend OTP</button>
+        </div>
+      </div>
+      <p class="auth-status" id="disb-credential-status"></p>
+    </section>
+
     <section class="modal" id="logout-modal" role="dialog" aria-modal="true" aria-labelledby="logout-title" hidden>
       <button class="modal-close" type="button" data-action="close-modal" aria-label="Close">x</button>
       <p class="eyebrow">Session</p>
@@ -1096,7 +1288,7 @@
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=8"></script>
   <script src="/image-crop.js?v=2"></script>
-  <script src="/app.js?v=27"></script>
+  <script src="/app.js?v=28"></script>
   <script src="/qris-frame-admin.js?v=9"></script>
 </body>
 </html>

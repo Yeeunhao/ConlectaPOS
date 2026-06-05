@@ -156,6 +156,134 @@ SESSION_IDLE_SECONDS = 30 * 60
 PAYMENT_METHOD_QRIS = "QRIS"
 PAYMENT_METHOD_CASH = "Cash"
 QRIS_FEE_RATE = 0.007
+DISBURSEMENT_ADMIN_FEE = 2000
+DISBURSEMENT_MIN_AMOUNT = 10000
+DISBURSEMENT_PENDING_TTL_SECONDS = 10 * 60
+DISBURSEMENT_OTP_TTL_SECONDS = 60
+DISBURSEMENT_RESERVING_STATUSES = {"pending", "success"}
+DISBURSEMENT_BANK_ROWS = """
+BRINIDJA|002|Bank Rakyat Indonesia|BRI
+IBBKIDJA|016|Bank Maybank Indonesia|Maybank
+BNINIDJA|009|Bank Negara Indonesia|BNI
+BDINIDJA|011|Bank Danamon|Danamon
+CENAIDJA|014|Bank Central Asia|BCA
+BMRIIDJA|008|Bank Mandiri|Mandiri
+BPIAIDJA|047|Bank Resona|Bank Resona
+CTCBIDJA|949|Bank Chinatrust Indonesia|Bank Chinatrust
+PINBIDJA|019|Bank Panin|Bank Panin
+BUMIIDJA|485|Bank MNC Internasional|Bank MNC
+DBSBIDJA|046|Bank DBS Indonesia|Bank DBS
+PDKSIDJ1|122|BPD Kalimantan Selatan|Bank Kalsel
+PDWRIDJ1|135|BPD Sulawesi Tenggara|Bank Sultra
+SCBLIDJX|050|Standard Charted Bank|Standard Charted
+ABALIDBS|129|BPD Bali|Bank Bali
+PDJGIDJ1|113|BPD Jawa Tengah|Bank Jateng
+SYJBIDJ1|425|Bank BJB Syariah|BJB Syariah
+PDWGIDJ1|134|BPD Sulawesi Tengah|Bank Sulteng
+MEDHIDS1|151|Bank Mestika Dharma|Bank Mestika
+BKCHIDJA|069|Bank of China Hongkong|Bank Hongkong
+PDJBIDJA|110|Bank Jawa Barat Dan Banten|Bank BJB
+SBJKIDJA|153|Bank Sinarmas|Bank Sinarmas
+ANZBIDJX|061|Bank ANZ Indonesia|Bank Anz
+ARTGIDJA|037|Bank Artha Graha International|Artha Graha
+BBUKIDJA|441|Bank Bukopin|Bank Bukopin
+BBAIIDJA|076|Bank Bumi Arta|Bank Bumi Artha
+BCIAIDJA|054|Bank Capital Indonesia|Bank Capital
+SYCAIDJ1|536|Bank Central Asia Syariah|BCA Syariah
+BICNIDJA|950|Bank Commonwealth|Bank Commonwealth
+BDKIIDJ1|111|Bank DKI|Bank DKI
+GNESIDJA|161|Bank Ganesha|Bank Ganesha
+ICBKIDJA|164|Bank ICBC Indonesia|Bank ICBC
+IAPTIDJA|513|Bank Ina Perdania|Bank Ina
+BIDXIDJA|555|Bank Index Selindo|Bank Index
+MASDIDJ1|157|Bank Maspion Indonesia|Bank Maspion
+MAYAIDJA|097|Bank Mayapada International|Bank Mayapada
+MAYOIDJA|553|Bank Mayora|Bank Mayora
+MEGAIDJA|426|Bank Mega|Bank Mega
+BMSEIDJA|548|Bank Multi Arta Sentosa|Multi Arta
+LFIBIDJ1|503|Bank Nationalnobu|Bank Nobu
+BOTKIDJX|042|Bank MUFG|Bank MUFG
+BDIPIDJ1|523|Bank Sahabat Sampoerna|Bank Sampoerna
+SDOBIDJ1|521|Bank Syariah Bukopin|Bukopin Syariah
+BUTGIDJ1|506|Bank Syariah Mega|Mega Syariah
+SUNIIDJA|213|Bank Tabungan Pensiunan Nasional (BTPN)|Bank BTPN
+BBIJIDJA|023|Bank UOB Indonesia|Bank UOB
+VICTIDJ1|566|Bank Victoria Internasional|Bank Victoria
+PDBKIDJ1|133|BPD Bengkulu|Bank Bengkulu
+PDYKIDJ1|112|BPD Daerah Istimewa Yogyakarta|Bank DIY
+PDJMIDJ1|115|BPD Jambi|Bank Jambi
+PDJTIDJ1|114|BPD Jawa Timur|Bank Jatim
+PDKBIDJ1|123|BPD Kalimantan Barat|Bank Kalbar
+PDKGIDJ1|125|BPD Kalimantan Tengah|Bank Kalteng
+PDLPIDJ1|121|BPD Lampung|Bank Lampung
+PDMLIDJ1|131|BPD Maluku Dan Malut|Bank Maluku Malut
+PDNBIDJ1|128|BPD Nusa Tenggara Barat|Bank NTB
+PDIJIDJ1|132|BPD Papua|Bank Papua
+PDWUIDJ1|127|BPD Sulut|Bank Sulut
+BSSPIDSP|120|BPD Sumsel Dan Babel|Bank Sulsel Babel
+PDSUIDJ1|117|BPD Sumut|Bank Sumut
+CITIIDJX|031|Citibank|Citibank
+HSBCIDJA|087|HSBC Indonesia|HSBC
+ALOBIDJA|567|Allo Bank Indonesia|Allo Bank
+BSMDIDJA|451|Bank Syariah Indonesia|BSI
+BNIAIDJA|022|CIMB Niaga|CIMB
+BBBAIDJA|013|Bank Permata|PERMATA
+MUABIDJA|147|Bank Muamalat Indonesia|MUAMALAT
+NISPIDJA|028|OCBC Indonesia|OCBC
+MEEKIDJ1|152|Bank Shinhan Indonesia|Bank Shinhan
+SIHBIDJ1|564|Mandiri Taspen Pos|Bank Mandiri Taspen
+AWANIDJA|167|Bank QNB Indonesia|Bank QNB
+PDBBIDJ1|137|BPD Banten|Bank Banten
+CICTIDJA|095|Bank JTrust Indonesia|Bank JTrust
+PUBAIDJ1|547|BTPN Syariah|BTPN Syariah
+BSDRIDJA|212|Bank Woori Saudara Indonesia 1906|Bank Woori Saudara
+LMANIDJ1|526|Bank Oke Indonesia|Bank Oke
+NETBIDJA|947|Bank Aladin Syariah|Bank Aladin Syariah
+IBKOIDJA|945|Bank IBK Indonesia|Bank IBK
+SSPIIDJA|535|Bank Seabank Indonesia|Bank Seabank
+BBLUIDJA|501|Bank BCA DIGITAL|Blu (BCA Digital)
+JAGBIDJA|542|Bank Jago|Bank Jago
+BUSTIDJ1|459|Krom Bank Indonesia|Krom Bank
+HNBNIDJA|484|Bank Hana (Line)|Bank Hana (Line)
+PDRIIDJA|119|BPD RIAU|BPD Riau
+PDKTIDJ1|124|BPD KALIMANTAN TIMUR DAN KALIMANTAN UTARA|BPD Kaltim dan Kaltara
+PDNTIDJA|130|BPD NUSA TENGGARA TIMUR|BPD NTT
+PDWSIDJA|126|BANK SULSELBAR|Bank Sulselbar
+FAMAIDJ1|562|Superbank Indonesia|Superbank
+BTANIDJA|200|Bank Tabungan Negara (BTN)|BTN
+LOMAIDJ1|531|PT. BANK AMAR INDONESIA|Bank Amar
+SYACIDJ1|116|PT. BANK ACEH SYARIAH|Bank Aceh Syariah
+AGTBIDJA|494|BANK RAYA INDONESIA|Bank Raya
+JSABIDJ1|472|Bank Jasa Jakarta|Jasa Jakarta
+SYBTIDJ1|200|Bank Tabungan Negara UUS (BTN Syariah)|BTN Syariah
+MCORIDJA|036|China Construction Bank|China Construction Bank
+SYNAIDJ1|022|CIMB Niaga Syariah|CIMB Niaga Syariah
+NUPAIDJ6|145|Bank Nusantara Parahyangan|Bank Nusantara Parahyangan
+BKIDIDJA|146|Bank of India|Bank of India
+ARFAIDJ1|517|Panin Dubai Syariah|Panin Dubai Syariah
+SYBBIDJ1|013|Permata Syariah|Permata Syariah
+RABOIDJA|089|Rabobank Indonesia|Rabobank Indonesia
+INDOIDJA|498|Bank SBI Indonesia|Bank SBI Indonesia
+SWAGIDJ1|405|Victoria Syariah|Victoria Syariah
+SYSBIDJ1|118|Nagari Syariah|Nagari Syariah
+|688|BPR Karyajatnika Sadaya|BPR Karyajatnika Sadaya
+CNBAIDJ1|559|Centratama Nasional Bank|Centratama Nasional Bank
+YUDBIDJ1|490|Bank Neo Commerce (BNC)|BNC
+""".strip()
+DISBURSEMENT_BANKS = [
+    {
+        "swift_code": parts[0].strip(),
+        "code": parts[1].strip(),
+        "full_name": parts[2].strip(),
+        "short_name": parts[3].strip(),
+    }
+    for parts in (
+        line.split("|", 3)
+        for line in DISBURSEMENT_BANK_ROWS.splitlines()
+        if line.strip()
+    )
+    if len(parts) == 4
+]
 PAID_QRIS_STATUSES = {"success", "paid", "completed", "settled", "succeeded"}
 OTP_TTL_SECONDS = 60
 OTP_RESEND_COOLDOWN_SECONDS = 60
@@ -1137,6 +1265,8 @@ def default_state():
         "auth": None,
         "pending_otps": {},
         "pending_auth": {},
+        "pending_disbursements": {},
+        "disbursement_requests": [],
     }
 
 
@@ -1478,6 +1608,7 @@ def system_admin_payload(auth=None):
         "merchants": merchants,
         "accounts": accounts,
         "version": load_version_info(),
+        "disbursements": [_public_disbursement_record(row) for row in load_disbursement_records(all_merchants=True)],
     }
 
 
@@ -2518,6 +2649,513 @@ def toggle_merchant_account_admin(account_id, admin_account, merchant_id=None):
     return True, "Admin role updated."
 
 
+def generate_disbursement_id():
+    return f"DISB-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
+
+
+def disbursement_status_label(value):
+    text = str(value or "").strip().lower()
+    if text in {"success", "approved", "approve"}:
+        return "Success"
+    if text in {"failed", "fail", "rejected", "reject", "cancel", "cancelled", "canceled"}:
+        return "Failed"
+    return "Pending"
+
+
+def disbursement_bank_options():
+    return [dict(bank) for bank in DISBURSEMENT_BANKS]
+
+
+def disbursement_bank_for(code, bank_name=""):
+    wanted_code = str(code or "").strip()
+    wanted_name = str(bank_name or "").strip().lower()
+    candidates = [bank for bank in DISBURSEMENT_BANKS if str(bank.get("code") or "") == wanted_code]
+    if wanted_name:
+        for bank in candidates:
+            names = {
+                str(bank.get("short_name") or "").strip().lower(),
+                str(bank.get("full_name") or "").strip().lower(),
+            }
+            if wanted_name in names:
+                return bank
+    return candidates[0] if candidates else None
+
+
+def normalize_bank_account_number(value):
+    return re.sub(r"\D+", "", str(value or ""))
+
+
+def _extract_beneficiary_name(data):
+    if not isinstance(data, dict):
+        return ""
+    direct_keys = (
+        "bank_account_name", "account_name", "beneficiary_name", "customer_name",
+        "name", "recipient_name", "bankAccountName", "accountName",
+    )
+    for key in direct_keys:
+        value = str(data.get(key) or "").strip()
+        if value:
+            return value
+    for key in ("data", "result", "beneficiary", "account", "response"):
+        nested = data.get(key)
+        if isinstance(nested, dict):
+            value = _extract_beneficiary_name(nested)
+            if value:
+                return value
+    return ""
+
+
+def check_beneficiary_with_provider(bank_code, bank_account_number):
+    if requests is None:
+        raise RuntimeError("requests package unavailable untuk inquiry rekening.")
+    code = str(bank_code or "").strip()
+    account = normalize_bank_account_number(bank_account_number)
+    if not disbursement_bank_for(code):
+        raise ValueError("Bank code tidak valid.")
+    if len(account) < 5:
+        raise ValueError("Nomor rekening belum valid.")
+    url = f"{VPS_QRIS_BASE_URL}/disbursement/check-beneficiary"
+    try:
+        response = requests.post(
+            url,
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            json={"bank_code": code, "bank_account_number": account},
+            timeout=30,
+        )
+        try:
+            payload = response.json()
+        except Exception:
+            payload = {"message": response.text}
+        if response.status_code >= 400:
+            raise RuntimeError(payload)
+        return payload if isinstance(payload, dict) else {"raw": payload}
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"Gagal check beneficiary: {exc}") from exc
+
+
+def _state_disbursement_records(state=None):
+    state = state or load_state()
+    records = state.get("disbursement_requests")
+    if not isinstance(records, list):
+        records = []
+        state["disbursement_requests"] = records
+    return records
+
+
+def load_disbursement_records(merchant_id=None, all_merchants=False):
+    if _db_ready():
+        try:
+            return conlecta_db.load_disbursement_requests(merchant_id, all_merchants=all_merchants)
+        except Exception as exc:
+            log.warning("load disbursement db failed: %s", exc)
+            if _db_mandatory():
+                raise RuntimeError(_db_unavailable_message("disbursement")) from exc
+    if _db_mandatory():
+        raise RuntimeError(_db_unavailable_message("disbursement"))
+    state = load_state()
+    rows = [dict(row) for row in _state_disbursement_records(state)]
+    if not all_merchants:
+        mid = normalize_merchant_id(merchant_id)
+        rows = [row for row in rows if normalize_merchant_id(row.get("merchant_id")) == mid]
+    return sorted(rows, key=lambda row: str(row.get("created_at") or ""), reverse=True)
+
+
+def find_disbursement_record(request_id):
+    rid = str(request_id or "").strip()
+    if not rid:
+        return None
+    if _db_ready():
+        try:
+            return conlecta_db.find_disbursement_request(rid)
+        except Exception as exc:
+            log.warning("find disbursement db failed: %s", exc)
+            if _db_mandatory():
+                raise RuntimeError(_db_unavailable_message("disbursement")) from exc
+    if _db_mandatory():
+        raise RuntimeError(_db_unavailable_message("disbursement"))
+    for row in _state_disbursement_records(load_state()):
+        if str(row.get("request_id") or "") == rid:
+            return dict(row)
+    return None
+
+
+def save_disbursement_record(record):
+    data = dict(record or {})
+    data["status"] = disbursement_status_label(data.get("status"))
+    now = datetime.now().isoformat(timespec="seconds")
+    data.setdefault("created_at", now)
+    data["updated_at"] = now
+    if _db_ready():
+        try:
+            return conlecta_db.save_disbursement_request(data)
+        except Exception as exc:
+            log.warning("save disbursement db failed: %s", exc)
+            if _db_mandatory():
+                raise RuntimeError(_db_unavailable_message("disbursement")) from exc
+    if _db_mandatory():
+        raise RuntimeError(_db_unavailable_message("disbursement"))
+    state = load_state()
+    rows = _state_disbursement_records(state)
+    rows.insert(0, data)
+    state["disbursement_requests"] = rows[:2000]
+    save_state(state)
+    return data
+
+
+def update_disbursement_record_status(request_id, status, processor=None, note=""):
+    label = disbursement_status_label(status)
+    if _db_ready():
+        try:
+            updated = conlecta_db.update_disbursement_status(request_id, label, processor=processor, note=note)
+            if updated:
+                return updated
+            current = conlecta_db.find_disbursement_request(request_id)
+            if current:
+                raise ValueError("Disbursement request sudah diproses.")
+            raise ValueError("Disbursement request tidak ditemukan.")
+        except ValueError:
+            raise
+        except Exception as exc:
+            log.warning("update disbursement db failed: %s", exc)
+            if _db_mandatory():
+                raise RuntimeError(_db_unavailable_message("disbursement")) from exc
+    if _db_mandatory():
+        raise RuntimeError(_db_unavailable_message("disbursement"))
+    state = load_state()
+    rows = _state_disbursement_records(state)
+    processor = dict(processor or {})
+    now = datetime.now().isoformat(timespec="seconds")
+    for row in rows:
+        if str(row.get("request_id") or "") != str(request_id or ""):
+            continue
+        if str(row.get("status") or "Pending").strip().lower() != "pending":
+            raise ValueError("Disbursement request sudah diproses.")
+        row.update({
+            "status": label,
+            "status_note": str(note or "").strip(),
+            "processed_by_account_id": str(processor.get("id") or ""),
+            "processed_by_name": str(processor.get("name") or processor.get("username") or ""),
+            "processed_by_email": str(processor.get("email") or ""),
+            "processed_at": now,
+            "updated_at": now,
+        })
+        save_state(state)
+        return dict(row)
+    raise ValueError("Disbursement request tidak ditemukan.")
+
+
+def qris_net_totals(merchant_id=None):
+    mid = normalize_merchant_id(merchant_id)
+    gross = 0
+    fee = 0
+    count = 0
+    for record in load_history_for_merchant(mid):
+        method = derive_payment_method(
+            record.get("payment_method"),
+            record.get("cash_received"),
+            record.get("change"),
+            record.get("qr_id"),
+        )
+        if method != PAYMENT_METHOD_QRIS:
+            continue
+        status = str(record.get("status") or record.get("payment_status") or record.get("transaction_status") or "").strip().lower()
+        if status and status not in PAID_QRIS_STATUSES:
+            continue
+        amount = _int_money(record.get("amount"))
+        payment_fee = _int_money(record.get("payment_fee")) or calc_qris_fee(amount)
+        gross += amount
+        fee += payment_fee
+        count += 1
+    return {
+        "qris_count": count,
+        "qris_gross": gross,
+        "qris_fee": fee,
+        "qris_net": max(0, gross - fee),
+    }
+
+
+def disbursement_balance_payload(merchant_id=None):
+    mid = normalize_merchant_id(merchant_id)
+    totals = qris_net_totals(mid)
+    records = load_disbursement_records(mid)
+    reserved = 0
+    pending = 0
+    success_gross = 0
+    success_net = 0
+    failed_gross = 0
+    for record in records:
+        status = str(record.get("status") or "Pending").strip().lower()
+        gross_amount = _int_money(record.get("gross_amount"))
+        if status in DISBURSEMENT_RESERVING_STATUSES:
+            reserved += gross_amount
+        if status == "pending":
+            pending += gross_amount
+        elif status == "success":
+            success_gross += gross_amount
+            success_net += _int_money(record.get("net_amount"))
+        elif status == "failed":
+            failed_gross += gross_amount
+    balance = max(0, totals["qris_net"] - reserved)
+    return {
+        "merchant_id": mid,
+        **totals,
+        "reserved_amount": reserved,
+        "pending_amount": pending,
+        "success_gross_amount": success_gross,
+        "success_net_amount": success_net,
+        "failed_gross_amount": failed_gross,
+        "admin_fee": DISBURSEMENT_ADMIN_FEE,
+        "minimum_amount": DISBURSEMENT_MIN_AMOUNT,
+        "balance": balance,
+    }
+
+
+def _public_disbursement_record(record):
+    data = dict(record or {})
+    data["status"] = disbursement_status_label(data.get("status"))
+    for key in (
+        "gross_amount", "admin_fee", "net_amount", "balance_before", "balance_after",
+    ):
+        data[key] = _int_money(data.get(key))
+    data["created_at_display"] = format_datetime(data.get("created_at")) if data.get("created_at") else ""
+    data["updated_at_display"] = format_datetime(data.get("updated_at")) if data.get("updated_at") else ""
+    data["processed_at_display"] = format_datetime(data.get("processed_at")) if data.get("processed_at") else ""
+    return data
+
+
+def disbursement_payload(merchant_id=None):
+    mid = normalize_merchant_id(merchant_id)
+    return {
+        "summary": disbursement_balance_payload(mid),
+        "requests": [_public_disbursement_record(row) for row in load_disbursement_records(mid)],
+        "banks": disbursement_bank_options(),
+    }
+
+
+def system_disbursement_payload(auth=None):
+    require_system_admin(auth)
+    rows = [_public_disbursement_record(row) for row in load_disbursement_records(all_merchants=True)]
+    return {
+        "disbursements": rows,
+        "banks": disbursement_bank_options(),
+    }
+
+
+def _merchant_admin_emails(merchant_id=None):
+    emails = []
+    for acc in _accounts_for_merchant(merchant_id):
+        if not _normalize_admin_account(acc.get("admin_account")):
+            continue
+        email = str(acc.get("email") or "").strip()
+        if email and email.lower() not in {item.lower() for item in emails}:
+            emails.append(email)
+    return emails
+
+
+def _build_disbursement_request_snapshot(data, auth, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or (auth or {}).get("merchant_id"))
+    if not is_merchant_admin_auth(auth):
+        raise PermissionError("Akses merchant admin diperlukan.")
+    bank = disbursement_bank_for(data.get("bank_code"), data.get("bank_name"))
+    if not bank:
+        raise ValueError("Pilih bank dari daftar resmi.")
+    account_number = normalize_bank_account_number(data.get("bank_account_number"))
+    if len(account_number) < 5:
+        raise ValueError("Nomor rekening belum valid.")
+    amount = _int_money(data.get("amount") or data.get("gross_amount"))
+    summary = disbursement_balance_payload(mid)
+    balance = _int_money(summary.get("balance"))
+    if balance < DISBURSEMENT_MIN_AMOUNT:
+        raise ValueError("Merchant balance belum cukup untuk minimum disbursement Rp 10.000.")
+    if amount < DISBURSEMENT_MIN_AMOUNT:
+        raise ValueError("Minimal disbursement Rp 10.000.")
+    if amount > balance:
+        raise ValueError("Nominal disbursement melebihi merchant balance.")
+    beneficiary_raw = check_beneficiary_with_provider(bank["code"], account_number)
+    beneficiary_name = _extract_beneficiary_name(beneficiary_raw) or str(data.get("beneficiary_name") or "").strip()
+    if not beneficiary_name:
+        beneficiary_name = "Verified Beneficiary"
+    merchant = merchant_payload(mid)
+    merchant_name = merchant.get("name") or (auth or {}).get("merchant_name") or DEFAULT_MERCHANT_NAME
+    net_amount = max(0, amount - DISBURSEMENT_ADMIN_FEE)
+    if net_amount <= 0:
+        raise ValueError("Nominal setelah admin fee tidak valid.")
+    return {
+        "request_id": generate_disbursement_id(),
+        "merchant_id": mid,
+        "merchant_name": merchant_name,
+        "request_account_id": str((auth or {}).get("id") or ""),
+        "request_name": str((auth or {}).get("name") or (auth or {}).get("username") or ""),
+        "request_email": str((auth or {}).get("email") or ""),
+        "bank_code": bank["code"],
+        "bank_name": bank["short_name"] or bank["full_name"],
+        "bank_swift_code": bank["swift_code"],
+        "bank_account_number": account_number,
+        "beneficiary_name": beneficiary_name,
+        "gross_amount": amount,
+        "admin_fee": DISBURSEMENT_ADMIN_FEE,
+        "net_amount": net_amount,
+        "balance_before": balance,
+        "balance_after": max(0, balance - amount),
+        "status": "Pending",
+        "beneficiary_raw": beneficiary_raw,
+    }
+
+
+def _pending_disbursement_public(meta):
+    now = time.time()
+    request = dict((meta or {}).get("request") or {})
+    return {
+        "pending_id": str((meta or {}).get("pending_id") or ""),
+        "request": _public_disbursement_record(request),
+        "expires_in": max(0, int(float((meta or {}).get("expires_ts", now)) - now)),
+        "otp_expires_in": max(0, int(float((meta or {}).get("otp_expires_ts", now)) - now)),
+        "can_resend_in": max(0, int(float((meta or {}).get("can_resend_at", now)) - now)),
+    }
+
+
+def start_disbursement_credentials(data, auth):
+    if not is_merchant_admin_auth(auth):
+        raise PermissionError("Akses merchant admin diperlukan.")
+    acc = _find_account_by_id(auth.get("id"))
+    if not acc:
+        raise RuntimeError("Account login tidak ditemukan.")
+    pin = str(data.get("pin") or "").strip()
+    if not pin.isdigit() or len(pin) != 6:
+        raise ValueError("PIN wajib 6 angka.")
+    if pin != str(acc.get("pin") or "").strip():
+        raise PermissionError("PIN salah.")
+    snapshot = _build_disbursement_request_snapshot(data, auth, auth.get("merchant_id"))
+    otp_code = str(random.randint(100000, 999999))
+    now = time.time()
+    meta = {
+        "pending_id": uuid.uuid4().hex,
+        "account_id": acc["id"],
+        "merchant_id": snapshot["merchant_id"],
+        "request": snapshot,
+        "code": otp_code,
+        "created_ts": now,
+        "expires_ts": now + DISBURSEMENT_PENDING_TTL_SECONDS,
+        "otp_expires_ts": now + DISBURSEMENT_OTP_TTL_SECONDS,
+        "can_resend_at": now + DISBURSEMENT_OTP_TTL_SECONDS,
+    }
+    state = load_state()
+    pending = state.get("pending_disbursements") or {}
+    pending[acc["id"]] = meta
+    state["pending_disbursements"] = pending
+    save_state(state)
+    _set_account_otp(acc["row_index"], otp_code)
+    _send_disbursement_otp_email(acc["email"], otp_code, acc["name"], snapshot)
+    return _pending_disbursement_public(meta)
+
+
+def _get_pending_disbursement(auth, pending_id=""):
+    if not is_merchant_admin_auth(auth):
+        raise PermissionError("Akses merchant admin diperlukan.")
+    acc = _find_account_by_id(auth.get("id"))
+    if not acc:
+        raise RuntimeError("Account login tidak ditemukan.")
+    state = load_state()
+    pending = state.get("pending_disbursements") or {}
+    meta = pending.get(acc["id"])
+    if not meta or str(meta.get("pending_id") or "") != str(pending_id or ""):
+        raise RuntimeError("Session disbursement sudah tidak aktif. Ulangi request.")
+    if time.time() > float(meta.get("expires_ts") or 0):
+        pending.pop(acc["id"], None)
+        state["pending_disbursements"] = pending
+        save_state(state)
+        _set_account_otp(acc["row_index"], "")
+        raise RuntimeError("Session disbursement expired. Ulangi request.")
+    return acc, state, pending, meta
+
+
+def resend_disbursement_otp(auth, pending_id=""):
+    acc, state, pending, meta = _get_pending_disbursement(auth, pending_id)
+    now = time.time()
+    if now <= float(meta.get("otp_expires_ts") or 0):
+        wait = max(1, int(float(meta.get("otp_expires_ts") or now) - now))
+        raise RuntimeError(f"OTP masih aktif. Tunggu {wait} detik sebelum resend.")
+    if now < float(meta.get("can_resend_at") or 0):
+        wait = max(1, int(float(meta.get("can_resend_at") or now) - now))
+        raise RuntimeError(f"Tunggu {wait} detik sebelum resend OTP.")
+    otp_code = str(random.randint(100000, 999999))
+    meta["code"] = otp_code
+    meta["otp_expires_ts"] = now + DISBURSEMENT_OTP_TTL_SECONDS
+    meta["can_resend_at"] = now + DISBURSEMENT_OTP_TTL_SECONDS
+    meta["resend_count"] = _int_money(meta.get("resend_count")) + 1
+    pending[acc["id"]] = meta
+    state["pending_disbursements"] = pending
+    save_state(state)
+    _set_account_otp(acc["row_index"], otp_code)
+    _send_disbursement_otp_email(acc["email"], otp_code, acc["name"], meta.get("request") or {})
+    return _pending_disbursement_public(meta)
+
+
+def confirm_disbursement_otp(auth, pending_id="", otp=""):
+    acc, state, pending, meta = _get_pending_disbursement(auth, pending_id)
+    now = time.time()
+    if now > float(meta.get("otp_expires_ts") or 0):
+        _set_account_otp(acc["row_index"], "")
+        raise RuntimeError("OTP sudah expired. Silakan resend OTP.")
+    expected = str(meta.get("code") or acc.get("otp") or "")
+    if not expected or expected != str(otp or "").strip():
+        raise PermissionError("Kode OTP salah atau kadaluarsa.")
+    snapshot = dict(meta.get("request") or {})
+    mid = normalize_merchant_id(snapshot.get("merchant_id") or auth.get("merchant_id"))
+    summary = disbursement_balance_payload(mid)
+    amount = _int_money(snapshot.get("gross_amount"))
+    if amount < DISBURSEMENT_MIN_AMOUNT:
+        raise ValueError("Minimal disbursement Rp 10.000.")
+    if amount > _int_money(summary.get("balance")):
+        raise ValueError("Merchant balance berubah. Nominal disbursement melebihi balance saat ini.")
+    snapshot["balance_before"] = _int_money(summary.get("balance"))
+    snapshot["balance_after"] = max(0, _int_money(summary.get("balance")) - amount)
+    snapshot["status"] = "Pending"
+    saved = save_disbursement_record(snapshot)
+    state = load_state()
+    pending = state.get("pending_disbursements") or {}
+    pending.pop(acc["id"], None)
+    state["pending_disbursements"] = pending
+    save_state(state)
+    _set_account_otp(acc["row_index"], "")
+    threading.Thread(target=lambda: send_disbursement_request_email(saved), daemon=True).start()
+    log.info("Disbursement request created: %s merchant=%s amount=%s account=%s", saved.get("request_id"), mid, amount, acc["id"])
+    return {
+        "request": _public_disbursement_record(saved),
+        **disbursement_payload(mid),
+    }
+
+
+def update_disbursement_status_from_admin(data, auth):
+    require_system_admin(auth)
+    action = str(data.get("action") or data.get("status") or "").strip().lower()
+    if action in {"approve", "approved", "success"}:
+        status = "Success"
+    elif action in {"reject", "rejected", "failed", "cancel", "cancelled", "canceled"}:
+        status = "Failed"
+    else:
+        raise ValueError("Action disbursement tidak valid.")
+    updated = update_disbursement_record_status(
+        data.get("request_id"),
+        status,
+        processor=auth,
+        note=data.get("note") or "",
+    )
+    threading.Thread(target=lambda: send_disbursement_status_email(updated), daemon=True).start()
+    log.info(
+        "System admin updated disbursement: %s status=%s admin=%s",
+        updated.get("request_id"),
+        status,
+        auth.get("email") or auth.get("id"),
+    )
+    return {
+        "request": _public_disbursement_record(updated),
+        **system_disbursement_payload(auth),
+    }
+
+
 def load_email_templates():
     templates = {key: dict(value) for key, value in DEFAULT_EMAIL_TEMPLATES.items()}
     if _db_ready():
@@ -2760,6 +3398,232 @@ def _send_otp_email(to_email, otp_code, account_name, username=""):
     service = build("gmail", "v1", credentials=creds)
     service.users().messages().send(userId="me", body={"raw": raw}).execute()
     log.info("OTP sent from web to %s", to_email)
+
+
+def _email_logo_path_for_merchant(merchant_id=None):
+    mid = normalize_merchant_id(merchant_id)
+    try:
+        settings = load_settings(mid)
+        logo_path = merchant_brand_logo_file(settings, mid)
+        if logo_path and os.path.isfile(logo_path):
+            return logo_path
+    except Exception:
+        pass
+    return BRAND_EMAIL_LOGO if os.path.isfile(BRAND_EMAIL_LOGO) else BRAND_DEFAULT_LOGO
+
+
+def _send_html_email(to_email, subject, html_body, plain_body="", cc=None, logo_path="", logo_cid="mail_logo"):
+    to_email = str(to_email or "").strip()
+    if not to_email:
+        raise RuntimeError("Email tujuan kosong.")
+    creds = _load_gmail_credentials()
+    if creds is None:
+        raise RuntimeError("Gmail token tidak tersedia untuk kirim email.")
+    try:
+        from googleapiclient.discovery import build
+    except Exception as exc:
+        raise RuntimeError(f"googleapiclient unavailable: {exc}")
+    cc_list = []
+    seen = {to_email.lower()}
+    for item in cc or []:
+        email = str(item or "").strip()
+        if not email or email.lower() in seen:
+            continue
+        cc_list.append(email)
+        seen.add(email.lower())
+    msg = MIMEMultipart("related")
+    msg["to"] = to_email
+    if cc_list:
+        msg["cc"] = ", ".join(cc_list)
+    msg["from"] = "Conlecta Indonesia <conlecta.indonesia@gmail.com>"
+    msg["subject"] = subject
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(plain_body or subject, "plain", "utf-8"))
+    alt.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(alt)
+    if logo_path and os.path.isfile(logo_path):
+        try:
+            with open(logo_path, "rb") as f:
+                img = MIMEImage(f.read())
+            img.add_header("Content-ID", f"<{logo_cid}>")
+            img.add_header("Content-Disposition", "inline", filename=os.path.basename(logo_path))
+            msg.attach(img)
+        except Exception as exc:
+            log.debug("email logo skipped %s: %s", logo_path, exc)
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
+    service = build("gmail", "v1", credentials=creds)
+    service.users().messages().send(userId="me", body={"raw": raw}).execute()
+    log.info("Email sent to %s cc=%s subject=%s", to_email, ",".join(cc_list), subject)
+
+
+def _disbursement_email_shell(title, subtitle, rows, merchant_id=None, badge="Pending"):
+    mid = normalize_merchant_id(merchant_id)
+    merchant = merchant_payload(mid)
+    merchant_name = html.escape(str(merchant.get("name") or DEFAULT_MERCHANT_NAME))
+    safe_title = html.escape(str(title or "Disbursement"))
+    safe_subtitle = html.escape(str(subtitle or ""))
+    safe_badge = html.escape(str(badge or "Pending"))
+    row_html = "".join(
+        f"""
+        <tr>
+          <td style="padding:12px 20px;color:#94a3b8;font-size:14px;border-bottom:1px solid #e2e5ea;">{html.escape(str(label))}</td>
+          <td align="right" style="padding:12px 20px;color:#0f172a;font-size:14px;font-weight:700;border-bottom:1px solid #e2e5ea;">{html.escape(str(value))}</td>
+        </tr>
+        """
+        for label, value in rows
+    )
+    return f"""<!doctype html>
+<html>
+<body style="margin:0;padding:0;background:#0d1117;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#0d1117;padding:34px 14px;">
+    <tr>
+      <td align="center">
+        <table width="640" cellpadding="0" cellspacing="0" role="presentation" style="width:100%;max-width:640px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e2e8f0;">
+          <tr>
+            <td style="height:5px;background:linear-gradient(90deg,#00C896,#0094FF);font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:32px 30px 18px;">
+              <img src="cid:mail_logo" width="96" height="96" style="display:block;width:96px;height:96px;object-fit:cover;border-radius:16px;margin:0 auto 18px;border:1px solid #e2e8f0;" alt="{merchant_name}">
+              <div style="display:inline-block;margin-bottom:14px;padding:6px 12px;border-radius:999px;background:#ecfeff;color:#0369a1;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;">{safe_badge}</div>
+              <h1 style="margin:0;color:#0f172a;font-size:26px;line-height:1.25;font-weight:800;text-align:center;">{safe_title}</h1>
+              <p style="margin:12px 0 0;color:#64748b;font-size:15px;line-height:1.55;text-align:center;">{safe_subtitle}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 28px 30px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+                {row_html}
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:20px;color:#94a3b8;font-size:12px;border-top:1px solid #e2e8f0;">Conlecta POS &middot; Disbursement Notification</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+
+def _disbursement_email_recipients(record):
+    mid = normalize_merchant_id((record or {}).get("merchant_id"))
+    to_email = str((record or {}).get("request_email") or "").strip()
+    admins = _merchant_admin_emails(mid)
+    if not to_email and admins:
+        to_email = admins[0]
+    cc = [email for email in admins if email.lower() != to_email.lower()]
+    return to_email, cc
+
+
+def _disbursement_common_rows(record):
+    return [
+        ("Request ID", record.get("request_id") or "-"),
+        ("Merchant", record.get("merchant_name") or record.get("merchant_id") or "-"),
+        ("Request By", f"{record.get('request_name') or '-'} ({record.get('request_email') or '-'})"),
+        ("Bank", record.get("bank_name") or "-"),
+        ("No. Rekening", record.get("bank_account_number") or "-"),
+        ("Penerima", record.get("beneficiary_name") or "-"),
+        ("Merchant Balance Before", format_rupiah(record.get("balance_before"))),
+        ("Admin Fee", format_rupiah(record.get("admin_fee"))),
+        ("Disbursement Amount", format_rupiah(record.get("net_amount"))),
+        ("Balance Merchant After", format_rupiah(record.get("balance_after"))),
+        ("Status", disbursement_status_label(record.get("status"))),
+    ]
+
+
+def _send_disbursement_otp_email(to_email, otp_code, account_name, record):
+    name = _otp_display_name(account_name, "")
+    rows = [
+        ("Kode OTP", str(otp_code)),
+        ("Berlaku", "60 detik"),
+        ("Merchant", record.get("merchant_name") or record.get("merchant_id") or "-"),
+        ("Request Amount", format_rupiah(record.get("gross_amount"))),
+        ("Admin Fee", format_rupiah(record.get("admin_fee"))),
+        ("Transfer Amount", format_rupiah(record.get("net_amount"))),
+        ("Bank", record.get("bank_name") or "-"),
+        ("No. Rekening", record.get("bank_account_number") or "-"),
+    ]
+    html_body = _disbursement_email_shell(
+        "OTP Disbursement Request",
+        f"Halo {html.escape(name)}, gunakan OTP ini untuk mengonfirmasi request disbursement.",
+        rows,
+        record.get("merchant_id"),
+        "OTP",
+    )
+    _send_html_email(
+        to_email,
+        f"Conlecta POS - OTP Disbursement {record.get('merchant_name') or ''}".strip(),
+        html_body,
+        plain_body=f"Kode OTP disbursement Conlecta POS Anda: {otp_code}. Berlaku 60 detik.",
+        logo_path=_email_logo_path_for_merchant(record.get("merchant_id")),
+    )
+
+
+def send_disbursement_request_email(record):
+    try:
+        rec = _public_disbursement_record(record)
+        to_email, cc = _disbursement_email_recipients(rec)
+        if not to_email:
+            log.warning("disbursement request email skipped: no merchant admin email")
+            return
+        html_body = _disbursement_email_shell(
+            "Disbursement Request Created",
+            "Request disbursement baru sudah dibuat dan menunggu approval system admin.",
+            _disbursement_common_rows(rec),
+            rec.get("merchant_id"),
+            "Pending",
+        )
+        _send_html_email(
+            to_email,
+            f"{rec.get('merchant_name') or 'Merchant'} - Disbursement Request {format_rupiah(rec.get('net_amount'))}",
+            html_body,
+            plain_body=f"Disbursement request {rec.get('request_id')} dibuat dengan nominal {format_rupiah(rec.get('net_amount'))}.",
+            cc=cc,
+            logo_path=_email_logo_path_for_merchant(rec.get("merchant_id")),
+        )
+    except Exception as exc:
+        log.warning("send_disbursement_request_email failed: %s", exc)
+
+
+def send_disbursement_status_email(record):
+    try:
+        rec = _public_disbursement_record(record)
+        to_email, cc = _disbursement_email_recipients(rec)
+        if not to_email:
+            log.warning("disbursement status email skipped: no merchant admin email")
+            return
+        status = disbursement_status_label(rec.get("status"))
+        subtitle = (
+            "Disbursement sudah di-approve dan dikirimkan ke rekening berikut."
+            if status == "Success"
+            else "Disbursement ditolak/dibatalkan oleh system admin."
+        )
+        rows = _disbursement_common_rows(rec)
+        rows.extend([
+            ("Processed By", f"{rec.get('processed_by_name') or '-'} ({rec.get('processed_by_email') or '-'})"),
+            ("Processed At", rec.get("processed_at_display") or "-"),
+            ("Note", rec.get("status_note") or "-"),
+        ])
+        html_body = _disbursement_email_shell(
+            f"Disbursement {status}",
+            subtitle,
+            rows,
+            rec.get("merchant_id"),
+            status,
+        )
+        _send_html_email(
+            to_email,
+            f"{rec.get('merchant_name') or 'Merchant'} - Disbursement {status} {format_rupiah(rec.get('net_amount'))}",
+            html_body,
+            plain_body=f"Disbursement {rec.get('request_id')} status {status}.",
+            cc=cc,
+            logo_path=_email_logo_path_for_merchant(rec.get("merchant_id")),
+        )
+    except Exception as exc:
+        log.warning("send_disbursement_status_email failed: %s", exc)
 
 
 def _pending_otp_payload(acc, meta):
@@ -5143,6 +6007,110 @@ def make_vendor_invoice_pdf(payload):
     return buffer.getvalue()
 
 
+def make_disbursement_pdf(record):
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_RIGHT
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except Exception as exc:
+        raise RuntimeError(f"ReportLab unavailable: {exc}")
+
+    rec = _public_disbursement_record(record)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=48, bottomMargin=40)
+    W = doc.width
+    styles = getSampleStyleSheet()
+    s_title = ParagraphStyle("disb_title", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=colors.HexColor("#0f172a"))
+    s_cell = ParagraphStyle("disb_cell", parent=styles["BodyText"], fontName="Helvetica", fontSize=8.2, leading=11, textColor=colors.HexColor("#1f2937"))
+    s_label = ParagraphStyle("disb_label", parent=s_cell, textColor=colors.HexColor("#64748b"), fontName="Helvetica-Bold")
+    s_right = ParagraphStyle("disb_right", parent=s_cell, alignment=TA_RIGHT)
+    s_small = ParagraphStyle("disb_small", parent=s_cell, fontSize=7, leading=9, textColor=colors.HexColor("#6c727f"))
+
+    logo = None
+    logo_path = BRAND_EMAIL_LOGO if os.path.isfile(BRAND_EMAIL_LOGO) else BRAND_DEFAULT_LOGO
+    if logo_path and os.path.isfile(logo_path):
+        try:
+            logo = Image(logo_path, width=42, height=42)
+        except Exception:
+            logo = None
+
+    brand = Table(
+        [[logo if logo else "", Paragraph("<b>Conlecta</b><br/><font color='#64748b' size='7'>Disbursement Proof</font>", s_cell)]],
+        colWidths=[48, 180],
+    )
+    brand.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+    header = Table(
+        [[brand, Paragraph(f"<b>{_pdf_escape(rec.get('request_id') or '-')}</b><br/><font color='#64748b' size='7'>Generated: {_pdf_now_display()}</font>", s_right)]],
+        colWidths=[W * 0.55, W * 0.45],
+    )
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+
+    kpi = Table([[
+        Paragraph(f"TOTAL REQUEST<br/><br/><font color='#0f766e' size='12'><b>{format_rupiah(rec.get('gross_amount'))}</b></font>", s_cell),
+        Paragraph(f"ADMIN FEE<br/><br/><font color='#d97706' size='12'><b>{format_rupiah(rec.get('admin_fee'))}</b></font>", s_cell),
+        Paragraph(f"TRANSFER AMOUNT<br/><br/><font color='#2563eb' size='12'><b>{format_rupiah(rec.get('net_amount'))}</b></font>", s_cell),
+        Paragraph(f"STATUS<br/><br/><font color='#0f172a' size='12'><b>{_pdf_escape(rec.get('status'))}</b></font>", s_cell),
+    ]], colWidths=[W / 4] * 4)
+    kpi.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#e2e8f0")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e2e8f0")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 12),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+    ]))
+
+    rows = [
+        ("Merchant", rec.get("merchant_name") or rec.get("merchant_id") or "-"),
+        ("Merchant ID", rec.get("merchant_id") or "-"),
+        ("Request By", rec.get("request_name") or "-"),
+        ("Request Email", rec.get("request_email") or "-"),
+        ("Bank", rec.get("bank_name") or "-"),
+        ("Bank Code", rec.get("bank_code") or "-"),
+        ("Account Number", rec.get("bank_account_number") or "-"),
+        ("Beneficiary", rec.get("beneficiary_name") or "-"),
+        ("Balance Before", format_rupiah(rec.get("balance_before"))),
+        ("Balance After", format_rupiah(rec.get("balance_after"))),
+        ("Created At", rec.get("created_at_display") or rec.get("created_at") or "-"),
+        ("Processed By", f"{rec.get('processed_by_name') or '-'} ({rec.get('processed_by_email') or '-'})"),
+        ("Processed At", rec.get("processed_at_display") or "-"),
+        ("Note", rec.get("status_note") or "-"),
+    ]
+    table = Table(
+        [[Paragraph(_pdf_escape(label), s_label), Paragraph(_pdf_escape(value), s_cell)] for label, value in rows],
+        colWidths=[150, W - 150],
+    )
+    table.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#e2e8f0")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#e2e8f0")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f8fafc")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+
+    story = [
+        header,
+        Spacer(1, 18),
+        Paragraph("DISBURSEMENT PROOF", s_title),
+        Spacer(1, 12),
+        kpi,
+        Spacer(1, 16),
+        table,
+        Spacer(1, 12),
+        Paragraph(_pdf_escape(PDF_GENERATED_REMARK), s_small),
+    ]
+    _pdf_build(doc, story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def find_record(txn_id, merchant_id=None):
     mid = normalize_merchant_id(merchant_id or current_merchant_id())
     for record in load_history_for_merchant(mid):
@@ -5710,7 +6678,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
         try:
             if path.startswith("/api/"):
                 return self.handle_api_get(path, parse_qs(parsed.query))
-            if app_path in ("", "/", "/login", "/otp", "/pin", "/pin-register", "/cashier", "/stock", "/analytics", "/history", "/settings", "/log", "/system-admin"):
+            if app_path in ("", "/", "/login", "/otp", "/pin", "/pin-register", "/cashier", "/stock", "/analytics", "/history", "/settings", "/log", "/disbursement", "/system-admin"):
                 return self.serve_file(os.path.join(WEB_DIR, "index.html"))
             if app_path == "/qr-display.html":
                 self.send_response(308)
@@ -5905,6 +6873,17 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "admin_allow_analytics": admin_allow_analytics(settings),
                 "accounts": merchant_admin_accounts_payload(mid),
             })
+        if path == "/api/disbursement":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            try:
+                return self.send_json({"ok": True, **disbursement_payload(mid)})
+            except Exception as exc:
+                return self.send_error_json(exc, 400)
         if path == "/api/assets":
             state = load_state()
             auth = self.get_device_auth(state)
@@ -5943,6 +6922,31 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **payload})
+        if path == "/api/system-admin/disbursements":
+            state = load_state()
+            try:
+                auth = self.request_system_admin(state)
+                payload = system_disbursement_payload(auth)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            except Exception as exc:
+                return self.send_error_json(exc, 400)
+            return self.send_json({"ok": True, **payload})
+        if path == "/api/system-admin/disbursement.pdf":
+            state = load_state()
+            try:
+                self.request_system_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            request_id = (query.get("request_id") or query.get("id") or [""])[0]
+            record = find_disbursement_record(request_id)
+            if not record:
+                return self.send_error_json("Disbursement request not found", 404)
+            return self.send_bytes(
+                make_disbursement_pdf(record),
+                "application/pdf",
+                f"disbursement-{request_id}.pdf",
+            )
         if path == "/api/system-admin/qris-frame":
             state = load_state()
             try:
@@ -6211,6 +7215,61 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "message": msg,
                 "accounts": merchant_admin_accounts_payload(mid),
             })
+        if path == "/api/disbursement/check-beneficiary":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            try:
+                bank = disbursement_bank_for(data.get("bank_code"), data.get("bank_name"))
+                if not bank:
+                    raise ValueError("Pilih bank dari daftar resmi.")
+                account_number = normalize_bank_account_number(data.get("bank_account_number"))
+                provider = check_beneficiary_with_provider(bank["code"], account_number)
+                return self.send_json({
+                    "ok": True,
+                    "bank": bank,
+                    "bank_account_number": account_number,
+                    "beneficiary_name": _extract_beneficiary_name(provider),
+                    "raw": provider,
+                })
+            except Exception as exc:
+                return self.send_error_json(exc, 400)
+        if path == "/api/disbursement/credentials/start":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+                pending = start_disbursement_credentials(data, auth)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            except Exception as exc:
+                return self.send_error_json(exc, 400)
+            return self.send_json({"ok": True, "pending": pending})
+        if path == "/api/disbursement/credentials/resend":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+                pending = resend_disbursement_otp(auth, data.get("pending_id"))
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            except Exception as exc:
+                return self.send_error_json(exc, 400)
+            return self.send_json({"ok": True, "pending": pending, "message": "OTP baru dikirim."})
+        if path == "/api/disbursement/confirm":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_admin(state)
+                payload = confirm_disbursement_otp(auth, data.get("pending_id"), data.get("otp"))
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            except Exception as exc:
+                return self.send_error_json(exc, 400)
+            return self.send_json({"ok": True, **payload})
         if path == "/api/system-admin/merchant/save":
             state = load_state()
             try:
@@ -6264,6 +7323,16 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             except Exception as exc:
                 return self.send_error_json(exc, 400)
             return self.send_json({"ok": True, **updated})
+        if path == "/api/system-admin/disbursement/status":
+            state = load_state()
+            try:
+                auth = self.request_system_admin(state)
+                payload = update_disbursement_status_from_admin(data, auth)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+            except Exception as exc:
+                return self.send_error_json(exc, 400)
+            return self.send_json({"ok": True, **payload})
         if path == "/api/system-admin/qris-frame/save":
             state = load_state()
             try:
