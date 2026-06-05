@@ -820,6 +820,79 @@ function linePriceHtml(item) {
   return formatRp(subtotal || unit * qty);
 }
 
+function groupedDisplayItems(items = []) {
+  const rows = [];
+  const groups = new Map();
+  items.forEach((item) => {
+    if (item.line_type === "package" && item.package_items) {
+      rows.push({
+        type: "package",
+        package_id: item.package_id || item.id,
+        package_name: item.package_name || item.name,
+        qty: item.qty || 1,
+        subtotal: item.subtotal || 0,
+        children: item.package_items || [],
+        free: item.free,
+      });
+      return;
+    }
+    const packageId = String(item.package_id || "").trim();
+    if (!packageId) {
+      rows.push({ type: "item", item });
+      return;
+    }
+    const key = String(item.package_line_id || packageId);
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        type: "package",
+        package_id: packageId,
+        package_name: item.package_name || "Package",
+        qty: Number(item.package_qty || 1) || 1,
+        subtotal: Number(item.package_total || 0),
+        children: [],
+        free: item.free,
+      };
+      groups.set(key, group);
+      rows.push(group);
+    }
+    group.children.push(item);
+    if (!group.subtotal) group.subtotal += Number(item.subtotal || 0);
+  });
+  return rows;
+}
+
+function displayItemsHtml(items = []) {
+  return groupedDisplayItems(items).map((row) => {
+    if (row.type === "package") {
+      const total = row.subtotal || row.children.reduce((sum, child) => sum + Number(child.subtotal || 0), 0);
+      return `
+        <div class="display-item display-package-item">
+          <span>${escapeHtml(row.package_name)}${row.free ? ` [${escapeHtml(displayText("Free"))}]` : ""}</span>
+          <span>x${escapeHtml(row.qty || 1)}</span>
+          <span class="line-price">${formatRp(total)}</span>
+          <div class="display-package-lines">
+            ${row.children.map((child) => `
+              <div>
+                <span>${escapeHtml(child.item_name || child.name || "")}</span>
+                <span>${linePriceHtml(child)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+    const item = row.item || {};
+    return `
+      <div class="display-item">
+        <span>${escapeHtml(item.item_name || item.name || "")}${item.free ? ` [${escapeHtml(displayText("Free"))}]` : ""}</span>
+        <span>x${escapeHtml(item.qty || 0)}</span>
+        <span class="line-price">${linePriceHtml(item)}</span>
+      </div>
+    `;
+  }).join("") || `<div class="empty-state">${escapeHtml(displayText("No line items"))}</div>`;
+}
+
 let videoPlaylistIndex = 0;
 let videoPlaylistSignature = "";
 
@@ -1133,13 +1206,7 @@ function renderDisplay() {
 
   $("#display-status").textContent = "";
   $("#display-total").textContent = formatRp(view.amount);
-  $("#display-items").innerHTML = items.map((item) => `
-    <div class="display-item">
-      <span>${escapeHtml(item.item_name || item.name || "")}${item.free ? ` [${escapeHtml(displayText("Free"))}]` : ""}</span>
-      <span>x${escapeHtml(item.qty || 0)}</span>
-      <span class="line-price">${linePriceHtml(item)}</span>
-    </div>
-  `).join("") || `<div class="empty-state">${escapeHtml(displayText("No line items"))}</div>`;
+  $("#display-items").innerHTML = displayItemsHtml(items);
 
   $("#display-payment-logos").hidden = hasActiveQr || hasEvent;
   $("#display-hint").textContent = cashLive.active && cashLive.cash > 0 && !hasEvent && !hasActiveQr

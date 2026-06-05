@@ -119,6 +119,8 @@ ITEMS_HEADER = [
     "No", "Transaction ID", "QR ID", "Item Name", "Qty", "Amount",
     "Subtotal", "Capital", "Profit", "Payment Fee", "Total Cost", "Free", "Disc %", "Disc Rp", "Line Discount",
     "Payment Method", "Change", "Cash Received", "Merchant ID",
+    "Line Type", "Package ID", "Package Name", "Package Line ID", "Package Qty",
+    "Original Price", "Package Gross", "Package Discount", "Package Tip", "Package Total",
 ]
 ACCOUNT_HEADER = [
     "Account ID", "Account Name", "Email", "Password", "OTP",
@@ -355,7 +357,9 @@ DEFAULT_SETTINGS = {
     "payment_image_path": "",
     "payment_image_paths": [],
     "admin_allow_stock_crud": True,
+    "admin_allow_package_crud": True,
     "admin_allow_analytics": True,
+    "packages": [],
 }
 LEGACY_QRIS_SETTING_KEYS = {
     "partner_id", "client_id", "client_secret", "base_url", "token_url",
@@ -2598,6 +2602,8 @@ def save_merchant_admin_settings(data, merchant_id=None):
     settings = load_settings(mid)
     if "admin_allow_stock_crud" in data:
         settings["admin_allow_stock_crud"] = bool(data.get("admin_allow_stock_crud"))
+    if "admin_allow_package_crud" in data:
+        settings["admin_allow_package_crud"] = bool(data.get("admin_allow_package_crud"))
     if "admin_allow_analytics" in data:
         settings["admin_allow_analytics"] = bool(data.get("admin_allow_analytics"))
     merchant_name = str(data.get("merchant_name") or data.get("shop_name") or "").strip()
@@ -2615,10 +2621,11 @@ def save_merchant_admin_settings(data, merchant_id=None):
         upsert_merchant(mid, merchant_name or settings.get("shop_name") or DEFAULT_MERCHANT_NAME, logo_path)
     saved = save_settings(settings, mid)
     log.info(
-        "Merchant admin settings saved: merchant=%s name=%s stock_crud=%s analytics=%s",
+        "Merchant admin settings saved: merchant=%s name=%s stock_crud=%s package_crud=%s analytics=%s",
         mid,
         saved.get("shop_name"),
         saved.get("admin_allow_stock_crud"),
+        saved.get("admin_allow_package_crud"),
         saved.get("admin_allow_analytics"),
     )
     return saved
@@ -4186,6 +4193,11 @@ def admin_allow_stock_crud(settings=None, merchant_id=None):
     return bool(settings.get("admin_allow_stock_crud", True))
 
 
+def admin_allow_package_crud(settings=None, merchant_id=None):
+    settings = settings if settings is not None else load_settings(merchant_id)
+    return bool(settings.get("admin_allow_package_crud", True))
+
+
 def admin_allow_analytics(settings=None, merchant_id=None):
     settings = settings if settings is not None else load_settings(merchant_id)
     return bool(settings.get("admin_allow_analytics", True))
@@ -4198,11 +4210,136 @@ def can_merchant_crud_stock(auth, merchant_id=None):
     return admin_allow_stock_crud(merchant_id=mid)
 
 
+def can_merchant_crud_package(auth, merchant_id=None):
+    if not is_merchant_admin_auth(auth):
+        return False
+    mid = normalize_merchant_id(merchant_id or (auth or {}).get("merchant_id"))
+    return admin_allow_package_crud(merchant_id=mid)
+
+
 def can_merchant_view_analytics(auth, merchant_id=None):
     if not is_merchant_admin_auth(auth):
         return False
     mid = normalize_merchant_id(merchant_id or (auth or {}).get("merchant_id"))
     return admin_allow_analytics(merchant_id=mid)
+
+
+def _clean_image_b64(value):
+    raw = str(value or "").strip()
+    if "," in raw and raw.lower().startswith("data:"):
+        raw = raw.split(",", 1)[1]
+    return raw
+
+
+def _package_id(value="", name=""):
+    text = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(value or "").strip()).strip("-_")
+    if text:
+        return text[:80]
+    base = re.sub(r"[^a-zA-Z0-9]+", "-", str(name or "package").strip().lower()).strip("-") or "package"
+    return f"pkg-{base[:42]}-{secrets.token_hex(4)}"
+
+
+def _normalize_package_collection(packages, products=None, strict=False):
+    product_by_name = {
+        str(product.get("name") or "").strip().casefold(): product
+        for product in (products or [])
+        if str(product.get("name") or "").strip()
+    }
+    clean = []
+    seen_ids = set()
+    seen_names = set()
+    for raw in packages or []:
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or raw.get("package_name") or "").strip()
+        if not name:
+            if strict:
+                raise ValueError("Nama package wajib diisi.")
+            continue
+        name_key = name.casefold()
+        if strict and name_key in seen_names:
+            raise ValueError(f"Nama package duplikat: {name}.")
+        seen_names.add(name_key)
+        package_id = _package_id(raw.get("id") or raw.get("package_id"), name)
+        while package_id in seen_ids:
+            package_id = f"{package_id[:70]}-{secrets.token_hex(3)}"
+        seen_ids.add(package_id)
+        items = []
+        item_seen = set()
+        for entry in raw.get("items") or raw.get("package_items") or []:
+            item_name = str(entry.get("item_name") or entry.get("name") or "").strip()
+            key = item_name.casefold()
+            if not item_name:
+                continue
+            if key in item_seen:
+                if strict:
+                    raise ValueError(f"Item {item_name} duplikat di package {name}.")
+                continue
+            product = product_by_name.get(key) or {}
+            if strict and not product:
+                raise ValueError(f"Item {item_name} tidak ada di stock.")
+            item_seen.add(key)
+            qty = max(1, _int_money(entry.get("qty"), 1))
+            original_price = _int_money(
+                entry.get("original_price")
+                or entry.get("package_original_price")
+                or product.get("price")
+                or entry.get("unit_price")
+                or entry.get("price")
+            )
+            package_price = _int_money(
+                entry.get("package_price")
+                or entry.get("price")
+                or entry.get("amount")
+                or original_price
+            )
+            items.append({
+                "name": item_name,
+                "item_name": item_name,
+                "qty": qty,
+                "package_price": package_price,
+                "price": package_price,
+                "original_price": original_price,
+                "stock": _int_money(product.get("stock")),
+                "image_b64": str(product.get("image_b64") or entry.get("image_b64") or ""),
+            })
+        if strict and not items:
+            raise ValueError(f"Package {name} minimal berisi satu item.")
+        total = sum(_int_money(item.get("package_price")) * max(1, _int_money(item.get("qty"), 1)) for item in items)
+        clean.append({
+            "id": package_id,
+            "name": name,
+            "price": total,
+            "image_b64": _clean_image_b64(raw.get("image_b64") or raw.get("image")),
+            "items": items,
+            "merchant_id": normalize_merchant_id(raw.get("merchant_id") or current_merchant_id()),
+        })
+    return clean
+
+
+def load_packages(merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    settings = load_settings(mid)
+    try:
+        products = load_stock(force=True, merchant_id=mid)
+    except Exception:
+        products = []
+    packages = _normalize_package_collection(settings.get("packages") or [], products=products, strict=False)
+    for package in packages:
+        package["merchant_id"] = mid
+    return packages
+
+
+def save_packages(packages, merchant_id=None):
+    mid = normalize_merchant_id(merchant_id or current_merchant_id())
+    products = load_stock(force=True, merchant_id=mid)
+    clean = _normalize_package_collection(packages, products=products, strict=True)
+    for package in clean:
+        package["merchant_id"] = mid
+    settings = load_settings(mid)
+    settings["packages"] = clean
+    save_settings(settings, mid)
+    return clean
 
 
 def save_vendor(name, merchant_id=None, registered_by_account_id=None):
@@ -4428,6 +4565,9 @@ def normalize_items(items, payment_method, cash_received=0, change=0):
             if gross and subtotal <= 0 and line_discount >= gross and not tip_fixed:
                 free = True
                 price = 0
+        package_id = str(item.get("package_id") or "").strip()
+        package_name = str(item.get("package_name") or "").strip()
+        package_line_id = str(item.get("package_line_id") or package_id or "").strip()
         clean.append({
             "item_name": name,
             "name": name,
@@ -4450,6 +4590,17 @@ def normalize_items(items, payment_method, cash_received=0, change=0):
             "payment_method": payment_method,
             "cash_received": cash_received,
             "change": change,
+            "line_type": str(item.get("line_type") or ("package_item" if package_id else "item")),
+            "package_id": package_id,
+            "package_name": package_name,
+            "package_line_id": package_line_id,
+            "package_qty": _int_money(item.get("package_qty")),
+            "package_original_price": _int_money(item.get("package_original_price") or item.get("original_unit_price")),
+            "original_unit_price": _int_money(item.get("package_original_price") or item.get("original_unit_price")),
+            "package_gross": _int_money(item.get("package_gross")),
+            "package_discount": _int_money(item.get("package_discount")),
+            "package_tip": _int_money(item.get("package_tip")),
+            "package_total": _int_money(item.get("package_total")),
         })
     return clean
 
@@ -4659,6 +4810,16 @@ def save_history_to_sheets(record):
                 "Change": change,
                 "Cash Received": cash_received,
                 "Merchant ID": merchant_id,
+                "Line Type": item.get("line_type") or ("package_item" if item.get("package_id") else "item"),
+                "Package ID": item.get("package_id", ""),
+                "Package Name": item.get("package_name", ""),
+                "Package Line ID": item.get("package_line_id") or item.get("package_id", ""),
+                "Package Qty": item.get("package_qty", 0),
+                "Original Price": item.get("package_original_price", item.get("original_unit_price", 0)),
+                "Package Gross": item.get("package_gross", 0),
+                "Package Discount": item.get("package_discount", 0),
+                "Package Tip": item.get("package_tip", 0),
+                "Package Total": item.get("package_total", 0),
             })
             next_no_item += 1
 
@@ -4770,6 +4931,17 @@ def load_history_from_sheets():
                 ),
                 "change": item_change,
                 "cash_received": item_cash_received,
+                "line_type": _cell(row, item_headers, "Line Type", None, "") or ("package_item" if _cell(row, item_headers, "Package ID", None, "") else "item"),
+                "package_id": _cell(row, item_headers, "Package ID", None, ""),
+                "package_name": _cell(row, item_headers, "Package Name", None, ""),
+                "package_line_id": _cell(row, item_headers, "Package Line ID", None, ""),
+                "package_qty": _cell_int(row, item_headers, "Package Qty"),
+                "package_original_price": _cell_int(row, item_headers, "Original Price"),
+                "original_unit_price": _cell_int(row, item_headers, "Original Price"),
+                "package_gross": _cell_int(row, item_headers, "Package Gross"),
+                "package_discount": _cell_int(row, item_headers, "Package Discount"),
+                "package_tip": _cell_int(row, item_headers, "Package Tip"),
+                "package_total": _cell_int(row, item_headers, "Package Total"),
             }
             if tid:
                 items_by_txn.setdefault(tid, []).append(item)
@@ -5355,6 +5527,10 @@ def vendor_invoice_payload(vendor_id="", vendor_name="", date_from="", date_to="
                 "vendor_id": vid,
                 "vendor_name": vname,
                 "item": item_name,
+                "line_type": item.get("line_type") or ("package_item" if item.get("package_id") else "item"),
+                "package_id": item.get("package_id", ""),
+                "package_name": item.get("package_name", ""),
+                "package_original_price": _int_money(item.get("package_original_price") or item.get("original_unit_price")),
                 "qty": row_bd["qty"],
                 "capital": capital,
                 "cost": vendor_cost,
@@ -5665,7 +5841,55 @@ def make_pdf(record, merchant=False):
         Paragraph("SUBTOTAL", ParagraphStyle("ih5", parent=s_label, textColor=colors.white, alignment=TA_RIGHT)),
     ]
     item_data = [item_header]
-    for idx, item in enumerate(record.get("items", []) or [], start=1):
+    pdf_rows = []
+    package_rows = {}
+    for item in record.get("items", []) or []:
+        package_id = str(item.get("package_id") or "").strip()
+        if package_id:
+            key = str(item.get("package_line_id") or package_id).strip()
+            group = package_rows.get(key)
+            if not group:
+                group = {
+                    "type": "package",
+                    "package_id": package_id,
+                    "package_name": str(item.get("package_name") or "Package"),
+                    "qty": _int_money(item.get("package_qty"), 1) or 1,
+                    "items": [],
+                }
+                package_rows[key] = group
+                pdf_rows.append(group)
+            group["items"].append(item)
+        else:
+            pdf_rows.append({"type": "item", "item": item})
+
+    for idx, row in enumerate(pdf_rows, start=1):
+        if row.get("type") == "package":
+            children = row.get("items") or []
+            qty = max(1, _int_money(row.get("qty"), 1))
+            item_subtotal = sum(_int_money(child.get("subtotal")) for child in children)
+            package_total = _int_money(children[0].get("package_total")) if children else 0
+            if package_total:
+                item_subtotal = package_total
+            unit_price = round(item_subtotal / qty) if qty else item_subtotal
+            child_lines = []
+            for child in children:
+                child_qty = _int_money(child.get("qty"))
+                child_name = _pdf_escape(child.get("item_name") or child.get("name") or "")
+                child_price = _int_money(child.get("unit_price") or child.get("amount") or 0)
+                child_lines.append(f"|-- {child_name} x{child_qty} @ {format_rupiah(child_price)}")
+            name = _pdf_escape(row.get("package_name") or "Package")
+            if child_lines:
+                name += "<br/>" + "<br/>".join(f"<font color='#6c727f' size='7'>{line}</font>" for line in child_lines)
+            item_data.append([
+                Paragraph(str(idx), s_center),
+                Paragraph(f"<b>{name}</b>", s_body),
+                Paragraph(str(qty), s_center),
+                Paragraph(format_rupiah(unit_price), s_right),
+                Paragraph(f"<b>{format_rupiah(item_subtotal)}</b>", s_right_bold),
+            ])
+            continue
+
+        item = row.get("item") or {}
         qty = _int_money(item.get("qty"))
         name = _pdf_escape(item.get("item_name") or item.get("name") or "")
         unit_price = _int_money(item.get("unit_price") or item.get("amount") or 0)
@@ -6006,6 +6230,10 @@ def make_vendor_invoice_pdf(payload):
         tip_fixed = max(0, _int_money(row.get("tip_fixed")))
         base_sales = max(0, _int_money(row.get("subtotal")) - tip_fixed)
         sales_display = format_rupiah(base_sales)
+        original_unit = _int_money(row.get("package_original_price"))
+        original_total = original_unit * _int_money(row.get("qty")) if row.get("package_id") else 0
+        if original_total and original_total != base_sales:
+            sales_display = f"<strike><font color='#9ca3af'>{format_rupiah(original_total)}</font></strike><br/>{format_rupiah(base_sales)}"
         if tip_fixed:
             sales_display += f"<br/><font color='#059669' size='7'>+ tip {format_rupiah(tip_fixed)}</font>"
         table_rows.append([
@@ -6635,6 +6863,13 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             raise PermissionError("CRUD stock belum diaktifkan untuk merchant ini.")
         return auth
 
+    def request_merchant_package_admin(self, state=None):
+        auth = self.request_merchant_admin(state)
+        mid = normalize_merchant_id(auth.get("merchant_id"))
+        if not admin_allow_package_crud(merchant_id=mid):
+            raise PermissionError("CRUD package belum diaktifkan untuk merchant ini.")
+        return auth
+
     def log_message(self, fmt, *args):
         log.debug("%s - %s", self.address_string(), fmt % args)
     
@@ -6830,6 +7065,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                     "auth": auth,
                     "settings": settings_payload(merchant_id=DEFAULT_MERCHANT_ID),
                     "products": [],
+                    "packages": [],
                     "vendors": [],
                     "history": [],
                     "active_qr": None,
@@ -6850,6 +7086,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             active_qr = _active_qr_for_auth(state, auth, did) if auth else None
 
             products = load_stock(merchant_id=mid)
+            packages = load_packages(merchant_id=mid)
             history = load_history_for_merchant(mid)
             vendors = load_vendors(merchant_id=mid)
 
@@ -6867,6 +7104,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                     account_id=(auth or {}).get("id"),
                 ),
                 "products": products,
+                "packages": packages,
                 "vendors": vendors,
                 "history": history,
                 "active_qr": active_qr,
@@ -6884,6 +7122,12 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             auth = validate_stored_auth({**state, "auth": auth}) if auth else None
             mid = normalize_merchant_id((auth or {}).get("merchant_id"))
             return self.send_json({"ok": True, "products": load_stock(force=True, merchant_id=mid)})
+        if path == "/api/packages":
+            state = load_state()
+            auth = self.get_device_auth(state)
+            auth = validate_stored_auth({**state, "auth": auth}) if auth else None
+            mid = normalize_merchant_id((auth or {}).get("merchant_id"))
+            return self.send_json({"ok": True, "packages": load_packages(merchant_id=mid)})
         if path == "/api/vendors":
             state = load_state()
             auth = self.get_device_auth(state)
@@ -6903,6 +7147,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "merchant_id": mid,
                 "merchant_name": merchant_payload(mid).get("name") or settings.get("shop_name") or DEFAULT_MERCHANT_NAME,
                 "admin_allow_stock_crud": admin_allow_stock_crud(settings),
+                "admin_allow_package_crud": admin_allow_package_crud(settings),
                 "admin_allow_analytics": admin_allow_analytics(settings),
                 "accounts": merchant_admin_accounts_payload(mid),
             })
@@ -7212,6 +7457,7 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
                 "merchant_id": mid,
                 "merchant_name": merchant_payload(mid).get("name") or saved.get("shop_name") or DEFAULT_MERCHANT_NAME,
                 "admin_allow_stock_crud": admin_allow_stock_crud(saved),
+                "admin_allow_package_crud": admin_allow_package_crud(saved),
                 "admin_allow_analytics": admin_allow_analytics(saved),
             })
         if path == "/api/merchant-admin/account/update":
@@ -7552,6 +7798,23 @@ class ConlectaWebHandler(SimpleHTTPRequestHandler):
             return self.send_json({
                 "ok": True,
                 "products": products
+            })
+        if path == "/api/packages/save":
+            state = load_state()
+            try:
+                mid, auth = self.request_merchant_id(state)
+                self.request_merchant_package_admin(state)
+            except PermissionError as exc:
+                return self.send_error_json(exc, 403)
+
+            packages = save_packages(
+                data.get("packages", []),
+                merchant_id=mid
+            )
+
+            return self.send_json({
+                "ok": True,
+                "packages": packages
             })
         if path == "/api/checkout/cash":
             state = load_state()

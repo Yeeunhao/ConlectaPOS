@@ -399,6 +399,16 @@ def ensure_schema():
         "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS gross_amount NUMERIC(18,2) DEFAULT 0",
         "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS source_line_no INTEGER",
         "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(18,2) DEFAULT 0",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS line_type VARCHAR(50)",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_id VARCHAR(120)",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_name VARCHAR(255)",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_line_id VARCHAR(160)",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_qty INTEGER DEFAULT 0",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_original_price NUMERIC(18,2) DEFAULT 0",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_gross NUMERIC(18,2) DEFAULT 0",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_discount NUMERIC(18,2) DEFAULT 0",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_tip NUMERIC(18,2) DEFAULT 0",
+        "ALTER TABLE transaction_items ADD COLUMN IF NOT EXISTS package_total NUMERIC(18,2) DEFAULT 0",
         "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS merchant_name VARCHAR(255)",
         "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS bank_swift_code VARCHAR(30)",
         "ALTER TABLE disbursement_requests ADD COLUMN IF NOT EXISTS beneficiary_raw JSONB",
@@ -1050,8 +1060,10 @@ def save_history(record, merchant_id=None):
                         transaction_id, qr_id, item_name, qty, unit_price, subtotal, free_flag,
                         disc_percent, disc_amount, line_discount, tip_amount, payment_method, change_amount,
                         cash_received, merchant_id, capital, profit, payment_fee, total_cost,
-                        gross_amount, source_line_no
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        gross_amount, source_line_no, line_type, package_id, package_name,
+                        package_line_id, package_qty, package_original_price, package_gross,
+                        package_discount, package_tip, package_total
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """,
                     (
                         txn_id,
@@ -1075,6 +1087,16 @@ def save_history(record, merchant_id=None):
                         total_cost,
                         _int_money(item.get("gross"), unit * qty),
                         line_no,
+                        str(item.get("line_type") or ("package_item" if item.get("package_id") else "item")),
+                        str(item.get("package_id") or ""),
+                        str(item.get("package_name") or ""),
+                        str(item.get("package_line_id") or item.get("package_id") or ""),
+                        _int_money(item.get("package_qty")),
+                        _int_money(item.get("package_original_price") or item.get("original_unit_price")),
+                        _int_money(item.get("package_gross")),
+                        _int_money(item.get("package_discount")),
+                        _int_money(item.get("package_tip")),
+                        _int_money(item.get("package_total")),
                     ),
                 )
         conn.commit()
@@ -1119,6 +1141,17 @@ def load_history(merchant_id=None):
                         "payment_method": row.get("payment_method") or "",
                         "change": _money(row.get("change_amount")),
                         "cash_received": _money(row.get("cash_received")),
+                        "line_type": row.get("line_type") or ("package_item" if row.get("package_id") else "item"),
+                        "package_id": row.get("package_id") or "",
+                        "package_name": row.get("package_name") or "",
+                        "package_line_id": row.get("package_line_id") or "",
+                        "package_qty": int(row.get("package_qty") or 0),
+                        "package_original_price": _money(row.get("package_original_price")),
+                        "original_unit_price": _money(row.get("package_original_price")),
+                        "package_gross": _money(row.get("package_gross")),
+                        "package_discount": _money(row.get("package_discount")),
+                        "package_tip": _money(row.get("package_tip")),
+                        "package_total": _money(row.get("package_total")),
                     }
                     items_by_txn.setdefault(row["transaction_id"], []).append(item)
     result = []

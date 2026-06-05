@@ -288,9 +288,9 @@
             <div class="panel-head catalog-head">
               <div>
                 <p class="eyebrow">Katalog</p>
-                <h2>Product Catalog</h2>
+                <h2 id="catalog-title">Product Catalog</h2>
               </div>
-              <span class="hint">Tap item controls to update cart</span>
+              <span class="hint" id="catalog-hint">Tap item controls to update cart</span>
             </div>
 
             <div class="catalog-tools">
@@ -298,6 +298,10 @@
                 <span>Search</span>
                 <input id="search-input" type="search" placeholder="Cari produk...">
               </label>
+              <div class="segmented catalog-mode-tabs" role="group" aria-label="Catalog type">
+                <button class="seg active" type="button" data-catalog-mode="items">Items</button>
+                <button class="seg" type="button" data-catalog-mode="packages">Packages</button>
+              </div>
               <div class="segmented" role="group" aria-label="Catalog filter">
                 <button class="seg active" type="button" data-filter="all">All</button>
                 <button class="seg" type="button" data-filter="low">Low stock</button>
@@ -556,6 +560,7 @@
 
         <div class="stock-tabs segmented">
           <button class="seg active" type="button" data-stock-tab="items">Items</button>
+          <button class="seg can-crud-package-only" type="button" data-stock-tab="packages">Packages</button>
           <button class="seg can-crud-stock-only" type="button" data-stock-tab="vendors">Vendors</button>
           <button class="seg can-crud-stock-only" type="button" data-stock-tab="invoice">Vendor Invoice</button>
         </div>
@@ -623,6 +628,18 @@
             <button class="btn primary" type="button" data-action="add-vendor">Add Vendor</button>
           </div>
           <div class="stock-list vendor-list" id="vendor-list"></div>
+        </section>
+
+        <section class="stock-section panel package-panel" id="stock-section-packages">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Packages</p>
+              <h2 id="package-count">0 packages</h2>
+            </div>
+            <button class="btn primary" type="button" data-action="start-package-create">Create Package</button>
+          </div>
+          <input id="package-image" type="file" accept="image/*" hidden>
+          <div class="package-manager" id="package-manager"></div>
         </section>
 
         <section class="stock-section panel vendor-panel" id="stock-section-invoice">
@@ -1029,6 +1046,10 @@
                   <span>Allow stock CRUD</span>
                 </label>
                 <label class="check-row inline-check">
+                  <input id="admin-allow-package" type="checkbox">
+                  <span>Allow package CRUD</span>
+                </label>
+                <label class="check-row inline-check">
                   <input id="admin-allow-analytics" type="checkbox">
                   <span>Allow analytics menu</span>
                 </label>
@@ -1174,6 +1195,7 @@
         <div><dt>Cash Paid</dt><dd id="modal-cash">-</dd></div>
         <div><dt>Change</dt><dd id="modal-change">-</dd></div>
       </dl>
+      <div class="detail-items payment-items" id="payment-items"></div>
       <button class="btn primary wide ok-btn" type="button" data-action="close-modal">OK</button>
     </section>
 

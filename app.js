@@ -3,6 +3,7 @@ const state = {
   auth: null,
   pendingLogin: null,
   products: [],
+  packages: [],
   vendors: [],
   history: [],
   assets: { videos: [], payment_icons: [] },
@@ -13,10 +14,19 @@ const state = {
   activeQr: null,
   session: { sales: 0, revenue: 0 },
   cart: {},
+  packageCart: {},
   filter: "all",
+  catalogMode: "items",
   selectedStockName: "",
   selectedStockIndex: -1,
   stockImageB64: "",
+  packageImageB64: "",
+  packageBuilder: {
+    mode: "list",
+    selected: {},
+    editingId: "",
+    draft: null,
+  },
   currentTxn: "",
   historySearch: "",
   historyQr: "",
@@ -895,11 +905,31 @@ function cartRaw(name) {
   };
 }
 
+function packageCartRaw(packageId) {
+  const raw = state.packageCart[packageId];
+  if (!raw) return { qty: 0, free: false, disc_pct: 0, disc_fixed: 0, tip_fixed: 0 };
+  if (typeof raw === "number") return { qty: raw, free: false, disc_pct: 0, disc_fixed: 0, tip_fixed: 0 };
+  return {
+    qty: Number(raw.qty || 0),
+    free: Boolean(raw.free),
+    disc_pct: clampNumber(raw.disc_pct, 0, 100),
+    disc_fixed: Math.max(0, Number(raw.disc_fixed || 0)),
+    tip_fixed: Math.max(0, Number(raw.tip_fixed || 0)),
+  };
+}
+
 function setCartRaw(name, patch) {
   const current = cartRaw(name);
   const next = { ...current, ...patch };
   if (Number(next.qty || 0) <= 0) delete state.cart[name];
   else state.cart[name] = next;
+}
+
+function setPackageCartRaw(packageId, patch) {
+  const current = packageCartRaw(packageId);
+  const next = { ...current, ...patch };
+  if (Number(next.qty || 0) <= 0) delete state.packageCart[packageId];
+  else state.packageCart[packageId] = next;
 }
 
 function lineDiscount(gross, pct, fixed, free) {
@@ -920,12 +950,20 @@ function adminAllowStockCrud() {
   return state.settings?.admin_allow_stock_crud !== false;
 }
 
+function adminAllowPackageCrud() {
+  return state.settings?.admin_allow_package_crud !== false;
+}
+
 function adminAllowAnalytics() {
   return state.settings?.admin_allow_analytics !== false;
 }
 
 function canCrudStock() {
   return isMerchantAdmin() && adminAllowStockCrud();
+}
+
+function canCrudPackage() {
+  return isMerchantAdmin() && adminAllowPackageCrud();
 }
 
 function canViewAnalytics() {
@@ -945,6 +983,7 @@ function applyRolePermissions() {
   document.body.classList.toggle("is-merchant-admin", loggedIn && admin && !systemMode);
   document.body.classList.toggle("is-cashier-only", loggedIn && !canCrudStock() && !systemMode);
   document.body.classList.toggle("can-crud-stock", loggedIn && canCrudStock() && !systemMode);
+  document.body.classList.toggle("can-crud-package", loggedIn && canCrudPackage() && !systemMode);
   document.body.classList.toggle("can-view-analytics", loggedIn && canViewAnalytics() && !systemMode);
 }
 
@@ -956,6 +995,19 @@ function assertCanCrudStock(action = "mengubah stock") {
   }
   if (!adminAllowStockCrud()) {
     showToast("CRUD stock belum diaktifkan di Admin Setting.", "error");
+    return false;
+  }
+  return true;
+}
+
+function assertCanCrudPackage(action = "mengubah package") {
+  if (isSystemAdmin()) return false;
+  if (!isMerchantAdmin()) {
+    showToast(`Hanya merchant admin yang bisa ${action}.`, "error");
+    return false;
+  }
+  if (!adminAllowPackageCrud()) {
+    showToast("CRUD package belum diaktifkan di Admin Setting.", "error");
     return false;
   }
   return true;
@@ -2170,9 +2222,13 @@ async function pollStockFromServer() {
   if (!state.auth || isSystemAdmin() || stockPollInFlight) return;
   stockPollInFlight = true;
   try {
-    const result = await api("/api/stock", { loading: false });
+    const [result, packageResult] = await Promise.all([
+      api("/api/stock", { loading: false }),
+      api("/api/packages", { loading: false }),
+    ]);
     const nextProducts = Array.isArray(result.products) ? result.products : [];
     state.products = nextProducts;
+    state.packages = Array.isArray(packageResult.packages) ? packageResult.packages : state.packages;
     reconcileCartWithStock();
     renderStock();
     renderCatalog();
@@ -2209,6 +2265,7 @@ function applyLoggedOutState(message = "") {
   state.displayEvent = null;
   state.pendingPaymentClear = false;
   state.cart = {};
+  state.packageCart = {};
   state.currentTxn = "";
   stopQrPolling();
   stopOtpTimer();
@@ -2543,6 +2600,7 @@ async function logout() {
   state.pendingPaymentClear = false;
   state.logAdminPassword = "";
   state.cart = {};
+  state.packageCart = {};
   state.currentTxn = "";
   stopQrPolling();
   stopOtpTimer();
@@ -2585,10 +2643,161 @@ function showPage(name, { sync = true, updateRoute = true } = {}) {
   }
 }
 
+function productByName(name) {
+  return state.products.find((item) => item.name === name) || null;
+}
+
+function packageById(packageId) {
+  return state.packages.find((item) => String(item.id) === String(packageId)) || null;
+}
+
+function packageItemQty(item) {
+  return Math.max(1, Number(item?.qty || 1));
+}
+
+function packageItemPrice(item) {
+  return Math.max(0, Number(item?.package_price ?? item?.price ?? item?.amount ?? item?.original_price ?? 0));
+}
+
+function packageUnitPrice(packageItem) {
+  return (packageItem?.items || []).reduce((sum, item) => sum + packageItemPrice(item) * packageItemQty(item), 0);
+}
+
+function stockUsage({ excludeItemName = "", excludePackageId = "" } = {}) {
+  const usage = new Map();
+  Object.keys(state.cart || {}).forEach((name) => {
+    if (name === excludeItemName) return;
+    const qty = cartRaw(name).qty;
+    if (qty > 0) usage.set(name, (usage.get(name) || 0) + qty);
+  });
+  Object.keys(state.packageCart || {}).forEach((packageId) => {
+    if (String(packageId) === String(excludePackageId)) return;
+    const packageItem = packageById(packageId);
+    const packageQty = packageCartRaw(packageId).qty;
+    if (!packageItem || packageQty <= 0) return;
+    (packageItem.items || []).forEach((item) => {
+      const name = item.name || item.item_name || "";
+      if (!name) return;
+      usage.set(name, (usage.get(name) || 0) + packageItemQty(item) * packageQty);
+    });
+  });
+  return usage;
+}
+
+function availableStockForItem(name, opts = {}) {
+  const product = productByName(name);
+  if (!product) return 0;
+  const usage = stockUsage({ ...opts, excludeItemName: opts.excludeItemName ?? name });
+  return Math.max(0, Number(product.stock || 0) - Number(usage.get(name) || 0));
+}
+
+function packageAvailableStock(packageItem, { excludePackageId = "" } = {}) {
+  if (!packageItem?.items?.length) return 0;
+  const usage = stockUsage({ excludePackageId: excludePackageId || packageItem.id });
+  return Math.min(...packageItem.items.map((item) => {
+    const name = item.name || item.item_name || "";
+    const product = productByName(name);
+    if (!product) return 0;
+    const remaining = Math.max(0, Number(product.stock || 0) - Number(usage.get(name) || 0));
+    return Math.floor(remaining / packageItemQty(item));
+  }));
+}
+
+function allocateAmount(total, bases) {
+  const wanted = Math.max(0, Math.round(Number(total || 0)));
+  const sum = bases.reduce((acc, value) => acc + Math.max(0, Number(value || 0)), 0);
+  if (!wanted || !sum || !bases.length) return bases.map(() => 0);
+  let remaining = wanted;
+  return bases.map((base, index) => {
+    const value = index === bases.length - 1
+      ? remaining
+      : Math.min(remaining, Math.round(wanted * Math.max(0, Number(base || 0)) / sum));
+    remaining -= value;
+    return value;
+  });
+}
+
+function packageCartEntry(packageItem, raw = packageCartRaw(packageItem?.id)) {
+  if (!packageItem || raw.qty <= 0) return null;
+  const packageQty = raw.qty;
+  const childBases = (packageItem.items || []).map((item) => packageItemPrice(item) * packageItemQty(item) * packageQty);
+  const gross = childBases.reduce((sum, value) => sum + value, 0);
+  const discount = lineDiscount(gross, raw.disc_pct, raw.disc_fixed, raw.free);
+  const tip = Math.max(0, Number(raw.tip_fixed || 0));
+  const subtotal = raw.free ? tip : Math.max(0, gross - discount) + tip;
+  const discountParts = allocateAmount(discount, childBases);
+  const tipParts = allocateAmount(tip, childBases);
+  const children = (packageItem.items || []).map((item, index) => {
+    const name = item.name || item.item_name || "";
+    const product = productByName(name) || {};
+    const childQty = packageItemQty(item) * packageQty;
+    const unit = packageItemPrice(item);
+    const original = Math.max(0, Number(item.original_price ?? product.price ?? unit));
+    const lineGross = childBases[index] || 0;
+    const lineTip = tipParts[index] || 0;
+    const lineDisc = Math.min(lineGross, discountParts[index] || 0);
+    const lineSubtotal = raw.free ? lineTip : Math.max(0, lineGross - lineDisc) + lineTip;
+    return {
+      line_type: "package_item",
+      package_id: packageItem.id,
+      package_name: packageItem.name,
+      package_line_id: packageItem.id,
+      package_qty: packageQty,
+      package_original_price: original,
+      original_unit_price: original,
+      package_gross: gross,
+      package_discount: discount,
+      package_tip: tip,
+      package_total: subtotal,
+      name,
+      item_name: name,
+      qty: childQty,
+      price: raw.free ? 0 : unit,
+      amount: raw.free ? 0 : unit,
+      unit_price: unit,
+      capital: productCapital(product),
+      cost: productCapital(product),
+      stock: Number(product.stock || 0),
+      image_b64: product.image_b64 || item.image_b64 || "",
+      gross: lineGross,
+      line_discount: lineDisc,
+      disc_pct: raw.disc_pct,
+      disc_fixed: raw.disc_fixed ? lineDisc : 0,
+      tip_fixed: lineTip,
+      subtotal: lineSubtotal,
+      profit: lineSubtotal - (productCapital(product) * childQty),
+      free: raw.free,
+    };
+  });
+  const unitPrice = packageUnitPrice(packageItem);
+  return {
+    line_type: "package",
+    id: packageItem.id,
+    package_id: packageItem.id,
+    name: packageItem.name,
+    item_name: packageItem.name,
+    qty: packageQty,
+    price: raw.free ? 0 : unitPrice,
+    amount: raw.free ? 0 : unitPrice,
+    unit_price: unitPrice,
+    stock: packageAvailableStock(packageItem, { excludePackageId: packageItem.id }),
+    image_b64: packageItem.image_b64 || "",
+    gross,
+    line_discount: discount,
+    disc_pct: raw.disc_pct,
+    disc_fixed: raw.disc_fixed,
+    tip_fixed: tip,
+    subtotal,
+    profit: subtotal - children.reduce((sum, child) => sum + Number(child.capital || 0) * Number(child.qty || 0), 0),
+    free: raw.free,
+    package_items: children,
+  };
+}
+
 function cartEntries() {
-  return Object.entries(state.cart)
+  const itemEntries = Object.entries(state.cart)
     .map(([name]) => {
-      const product = state.products.find((item) => item.name === name);
+      const product = productByName(name);
       const raw = cartRaw(name);
       const qty = raw.qty;
       if (!product || qty <= 0) return null;
@@ -2600,6 +2809,7 @@ function cartEntries() {
       const subtotal = raw.free ? tip : base + tip;
       const isFree = raw.free || (gross > 0 && subtotal <= 0 && discount >= gross && !tip);
       return {
+        line_type: "item",
         name,
         item_name: name,
         qty,
@@ -2621,6 +2831,14 @@ function cartEntries() {
       };
     })
     .filter(Boolean);
+  const packageEntries = Object.keys(state.packageCart || {})
+    .map((packageId) => packageCartEntry(packageById(packageId)))
+    .filter(Boolean);
+  return itemEntries.concat(packageEntries);
+}
+
+function checkoutLineItems() {
+  return cartEntries().flatMap((item) => item.line_type === "package" ? (item.package_items || []) : [item]);
 }
 
 function cartTotal() {
@@ -2640,9 +2858,20 @@ function reconcileCartWithStock() {
       return;
     }
     const raw = cartRaw(name);
-    const qty = Math.max(0, Math.min(raw.qty, byName.get(name)));
+    const qty = Math.max(0, Math.min(raw.qty, availableStockForItem(name)));
     if (qty <= 0) delete state.cart[name];
     else state.cart[name] = { ...raw, qty };
+  });
+  Object.keys(state.packageCart || {}).forEach((packageId) => {
+    const packageItem = packageById(packageId);
+    if (!packageItem) {
+      delete state.packageCart[packageId];
+      return;
+    }
+    const raw = packageCartRaw(packageId);
+    const qty = Math.max(0, Math.min(raw.qty, packageAvailableStock(packageItem)));
+    if (qty <= 0) delete state.packageCart[packageId];
+    else state.packageCart[packageId] = { ...raw, qty };
   });
 }
 
@@ -2666,11 +2895,11 @@ function setCartQty(name, qty, { renderCatalogView = true } = {}) {
     showToast("Dismiss QR dulu sebelum ubah cart", "error");
     return false;
   }
-  const product = state.products.find((item) => item.name === name);
+  const product = productByName(name);
   if (!product) return false;
   const wantedQty = Number(qty);
   const safeQty = Number.isFinite(wantedQty) ? Math.floor(wantedQty) : 0;
-  const next = Math.max(0, Math.min(Number(product.stock || 0), safeQty));
+  const next = Math.max(0, Math.min(availableStockForItem(name), safeQty));
   setCartRaw(name, { qty: next });
   if (renderCatalogView) renderCatalog();
   else patchCatalogQty(name, next);
@@ -2680,19 +2909,63 @@ function setCartQty(name, qty, { renderCatalogView = true } = {}) {
 }
 
 function changeCartQty(name, delta) {
-  const product = state.products.find((item) => item.name === name);
+  const product = productByName(name);
   if (!product) return;
   const cur = cartRaw(name).qty;
-  if (delta > 0 && cur >= Number(product.stock || 0)) {
+  if (delta > 0 && cur >= availableStockForItem(name)) {
     showToast("Stock tidak cukup", "error");
     return;
   }
   setCartQty(name, cur + delta);
 }
 
+function packageCardElement(packageId) {
+  const safe = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(packageId) : String(packageId).replace(/"/g, '\\"');
+  return document.querySelector(`.product-card[data-package-id="${safe}"]`);
+}
+
+function patchPackageCatalogQty(packageId, qty) {
+  const card = packageCardElement(packageId);
+  if (!card) return;
+  card.classList.toggle("in-cart", qty > 0);
+  const input = card.querySelector("[data-package-qty-input]");
+  if (input && document.activeElement !== input) {
+    input.value = String(qty);
+  }
+}
+
+function setPackageCartQty(packageId, qty, { renderCatalogView = true } = {}) {
+  if (state.activeQr) {
+    showToast("Dismiss QR dulu sebelum ubah cart", "error");
+    return false;
+  }
+  const packageItem = packageById(packageId);
+  if (!packageItem) return false;
+  const wantedQty = Number(qty);
+  const safeQty = Number.isFinite(wantedQty) ? Math.floor(wantedQty) : 0;
+  const next = Math.max(0, Math.min(packageAvailableStock(packageItem), safeQty));
+  setPackageCartRaw(packageId, { qty: next });
+  if (renderCatalogView) renderCatalog();
+  else patchPackageCatalogQty(packageId, next);
+  renderCart();
+  updateTotals();
+  return next;
+}
+
+function changePackageCartQty(packageId, delta) {
+  const packageItem = packageById(packageId);
+  if (!packageItem) return;
+  const cur = packageCartRaw(packageId).qty;
+  if (delta > 0 && cur >= packageAvailableStock(packageItem)) {
+    showToast("Stock package tidak cukup", "error");
+    return;
+  }
+  setPackageCartQty(packageId, cur + delta);
+}
+
 function setCartQtyFromInput(input, { commit = false } = {}) {
   const name = input.dataset.name || "";
-  const product = state.products.find((item) => item.name === name);
+  const product = productByName(name);
   if (!product) return;
   const current = cartRaw(name).qty;
   if (state.activeQr) {
@@ -2700,11 +2973,35 @@ function setCartQtyFromInput(input, { commit = false } = {}) {
     showToast("Dismiss QR dulu sebelum ubah cart", "error");
     return;
   }
-  const stock = Number(product.stock || 0);
+  const stock = availableStockForItem(name);
   const typed = parseQtyValue(input.value);
   const next = Math.max(0, Math.min(stock, typed));
   if (typed > stock) input.value = String(next);
   const saved = setCartQty(name, next, { renderCatalogView: commit });
+  if (saved === false) {
+    input.value = String(current);
+    return;
+  }
+  if (commit) {
+    input.value = String(saved || 0);
+  }
+}
+
+function setPackageCartQtyFromInput(input, { commit = false } = {}) {
+  const packageId = input.dataset.packageId || "";
+  const packageItem = packageById(packageId);
+  if (!packageItem) return;
+  const current = packageCartRaw(packageId).qty;
+  if (state.activeQr) {
+    input.value = String(current);
+    showToast("Dismiss QR dulu sebelum ubah cart", "error");
+    return;
+  }
+  const stock = packageAvailableStock(packageItem);
+  const typed = parseQtyValue(input.value);
+  const next = Math.max(0, Math.min(stock, typed));
+  if (typed > stock) input.value = String(next);
+  const saved = setPackageCartQty(packageId, next, { renderCatalogView: commit });
   if (saved === false) {
     input.value = String(current);
     return;
@@ -2726,6 +3023,18 @@ function toggleFreeItem(name, checked) {
   updateTotals();
 }
 
+function toggleFreePackage(packageId, checked) {
+  if (state.activeQr) {
+    showToast("Dismiss QR dulu sebelum ubah cart", "error");
+    return;
+  }
+  if (!packageCartRaw(packageId).qty) setPackageCartQty(packageId, 1);
+  setPackageCartRaw(packageId, { free: checked });
+  renderCatalog();
+  renderCart();
+  updateTotals();
+}
+
 function isDiscountFieldFocused() {
   return Boolean(document.activeElement?.matches?.("[data-discount-field], [data-tip-field]"));
 }
@@ -2733,6 +3042,11 @@ function isDiscountFieldFocused() {
 function cartItemElement(name) {
   const safe = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(name) : name.replace(/"/g, '\\"');
   return document.querySelector(`.cart-item[data-name="${safe}"]`);
+}
+
+function cartPackageElement(packageId) {
+  const safe = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(packageId) : String(packageId).replace(/"/g, '\\"');
+  return document.querySelector(`.cart-item[data-package-id="${safe}"]`);
 }
 
 function patchCartItemLine(name) {
@@ -2763,12 +3077,42 @@ function patchCartDiscountFields(name) {
   if (freeCheckbox) freeCheckbox.checked = Boolean(raw.free);
 }
 
+function patchCartPackageLine(packageId) {
+  const item = cartEntries().find((entry) => entry.line_type === "package" && String(entry.package_id) === String(packageId));
+  const row = cartPackageElement(packageId);
+  if (!item || !row) return;
+  const line = row.querySelector(".cart-item-line");
+  if (line) line.innerHTML = cartPricingHtml(item);
+  const total = row.querySelector(".cart-package-total");
+  if (total) total.textContent = formatRp(item.subtotal);
+  const title = row.querySelector(".cart-item-name");
+  if (title) {
+    title.innerHTML = `<span data-i18n-skip>${escapeHtml(item.name)}</span>${item.free ? ` <span class="cart-free-badge">${escapeHtml(t("Free"))}</span>` : ""}`;
+  }
+}
+
+function patchCartPackageDiscountFields(packageId) {
+  const raw = packageCartRaw(packageId);
+  const row = cartPackageElement(packageId);
+  if (!row) return;
+  const pctInput = row.querySelector('[data-discount-field="disc_pct"]');
+  const fixedInput = row.querySelector('[data-discount-field="disc_fixed"]');
+  const tipInput = row.querySelector('[data-tip-field="tip_fixed"]');
+  const freeCheckbox = row.querySelector('[data-action="package-toggle-free"]');
+  if (pctInput) pctInput.disabled = Boolean(raw.disc_fixed);
+  if (fixedInput) fixedInput.disabled = Boolean(raw.disc_pct);
+  if (tipInput && document.activeElement !== tipInput) {
+    tipInput.value = raw.tip_fixed ? formatPlainNumber(raw.tip_fixed) : "";
+  }
+  if (freeCheckbox) freeCheckbox.checked = Boolean(raw.free);
+}
+
 function setLineDiscount(name, field, value, { repaint = false } = {}) {
   if (state.activeQr) {
     showToast("Dismiss QR dulu sebelum ubah diskon", "error");
     return;
   }
-  const product = state.products.find((item) => item.name === name);
+  const product = productByName(name);
   const raw = cartRaw(name);
   const qty = raw.qty || 1;
   const gross = Number(product?.price || 0) * qty;
@@ -2797,6 +3141,38 @@ function setLineDiscount(name, field, value, { repaint = false } = {}) {
   updateTotals({ publishDisplay: false });
 }
 
+function setPackageLineDiscount(packageId, field, value, { repaint = false } = {}) {
+  if (state.activeQr) {
+    showToast("Dismiss QR dulu sebelum ubah diskon", "error");
+    return;
+  }
+  const packageItem = packageById(packageId);
+  const raw = packageCartRaw(packageId);
+  const qty = raw.qty || 1;
+  const gross = packageUnitPrice(packageItem) * qty;
+  const next = {};
+  if (field === "disc_pct") {
+    const pct = clampNumber(value, 0, 100);
+    next.disc_pct = pct;
+    if (pct > 0) next.disc_fixed = 0;
+    next.free = pct >= 100;
+  } else {
+    const fixed = Math.min(Math.max(0, Number(value || 0)), gross || Number.MAX_SAFE_INTEGER);
+    next.disc_fixed = fixed;
+    if (fixed > 0) next.disc_pct = 0;
+    next.free = Boolean(gross && fixed >= gross);
+  }
+  setPackageCartRaw(packageId, next);
+  if (repaint) {
+    renderCatalog();
+    renderCart();
+  } else {
+    patchCartPackageLine(packageId);
+    patchCartPackageDiscountFields(packageId);
+  }
+  updateTotals({ publishDisplay: false });
+}
+
 function setLineTip(name, value, { repaint = false } = {}) {
   if (state.activeQr) {
     showToast("Dismiss QR dulu sebelum ubah tip", "error");
@@ -2814,6 +3190,23 @@ function setLineTip(name, value, { repaint = false } = {}) {
   updateTotals({ publishDisplay: false });
 }
 
+function setPackageLineTip(packageId, value, { repaint = false } = {}) {
+  if (state.activeQr) {
+    showToast("Dismiss QR dulu sebelum ubah tip", "error");
+    return;
+  }
+  const tip = Math.max(0, Number(value || 0));
+  setPackageCartRaw(packageId, { tip_fixed: tip });
+  if (repaint) {
+    renderCatalog();
+    renderCart();
+  } else {
+    patchCartPackageLine(packageId);
+    patchCartPackageDiscountFields(packageId);
+  }
+  updateTotals({ publishDisplay: false });
+}
+
 function cartPricingHtml(item) {
   const gross = Number(item.gross || 0);
   if (item.line_discount && gross) {
@@ -2823,9 +3216,79 @@ function cartPricingHtml(item) {
   return `${item.qty} x ${formatRp(item.unit_price)} = ${formatRp(item.subtotal)}`;
 }
 
+function triggerCatalogFlip() {
+  const panel = $(".catalog-panel");
+  if (!panel) return;
+  panel.classList.remove("is-catalog-flipping");
+  void panel.offsetWidth;
+  panel.classList.add("is-catalog-flipping");
+  setTimeout(() => panel.classList.remove("is-catalog-flipping"), 560);
+}
+
+function setCatalogMode(mode) {
+  const next = mode === "packages" ? "packages" : "items";
+  if (state.catalogMode !== next) {
+    state.catalogMode = next;
+    triggerCatalogFlip();
+  }
+  renderCatalog();
+}
+
 function renderCatalog() {
   const grid = $("#product-grid");
   const search = ($("#search-input").value || "").trim().toLowerCase();
+  const mode = state.catalogMode === "packages" ? "packages" : "items";
+  $$(".seg[data-catalog-mode]").forEach((btn) => btn.classList.toggle("active", btn.dataset.catalogMode === mode));
+  if ($("#catalog-title")) $("#catalog-title").textContent = mode === "packages" ? "Package Catalog" : "Product Catalog";
+  if ($("#catalog-hint")) $("#catalog-hint").textContent = mode === "packages" ? "Tap package controls to update cart" : "Tap item controls to update cart";
+
+  if (mode === "packages") {
+    let packages = state.packages.filter((item) => String(item.name || "").toLowerCase().includes(search));
+    if (state.filter === "low") packages = packages.filter((item) => packageAvailableStock(item) <= 5);
+    if (state.filter === "cart") packages = packages.filter((item) => packageCartRaw(item.id).qty > 0);
+
+    if (!packages.length) {
+      grid.innerHTML = `<div class="empty-state">${escapeHtml(t("No products found"))}</div>`;
+      return;
+    }
+
+    grid.innerHTML = packages.map((item) => {
+      const raw = packageCartRaw(item.id);
+      const qty = raw.qty;
+      const src = imageSrc(item);
+      const stock = packageAvailableStock(item);
+      const stockClass = stock <= 0 ? "out" : stock <= 5 ? "low" : "";
+      const itemLines = (item.items || []).slice(0, 4).map((child) => {
+        const price = packageItemPrice(child);
+        return `<span>${escapeHtml(child.name || child.item_name || "")} <b>${formatRp(price)}</b></span>`;
+      }).join("");
+      const extra = (item.items || []).length > 4 ? `<span>+${(item.items || []).length - 4} item</span>` : "";
+      return `
+        <article class="product-card package-product-card ${qty ? "in-cart" : ""}" data-package-id="${escapeAttr(item.id)}">
+          <div class="product-media">
+            ${src ? `<img src="${escapeAttr(src)}" alt="">` : `<div class="product-fallback">${escapeHtml(productInitial(item.name))}</div>`}
+          </div>
+          <div>
+            <div class="product-name">${escapeHtml(item.name)}</div>
+            <div class="product-price">${formatRp(packageUnitPrice(item))}</div>
+            <div class="product-stock ${stockClass}">${escapeHtml(t("Stock"))}: ${stock}</div>
+            <div class="package-card-lines">${itemLines}${extra}</div>
+          </div>
+          <div class="qty-control">
+            <button type="button" data-action="package-cart-dec" data-package-id="${escapeAttr(item.id)}">-</button>
+            <input class="qty-count qty-input" type="text" inputmode="numeric" pattern="[0-9]*" value="${qty}" aria-label="${escapeAttr(t("Quantity"))} ${escapeAttr(item.name)}" data-package-qty-input data-package-id="${escapeAttr(item.id)}">
+            <button type="button" data-action="package-cart-inc" data-package-id="${escapeAttr(item.id)}">+</button>
+          </div>
+          <label class="free-toggle">
+            <input type="checkbox" data-action="package-toggle-free" data-package-id="${escapeAttr(item.id)}" ${raw.free ? "checked" : ""}>
+            <span>${escapeHtml(t("Free"))}</span>
+          </label>
+        </article>
+      `;
+    }).join("");
+    return;
+  }
+
   let products = state.products.filter((item) => item.name.toLowerCase().includes(search));
   if (state.filter === "low") products = products.filter((item) => Number(item.stock || 0) <= 5);
   if (state.filter === "cart") products = products.filter((item) => cartRaw(item.name).qty > 0);
@@ -2865,6 +3328,118 @@ function renderCatalog() {
   }).join("");
 }
 
+function packageCartLinesHtml(item) {
+  const children = item.package_items || [];
+  if (!children.length) return "";
+  return `
+    <div class="cart-package-lines">
+      ${children.map((child) => {
+        const original = Number(child.original_unit_price || child.package_original_price || 0);
+        const unit = Number(child.unit_price || child.amount || child.price || 0);
+        const price = original && original !== unit
+          ? `<span class="price-strike">${formatRp(original)}</span> <strong>${formatRp(unit)}</strong>`
+          : `<strong>${formatRp(unit)}</strong>`;
+        return `
+          <div>
+            <span>${escapeHtml(child.item_name || child.name || "")} x${escapeHtml(child.qty || 0)}</span>
+            <span>${price}</span>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function groupedTransactionLines(items = []) {
+  const rows = [];
+  const groups = new Map();
+  items.forEach((item) => {
+    if (item.line_type === "package" && item.package_items) {
+      rows.push({
+        type: "package",
+        package_id: item.package_id || item.id,
+        package_name: item.package_name || item.name,
+        qty: item.qty || 1,
+        gross: item.gross || 0,
+        subtotal: item.subtotal || 0,
+        discount: item.line_discount || 0,
+        tip: item.tip_fixed || 0,
+        free: item.free,
+        children: item.package_items || [],
+      });
+      return;
+    }
+    const packageId = String(item.package_id || "").trim();
+    if (!packageId) {
+      rows.push({ type: "item", item });
+      return;
+    }
+    const key = String(item.package_line_id || packageId);
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        type: "package",
+        package_id: packageId,
+        package_name: item.package_name || "Package",
+        qty: Number(item.package_qty || 1) || 1,
+        gross: Number(item.package_gross || 0),
+        subtotal: Number(item.package_total || 0),
+        discount: Number(item.package_discount || 0),
+        tip: Number(item.package_tip || 0),
+        free: item.free,
+        children: [],
+      };
+      groups.set(key, group);
+      rows.push(group);
+    }
+    group.children.push(item);
+    if (!group.subtotal) group.subtotal += Number(item.subtotal || 0);
+    if (!group.gross) group.gross += Number(item.gross || 0);
+  });
+  return rows;
+}
+
+function detailLinePriceHtml(item) {
+  const gross = Number(item.gross || (item.unit_price || item.amount || item.price || 0) * (item.qty || 0));
+  const subtotal = Number(item.subtotal || 0);
+  const tip = Number(item.tip_fixed || 0);
+  const discount = Number(item.line_discount || Math.max(0, gross - Math.max(0, subtotal - tip)));
+  if (discount && gross) {
+    return `<span class="price-strike">${formatRp(gross)}</span> ${item.free ? "FREE" : formatRp(subtotal)}`;
+  }
+  return `${item.qty} x ${formatRp(item.amount || item.price || item.unit_price || 0)}`;
+}
+
+function detailItemsHtml(items = []) {
+  return groupedTransactionLines(items).map((row) => {
+    if (row.type === "package") {
+      return `
+        <div class="detail-item detail-package">
+          <strong>${escapeHtml(row.package_name)}${row.free ? " [FREE]" : ""}</strong>
+          <span>x${escapeHtml(row.qty || 1)}</span>
+          <span class="amount">${row.free ? "FREE" : ""}</span>
+          <div class="detail-package-lines">
+            ${row.children.map((child) => `
+              <div>
+                <span>${escapeHtml(child.item_name || child.name || "")}</span>
+                <span>${formatRp(child.subtotal || 0)}</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+    const item = row.item || {};
+    return `
+      <div class="detail-item">
+        <strong>${escapeHtml(item.item_name || item.name || "")}${item.free ? " [FREE]" : ""}</strong>
+        <span>${detailLinePriceHtml(item)}</span>
+        <span class="amount">${formatRp(item.subtotal || 0)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
 function renderCart() {
   if (isDiscountFieldFocused()) return;
   const list = $("#cart-list");
@@ -2873,39 +3448,80 @@ function renderCart() {
     list.innerHTML = `<div class="empty-state">${escapeHtml(t("Cart empty - choose products from catalog"))}</div>`;
     return;
   }
-  list.innerHTML = entries.map((item) => `
-    <article class="cart-item" data-name="${escapeAttr(item.name)}">
-      <div class="cart-item-head">
-        <div class="cart-item-main">
-          <strong class="cart-item-name"><span data-i18n-skip>${escapeHtml(item.name)}</span>${item.free ? ` <span class="cart-free-badge">${escapeHtml(t("Free"))}</span>` : ""}</strong>
-          <div class="cart-item-line">${cartPricingHtml(item)}</div>
+  list.innerHTML = entries.map((item) => {
+    if (item.line_type === "package") {
+      return `
+        <article class="cart-item cart-package-item" data-package-id="${escapeAttr(item.package_id)}">
+          <div class="cart-item-head">
+            <div class="cart-item-main">
+              <strong class="cart-item-name"><span data-i18n-skip>${escapeHtml(item.name)}</span>${item.free ? ` <span class="cart-free-badge">${escapeHtml(t("Free"))}</span>` : ""}</strong>
+              <div class="cart-item-line">${cartPricingHtml(item)}</div>
+            </div>
+            <div class="cart-package-side">
+              <strong class="cart-package-total">${formatRp(item.subtotal)}</strong>
+              <div class="cart-controls">
+                <button class="mini-btn" type="button" data-action="package-cart-dec" data-package-id="${escapeAttr(item.package_id)}" aria-label="${escapeAttr(t("Decrease"))}">-</button>
+                <span>${item.qty}</span>
+                <button class="mini-btn add" type="button" data-action="package-cart-inc" data-package-id="${escapeAttr(item.package_id)}" aria-label="${escapeAttr(t("Increase"))}">+</button>
+              </div>
+            </div>
+          </div>
+          ${packageCartLinesHtml(item)}
+          <div class="cart-item-adjust">
+            <label class="cart-disc-chip">
+              <span>Disc %</span>
+              <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_pct || ""}" data-discount-field="disc_pct" data-package-id="${escapeAttr(item.package_id)}" ${item.disc_fixed ? "disabled" : ""}>
+            </label>
+            <label class="cart-disc-chip">
+              <span>Disc Rp</span>
+              <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_fixed ? formatPlainNumber(item.disc_fixed) : ""}" data-discount-field="disc_fixed" data-package-id="${escapeAttr(item.package_id)}" ${item.disc_pct ? "disabled" : ""}>
+            </label>
+            <label class="cart-disc-chip">
+              <span>Tip Rp</span>
+              <input type="text" inputmode="numeric" placeholder="0" value="${item.tip_fixed ? formatPlainNumber(item.tip_fixed) : ""}" data-tip-field="tip_fixed" data-package-id="${escapeAttr(item.package_id)}">
+            </label>
+            <label class="cart-free-chip">
+              <input type="checkbox" data-action="package-toggle-free" data-package-id="${escapeAttr(item.package_id)}" ${item.free ? "checked" : ""}>
+              <span>Free</span>
+            </label>
+          </div>
+        </article>
+      `;
+    }
+    return `
+      <article class="cart-item" data-name="${escapeAttr(item.name)}">
+        <div class="cart-item-head">
+          <div class="cart-item-main">
+            <strong class="cart-item-name"><span data-i18n-skip>${escapeHtml(item.name)}</span>${item.free ? ` <span class="cart-free-badge">${escapeHtml(t("Free"))}</span>` : ""}</strong>
+            <div class="cart-item-line">${cartPricingHtml(item)}</div>
+          </div>
+          <div class="cart-controls">
+            <button class="mini-btn" type="button" data-action="cart-dec" data-name="${escapeAttr(item.name)}" aria-label="${escapeAttr(t("Decrease"))}">-</button>
+            <span>${item.qty}</span>
+            <button class="mini-btn add" type="button" data-action="cart-inc" data-name="${escapeAttr(item.name)}" aria-label="${escapeAttr(t("Increase"))}">+</button>
+          </div>
         </div>
-        <div class="cart-controls">
-          <button class="mini-btn" type="button" data-action="cart-dec" data-name="${escapeAttr(item.name)}" aria-label="${escapeAttr(t("Decrease"))}">-</button>
-          <span>${item.qty}</span>
-          <button class="mini-btn add" type="button" data-action="cart-inc" data-name="${escapeAttr(item.name)}" aria-label="${escapeAttr(t("Increase"))}">+</button>
+        <div class="cart-item-adjust">
+          <label class="cart-disc-chip">
+            <span>Disc %</span>
+            <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_pct || ""}" data-discount-field="disc_pct" data-name="${escapeAttr(item.name)}" ${item.disc_fixed ? "disabled" : ""}>
+          </label>
+          <label class="cart-disc-chip">
+            <span>Disc Rp</span>
+            <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_fixed ? formatPlainNumber(item.disc_fixed) : ""}" data-discount-field="disc_fixed" data-name="${escapeAttr(item.name)}" ${item.disc_pct ? "disabled" : ""}>
+          </label>
+          <label class="cart-disc-chip">
+            <span>Tip Rp</span>
+            <input type="text" inputmode="numeric" placeholder="0" value="${item.tip_fixed ? formatPlainNumber(item.tip_fixed) : ""}" data-tip-field="tip_fixed" data-name="${escapeAttr(item.name)}">
+          </label>
+          <label class="cart-free-chip">
+            <input type="checkbox" data-action="toggle-free" data-name="${escapeAttr(item.name)}" ${item.free ? "checked" : ""}>
+            <span>Free</span>
+          </label>
         </div>
-      </div>
-      <div class="cart-item-adjust">
-        <label class="cart-disc-chip">
-          <span>Disc %</span>
-          <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_pct || ""}" data-discount-field="disc_pct" data-name="${escapeAttr(item.name)}" ${item.disc_fixed ? "disabled" : ""}>
-        </label>
-        <label class="cart-disc-chip">
-          <span>Disc Rp</span>
-          <input type="text" inputmode="numeric" placeholder="0" value="${item.disc_fixed ? formatPlainNumber(item.disc_fixed) : ""}" data-discount-field="disc_fixed" data-name="${escapeAttr(item.name)}" ${item.disc_pct ? "disabled" : ""}>
-        </label>
-        <label class="cart-disc-chip">
-          <span>Tip Rp</span>
-          <input type="text" inputmode="numeric" placeholder="0" value="${item.tip_fixed ? formatPlainNumber(item.tip_fixed) : ""}" data-tip-field="tip_fixed" data-name="${escapeAttr(item.name)}">
-        </label>
-        <label class="cart-free-chip">
-          <input type="checkbox" data-action="toggle-free" data-name="${escapeAttr(item.name)}" ${item.free ? "checked" : ""}>
-          <span>Free</span>
-        </label>
-      </div>
-    </article>
-  `).join("");
+      </article>
+    `;
+  }).join("");
 }
 
 function updateTotals({ publishDisplay = true } = {}) {
@@ -3013,6 +3629,7 @@ function clearCart({ force = false } = {}) {
     return;
   }
   state.cart = {};
+  state.packageCart = {};
   $("#cash-received").value = "";
   resetCustomerFields();
   state.currentTxn = "";
@@ -3032,7 +3649,7 @@ function getCustomerSnapshot() {
 
 function checkoutPayload(method) {
   const total = cartTotal();
-  const entries = cartEntries();
+  const entries = checkoutLineItems();
   const gross = entries.reduce((sum, item) => sum + Number(item.gross || 0), 0);
   const lineDiscountTotal = entries.reduce((sum, item) => sum + Number(item.line_discount || 0), 0);
   const cash = parseMoney($("#cash-received").value);
@@ -3096,6 +3713,18 @@ function safeSetLocalStorage(key, value) {
 
 function compactDisplayItem(item) {
   return {
+    line_type: item.line_type || "item",
+    id: item.id || "",
+    package_id: item.package_id || "",
+    package_name: item.package_name || "",
+    package_line_id: item.package_line_id || "",
+    package_qty: item.package_qty || 0,
+    package_original_price: item.package_original_price || item.original_unit_price || 0,
+    original_unit_price: item.original_unit_price || item.package_original_price || 0,
+    package_gross: item.package_gross || 0,
+    package_discount: item.package_discount || 0,
+    package_tip: item.package_tip || 0,
+    package_total: item.package_total || 0,
     name: item.name,
     item_name: item.item_name || item.name,
     qty: item.qty,
@@ -3109,6 +3738,7 @@ function compactDisplayItem(item) {
     tip_fixed: item.tip_fixed,
     subtotal: item.subtotal,
     free: item.free,
+    package_items: (item.package_items || []).map(compactDisplayItem),
   };
 }
 
@@ -3384,6 +4014,7 @@ function showPaymentModal(record) {
   $("#modal-amount").textContent = formatRp(record.amount);
   $("#modal-cash").textContent = method === "Cash" ? formatRp(record.cash_received) : "-";
   $("#modal-change").textContent = method === "Cash" ? formatRp(change) : "-";
+  if ($("#payment-items")) $("#payment-items").innerHTML = detailItemsHtml(record.items || []);
   if (changeAlert) {
     changeAlert.hidden = method !== "Cash";
     $("#modal-cash-change").textContent = formatRp(change);
@@ -3515,6 +4146,7 @@ function closeModal(force = false) {
 
 function applyServerData(result, { preserveCart = false } = {}) {
   if (result.products) state.products = result.products;
+  if (result.packages) state.packages = result.packages;
   if (result.history) state.history = result.history;
   if (result.session) state.session = result.session;
   if (Object.prototype.hasOwnProperty.call(result, "display_event")) setDisplayEvent(result.display_event);
@@ -3548,6 +4180,7 @@ function selectedStockItem() {
 function renderStock() {
   renderVendorOptions();
   renderVendors();
+  renderPackages();
   const selectedIndex = selectedStockIndex();
   state.selectedStockIndex = selectedIndex;
   const selectedItem = selectedStockItem();
@@ -3612,6 +4245,276 @@ function renderVendors() {
       <button class="btn danger-soft" type="button" data-action="delete-vendor" data-id="${escapeAttr(vendor.id)}">Delete</button>
     </article>
   `).join("");
+}
+
+function resetPackageBuilder() {
+  state.packageImageB64 = "";
+  state.packageBuilder = {
+    mode: "list",
+    selected: {},
+    editingId: "",
+    draft: null,
+  };
+  if ($("#package-image")) $("#package-image").value = "";
+}
+
+function packageBuilderSelectedNames() {
+  return Object.keys(state.packageBuilder?.selected || {}).filter((name) => state.packageBuilder.selected[name]);
+}
+
+function startPackageCreate() {
+  if (!assertCanCrudPackage("membuat package")) return;
+  state.packageImageB64 = "";
+  state.packageBuilder = { mode: "select", selected: {}, editingId: "", draft: null };
+  renderPackages();
+}
+
+function editPackage(packageId) {
+  if (!assertCanCrudPackage("mengubah package")) return;
+  const packageItem = packageById(packageId);
+  if (!packageItem) return;
+  state.packageImageB64 = packageItem.image_b64 || "";
+  state.packageBuilder = {
+    mode: "setup",
+    selected: Object.fromEntries((packageItem.items || []).map((item) => [item.name || item.item_name, true])),
+    editingId: packageItem.id,
+    draft: JSON.parse(JSON.stringify(packageItem)),
+  };
+  renderPackages();
+}
+
+async function deletePackage(packageId) {
+  if (!assertCanCrudPackage("menghapus package")) return;
+  const packageItem = packageById(packageId);
+  if (!packageItem) return;
+  if (!confirm(`Delete package ${packageItem.name}?`)) return;
+  const packages = state.packages.filter((item) => String(item.id) !== String(packageId));
+  const result = await api("/api/packages/save", { method: "POST", body: { packages } });
+  state.packages = result.packages || packages;
+  delete state.packageCart[packageId];
+  resetPackageBuilder();
+  reconcileCartWithStock();
+  renderPackages();
+  renderCatalog();
+  renderCart();
+  updateTotals();
+  showToast("Package deleted");
+}
+
+function togglePackageBuilderItem(name) {
+  if (!assertCanCrudPackage("memilih item package")) return;
+  const selected = { ...(state.packageBuilder.selected || {}) };
+  selected[name] = !selected[name];
+  state.packageBuilder = { ...state.packageBuilder, selected };
+  renderPackages();
+}
+
+function confirmPackageSelection() {
+  if (!assertCanCrudPackage("membuat package")) return;
+  const names = packageBuilderSelectedNames();
+  if (!names.length) {
+    showToast("Pilih minimal satu item untuk package.", "error");
+    return;
+  }
+  const items = names.map((name) => {
+    const product = productByName(name) || {};
+    return {
+      name,
+      item_name: name,
+      qty: 1,
+      package_price: Number(product.price || 0),
+      price: Number(product.price || 0),
+      original_price: Number(product.price || 0),
+      stock: Number(product.stock || 0),
+      image_b64: product.image_b64 || "",
+    };
+  });
+  state.packageBuilder = {
+    ...state.packageBuilder,
+    mode: "setup",
+    draft: {
+      id: "",
+      name: "",
+      image_b64: "",
+      items,
+    },
+  };
+  renderPackages();
+}
+
+function collectPackageSetupDraft() {
+  const draft = JSON.parse(JSON.stringify(state.packageBuilder.draft || {}));
+  draft.id = state.packageBuilder.editingId || draft.id || "";
+  draft.name = $("#package-name")?.value?.trim?.() || "";
+  draft.image_b64 = state.packageImageB64 || draft.image_b64 || "";
+  draft.items = (draft.items || []).map((item, index) => {
+    const priceInput = document.querySelector(`[data-package-setup-price="${index}"]`);
+    const product = productByName(item.name || item.item_name) || {};
+    const price = parseMoney(priceInput?.value || item.package_price || item.price || 0);
+    return {
+      name: item.name || item.item_name || "",
+      item_name: item.name || item.item_name || "",
+      qty: 1,
+      package_price: price,
+      price,
+      original_price: Number(item.original_price ?? product.price ?? 0),
+      stock: Number(product.stock ?? item.stock ?? 0),
+      image_b64: product.image_b64 || item.image_b64 || "",
+    };
+  }).filter((item) => item.name);
+  draft.price = draft.items.reduce((sum, item) => sum + Number(item.package_price || 0), 0);
+  return draft;
+}
+
+function updatePackageSetupTotal() {
+  const total = $$("[data-package-setup-price]").reduce((sum, input) => sum + parseMoney(input.value), 0);
+  if ($("#package-total-preview")) $("#package-total-preview").textContent = formatRp(total);
+}
+
+async function savePackageDraft() {
+  if (!assertCanCrudPackage("menyimpan package")) return;
+  const draft = collectPackageSetupDraft();
+  if (!draft.name) {
+    showToast("Nama package wajib diisi.", "error");
+    return;
+  }
+  if (!draft.items.length) {
+    showToast("Package minimal berisi satu item.", "error");
+    return;
+  }
+  const conflict = state.packages.some((item) => (
+    String(item.id) !== String(state.packageBuilder.editingId || draft.id)
+    && String(item.name || "").trim().toLowerCase() === draft.name.toLowerCase()
+  ));
+  if (conflict) {
+    showToast("Nama package sudah dipakai.", "error");
+    return;
+  }
+  const existingId = state.packageBuilder.editingId || draft.id;
+  const packages = existingId
+    ? state.packages.map((item) => String(item.id) === String(existingId) ? { ...draft, id: existingId } : item)
+    : state.packages.concat(draft);
+  const result = await api("/api/packages/save", { method: "POST", body: { packages } });
+  state.packages = result.packages || packages;
+  resetPackageBuilder();
+  reconcileCartWithStock();
+  renderPackages();
+  renderCatalog();
+  renderCart();
+  updateTotals();
+  showToast("Package saved");
+}
+
+function renderPackages() {
+  const container = $("#package-manager");
+  if (!container) return;
+  const builder = state.packageBuilder || { mode: "list" };
+  if ($("#package-count")) $("#package-count").textContent = `${state.packages.length} packages`;
+  if (builder.mode === "select") {
+    const selectedNames = packageBuilderSelectedNames();
+    container.innerHTML = `
+      <div class="package-builder-head">
+        <div>
+          <p class="eyebrow">Select Items</p>
+          <h3>${selectedNames.length} selected</h3>
+        </div>
+        <div class="button-row compact">
+          <button class="btn ghost" type="button" data-action="cancel-package-builder">Cancel</button>
+          <button class="btn primary" type="button" data-action="confirm-package-selection">Confirm</button>
+        </div>
+      </div>
+      <div class="package-pick-grid">
+        ${state.products.map((item) => {
+          const selected = Boolean(builder.selected?.[item.name]);
+          const src = imageSrc(item);
+          return `
+            <button class="package-pick-card ${selected ? "selected" : ""}" type="button" data-action="toggle-package-pick" data-name="${escapeAttr(item.name)}">
+              <span class="stock-thumb">${src ? `<img src="${escapeAttr(src)}" alt="">` : escapeHtml(productInitial(item.name))}</span>
+              <strong>${escapeHtml(item.name)}</strong>
+              <small>${escapeHtml(t("Stock"))}: ${Number(item.stock || 0)}</small>
+            </button>
+          `;
+        }).join("") || `<div class="empty-state">Belum ada stock item</div>`}
+      </div>
+    `;
+    return;
+  }
+  if (builder.mode === "setup") {
+    const draft = builder.draft || { items: [] };
+    const img = state.packageImageB64 || draft.image_b64 || "";
+    container.innerHTML = `
+      <div class="package-builder-head">
+        <div>
+          <p class="eyebrow">Package Setup</p>
+          <h3>${builder.editingId ? "Edit Package" : "Create Package"}</h3>
+        </div>
+        <div class="button-row compact">
+          <button class="btn ghost" type="button" data-action="cancel-package-builder">Cancel</button>
+          <button class="btn primary" type="button" data-action="save-package">${builder.editingId ? "Save Package" : "Create Package"}</button>
+        </div>
+      </div>
+      <div class="package-setup-grid">
+        <label class="image-picker package-image-picker" for="package-image">
+          <span id="package-image-preview">${img ? `<img src="${escapeAttr(imageSrc({ image_b64: img }))}" alt="">` : "Choose package image"}</span>
+          <small>PNG, JPG, WEBP</small>
+        </label>
+        <div class="package-setup-fields">
+          <label class="field">
+            <span>Package Name</span>
+            <input id="package-name" type="text" value="${escapeAttr(draft.name || "")}" placeholder="Paket A+B">
+          </label>
+          <div class="package-total-preview">
+            <span>Total Package</span>
+            <strong id="package-total-preview">${formatRp((draft.items || []).reduce((sum, item) => sum + Number(item.package_price || item.price || 0), 0))}</strong>
+          </div>
+        </div>
+      </div>
+      <div class="package-setup-items">
+        ${(draft.items || []).map((item, index) => {
+          const name = item.name || item.item_name || "";
+          const product = productByName(name) || {};
+          const src = imageSrc(product) || imageSrc(item);
+          return `
+            <article class="package-setup-row">
+              <span class="stock-thumb">${src ? `<img src="${escapeAttr(src)}" alt="">` : escapeHtml(productInitial(name))}</span>
+              <div>
+                <strong>${escapeHtml(name)}</strong>
+                <small>${escapeHtml(t("Stock"))}: ${Number(product.stock ?? item.stock ?? 0)} | Harga asli ${formatRp(item.original_price ?? product.price ?? 0)}</small>
+              </div>
+              <label class="field compact-field">
+                <span>Harga Package</span>
+                <input type="text" inputmode="numeric" value="${formatPlainNumber(item.package_price || item.price || 0)}" data-package-setup-price="${index}">
+              </label>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    `;
+    return;
+  }
+  container.innerHTML = state.packages.length ? `
+    <div class="package-list">
+      ${state.packages.map((packageItem) => {
+        const src = imageSrc(packageItem);
+        const stock = packageAvailableStock(packageItem);
+        return `
+          <article class="stock-item package-stock-item">
+            <div class="stock-thumb">${src ? `<img src="${escapeAttr(src)}" alt="">` : escapeHtml(productInitial(packageItem.name))}</div>
+            <div>
+              <strong>${escapeHtml(packageItem.name)}</strong>
+              <div class="stock-price">${formatRp(packageUnitPrice(packageItem))}</div>
+              <div class="muted">${(packageItem.items || []).map((item) => `${escapeHtml(item.name || item.item_name || "")} ${formatRp(packageItemPrice(item))}`).join(" | ")}</div>
+              <div class="muted">Available ${stock}</div>
+            </div>
+            <div class="button-row compact">
+              <button class="btn ghost" type="button" data-action="edit-package" data-package-id="${escapeAttr(packageItem.id)}">Edit</button>
+              <button class="btn danger-soft" type="button" data-action="delete-package" data-package-id="${escapeAttr(packageItem.id)}">Delete</button>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  ` : `<div class="empty-state">Belum ada package</div>`;
 }
 
 function selectStock(identifier) {
@@ -3697,8 +4600,9 @@ async function deleteSelectedStock() {
 }
 
 async function setStockTab(tab, { loading = true } = {}) {
-  let nextTab = ["items", "vendors", "invoice"].includes(tab) ? tab : "items";
-  if (!canCrudStock()) nextTab = "items";
+  let nextTab = ["items", "vendors", "invoice", "packages"].includes(tab) ? tab : "items";
+  if (["vendors", "invoice"].includes(nextTab) && !canCrudStock()) nextTab = "items";
+  if (nextTab === "packages" && !canCrudPackage()) nextTab = "items";
   state.stockTab = nextTab;
   $$(".stock-tabs .seg").forEach((btn) => btn.classList.toggle("active", btn.dataset.stockTab === nextTab));
   $$(".stock-section").forEach((section) => section.classList.toggle("active", section.id === `stock-section-${nextTab}`));
@@ -3924,11 +4828,47 @@ function syncAnalyticsFiltersFromInputs() {
 }
 
 function analyticsItemCosts(record, productMap = new Map()) {
-  const items = record.items || [];
+  const rows = groupedTransactionLines(record.items || []);
   const totalFee = recordPaymentFee(record);
-  const subtotalTotal = items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+  const subtotalTotal = rows.reduce((sum, row) => {
+    if (row.type === "package") {
+      return sum + Number(row.subtotal || row.children.reduce((acc, child) => acc + Number(child.subtotal || 0), 0));
+    }
+    return sum + Number(row.item?.subtotal || 0);
+  }, 0);
   let remainingFee = totalFee;
-  return items.map((item, index) => {
+  return rows.map((row, index) => {
+    if (row.type === "package") {
+      const children = row.children || [];
+      const subtotal = Number(row.subtotal || children.reduce((sum, child) => sum + Number(child.subtotal || 0), 0));
+      const gross = Number(row.gross || children.reduce((sum, child) => sum + Number(child.gross || 0), 0));
+      const storedFee = children.reduce((sum, child) => sum + Number(child.payment_fee || 0), 0);
+      const qrisCost = storedFee || (totalFee && subtotalTotal
+        ? (index === rows.length - 1 ? remainingFee : Math.round(totalFee * subtotal / subtotalTotal))
+        : 0);
+      if (!storedFee) remainingFee -= qrisCost;
+      const vendorCost = children.reduce((sum, child) => {
+        const name = String(child.item_name || child.name || "").trim();
+        const currentProduct = productMap.get(name);
+        const capital = Number(child.capital || child.cost || productCapital(currentProduct) || 0);
+        return sum + (capital * Number(child.qty || 0));
+      }, 0);
+      const totalCost = vendorCost + qrisCost;
+      const tip = Number(row.tip || children.reduce((sum, child) => sum + Number(child.tip_fixed || child.tip_amount || 0), 0));
+      return {
+        item: row,
+        name: row.package_name || "Package",
+        qty: Number(row.qty || 1),
+        subtotal,
+        gross,
+        tip,
+        vendorCost,
+        qrisCost,
+        totalCost,
+        profit: subtotal - totalCost,
+      };
+    }
+    const item = row.item || {};
     const name = String(item.item_name || item.name || "").trim();
     const qty = Number(item.qty || 0);
     const subtotal = Number(item.subtotal || 0);
@@ -4308,22 +5248,7 @@ function openDetail(txnId) {
     <div><dt>Amount</dt><dd>${formatRp(record.amount)}</dd></div>
     ${isCash ? `<div><dt>Cash Received</dt><dd>${formatRp(record.cash_received)}</dd></div><div><dt>Change</dt><dd>${formatRp(record.change)}</dd></div>` : ""}
   `;
-  $("#detail-items").innerHTML = (record.items || []).map((item) => {
-    const gross = Number(item.gross || (item.unit_price || item.amount || item.price || 0) * (item.qty || 0));
-    const subtotal = Number(item.subtotal || 0);
-    const tip = Number(item.tip_fixed || 0);
-    const discount = Number(item.line_discount || Math.max(0, gross - Math.max(0, subtotal - tip)));
-    const price = discount && gross
-      ? `<span class="price-strike">${formatRp(gross)}</span> ${item.free ? "FREE" : formatRp(subtotal)}`
-      : `${item.qty} x ${formatRp(item.amount || item.price || item.unit_price || 0)}`;
-    return `
-      <div class="detail-item">
-        <strong>${escapeHtml(item.item_name || item.name || "")}${item.free ? " [FREE]" : ""}</strong>
-        <span>${price}</span>
-        <span class="amount">${formatRp(subtotal)}</span>
-      </div>
-    `;
-  }).join("");
+  $("#detail-items").innerHTML = detailItemsHtml(record.items || []);
   $("#modal-backdrop").hidden = false;
 }
 
@@ -5299,6 +6224,7 @@ function renderAdminSettings() {
     $("#admin-merchant-logo-preview").src = state.adminMerchantLogoDataUrl || brandLogoUrl(s);
   }
   if ($("#admin-allow-stock")) $("#admin-allow-stock").checked = adminAllowStockCrud();
+  if ($("#admin-allow-package")) $("#admin-allow-package").checked = adminAllowPackageCrud();
   if ($("#admin-allow-analytics")) $("#admin-allow-analytics").checked = adminAllowAnalytics();
   renderMerchantAccountList();
 }
@@ -5335,6 +6261,12 @@ async function loadMerchantAdminData() {
       admin_allow_stock_crud: Boolean(result.admin_allow_stock_crud),
     };
   }
+  if (Object.prototype.hasOwnProperty.call(result, "admin_allow_package_crud")) {
+    state.settings = {
+      ...(state.settings || {}),
+      admin_allow_package_crud: Boolean(result.admin_allow_package_crud),
+    };
+  }
   if (Object.prototype.hasOwnProperty.call(result, "admin_allow_analytics")) {
     state.settings = {
       ...(state.settings || {}),
@@ -5365,6 +6297,7 @@ async function saveAdminSettings() {
       shop_address: $("#admin-shop-address")?.value.trim() || "",
       shop_postcode: $("#admin-shop-postcode")?.value.trim() || "",
       admin_allow_stock_crud: Boolean($("#admin-allow-stock")?.checked),
+      admin_allow_package_crud: Boolean($("#admin-allow-package")?.checked),
       admin_allow_analytics: Boolean($("#admin-allow-analytics")?.checked),
       logo_data_url: state.adminMerchantLogoDataUrl || "",
       logo_filename: state.adminMerchantLogoFilename || "",
@@ -5977,13 +6910,15 @@ function exportLogs() {
 }
 
 async function refreshStockData({ loading = false } = {}) {
-  const [stockResult, vendorResult] = await Promise.all([
+  const [stockResult, vendorResult, packageResult] = await Promise.all([
     api("/api/stock", { loading: loading ? "Loading item from Database..." : false }),
     api("/api/vendors", { loading: false }),
+    api("/api/packages", { loading: false }),
   ]);
   const nextProducts = Array.isArray(stockResult.products) ? stockResult.products : [];
   state.products = nextProducts;
   state.vendors = Array.isArray(vendorResult.vendors) ? vendorResult.vendors : [];
+  state.packages = Array.isArray(packageResult.packages) ? packageResult.packages : state.packages;
   reconcileCartWithStock();
   renderStock();
   renderCatalog();
@@ -6067,6 +7002,7 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   if (bootProgress) prepareLoginSplashForBootstrap();
   const bootProducts = Array.isArray(result.products) ? result.products : [];
   state.products = bootProducts;
+  state.packages = Array.isArray(result.packages) ? result.packages : [];
   if (bootProgress) updateBootLoading("vendor", 48);
   state.vendors = result.vendors || [];
   if (bootProgress) updateBootLoading("history", 68);
@@ -6141,6 +7077,10 @@ async function handleAction(action, target) {
       changeCartQty(target.dataset.name, 1);
     } else if (action === "cart-dec") {
       changeCartQty(target.dataset.name, -1);
+    } else if (action === "package-cart-inc") {
+      changePackageCartQty(target.dataset.packageId, 1);
+    } else if (action === "package-cart-dec") {
+      changePackageCartQty(target.dataset.packageId, -1);
     } else if (action === "select-disbursement-bank") {
       $("#disb-bank-code").value = target.dataset.bankCode || "";
       $("#disb-bank-search").value = target.dataset.bankName || "";
@@ -6158,6 +7098,8 @@ async function handleAction(action, target) {
       selectStock(target.dataset.index ?? target.dataset.name);
     } else if (action === "toggle-free") {
       toggleFreeItem(target.dataset.name, target.checked);
+    } else if (action === "package-toggle-free") {
+      toggleFreePackage(target.dataset.packageId, target.checked);
     } else if (action === "delete-stock") {
       await deleteSelectedStock();
     } else if (action === "reload-stock") {
@@ -6167,6 +7109,21 @@ async function handleAction(action, target) {
       await addVendor();
     } else if (action === "delete-vendor") {
       await deleteVendor(target.dataset.id);
+    } else if (action === "start-package-create") {
+      startPackageCreate();
+    } else if (action === "toggle-package-pick") {
+      togglePackageBuilderItem(target.dataset.name);
+    } else if (action === "confirm-package-selection") {
+      confirmPackageSelection();
+    } else if (action === "cancel-package-builder") {
+      resetPackageBuilder();
+      renderPackages();
+    } else if (action === "save-package") {
+      await savePackageDraft();
+    } else if (action === "edit-package") {
+      editPackage(target.dataset.packageId);
+    } else if (action === "delete-package") {
+      await deletePackage(target.dataset.packageId);
     } else if (action === "build-vendor-invoice") {
       await buildVendorInvoice();
     } else if (action === "export-vendor-pdf") {
@@ -6471,6 +7428,11 @@ function bindEvents() {
       renderCatalog();
       return;
     }
+    const catalogModeBtn = event.target.closest("[data-catalog-mode]");
+    if (catalogModeBtn) {
+      setCatalogMode(catalogModeBtn.dataset.catalogMode);
+      return;
+    }
     const settingsTab = event.target.closest("[data-settings-tab]");
     if (settingsTab) {
       setSettingsTab(settingsTab.dataset.settingsTab);
@@ -6536,22 +7498,50 @@ function bindEvents() {
       if (err.message !== "Crop cancelled.") showToast(err.message, "error");
     }
   });
+  $("#package-image")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const dataUrl = await cropImageFile(file, "catalog", "Package image");
+      if (state.packageBuilder?.mode === "setup") {
+        state.packageBuilder.draft = collectPackageSetupDraft();
+      }
+      state.packageImageB64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+      renderPackages();
+    } catch (err) {
+      if (err.message !== "Crop cancelled.") showToast(err.message, "error");
+    }
+  });
   document.addEventListener("input", (event) => {
     const qtyInput = event.target.closest("[data-qty-input]");
     if (qtyInput) {
       setCartQtyFromInput(qtyInput, { commit: false });
       return;
     }
+    const packageQtyInput = event.target.closest("[data-package-qty-input]");
+    if (packageQtyInput) {
+      setPackageCartQtyFromInput(packageQtyInput, { commit: false });
+      return;
+    }
     const tipInput = event.target.closest("[data-tip-field]");
     if (tipInput) {
-      setLineTip(tipInput.dataset.name, parseMoney(tipInput.value), { repaint: false });
+      if (tipInput.dataset.packageId) setPackageLineTip(tipInput.dataset.packageId, parseMoney(tipInput.value), { repaint: false });
+      else setLineTip(tipInput.dataset.name, parseMoney(tipInput.value), { repaint: false });
       return;
     }
     const discountInput = event.target.closest("[data-discount-field]");
     if (discountInput) {
       const field = discountInput.dataset.discountField;
       const value = parseMoney(discountInput.value);
-      setLineDiscount(discountInput.dataset.name, field, value, { repaint: false });
+      if (discountInput.dataset.packageId) setPackageLineDiscount(discountInput.dataset.packageId, field, value, { repaint: false });
+      else setLineDiscount(discountInput.dataset.name, field, value, { repaint: false });
+      return;
+    }
+    const packagePriceInput = event.target.closest("[data-package-setup-price]");
+    if (packagePriceInput) {
+      packagePriceInput.value = formatPlainNumber(parseMoney(packagePriceInput.value));
+      updatePackageSetupTotal();
       return;
     }
     if (event.target.closest("#system-txn-search")) {
@@ -6594,6 +7584,11 @@ function bindEvents() {
       setCartQtyFromInput(qtyInput, { commit: true });
       return;
     }
+    const packageQtyInput = event.target.closest?.("[data-package-qty-input]");
+    if (packageQtyInput) {
+      setPackageCartQtyFromInput(packageQtyInput, { commit: true });
+      return;
+    }
     const tipInput = event.target.closest?.("[data-tip-field]");
     if (tipInput) {
       const row = tipInput.closest(".cart-item");
@@ -6626,11 +7621,17 @@ function bindEvents() {
   }, true);
   document.addEventListener("keydown", (event) => {
     const qtyInput = event.target.closest?.("[data-qty-input]");
-    if (!qtyInput) return;
+    const packageQtyInput = event.target.closest?.("[data-package-qty-input]");
+    if (!qtyInput && !packageQtyInput) return;
     if (event.key === "Enter") {
       event.preventDefault();
-      setCartQtyFromInput(qtyInput, { commit: true });
-      qtyInput.blur();
+      if (packageQtyInput) {
+        setPackageCartQtyFromInput(packageQtyInput, { commit: true });
+        packageQtyInput.blur();
+      } else {
+        setCartQtyFromInput(qtyInput, { commit: true });
+        qtyInput.blur();
+      }
     }
   });
   document.addEventListener("change", (event) => {
@@ -6641,6 +7642,11 @@ function bindEvents() {
     const qtyInput = event.target.closest?.("[data-qty-input]");
     if (qtyInput) {
       setCartQtyFromInput(qtyInput, { commit: true });
+      return;
+    }
+    const packageQtyInput = event.target.closest?.("[data-package-qty-input]");
+    if (packageQtyInput) {
+      setPackageCartQtyFromInput(packageQtyInput, { commit: true });
       return;
     }
     if (event.target.closest("#system-txn-merchant")) {
