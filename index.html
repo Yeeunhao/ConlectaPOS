@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="/assets/ConlectaTabLogo.png">
   <link rel="apple-touch-icon" href="/assets/ConlectaTabLogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=11">
+  <link rel="stylesheet" href="/styles.css?v=12">
   <link rel="stylesheet" href="/theme-pack.css?v=10">
 </head>
 <body data-theme="crystal_bloom">
@@ -1227,21 +1227,36 @@
       <h2 id="disbursement-credential-title">Verifikasi Disbursement</h2>
       <div class="detail-summary compact" id="disbursement-credential-summary"></div>
       <div class="disbursement-credential-step" id="disbursement-pin-step">
-        <label class="field">
-          <span>PIN Admin</span>
-          <input id="disb-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
-        </label>
-        <button class="btn primary wide" type="button" data-action="start-disbursement-otp">Send OTP</button>
+        <p class="muted">Masukkan 6 digit PIN admin.</p>
+        <div class="otp-row pin-row disbursement-digit-row" aria-label="6 digit merchant admin PIN">
+          <input class="disb-pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code">
+          <input class="disb-pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="disb-pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="disb-pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="disb-pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="disb-pin-digit" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+        </div>
+        <input id="disb-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" hidden>
+        <div class="button-row">
+          <button class="btn ghost" type="button" data-action="close-modal">Cancel</button>
+          <button class="btn primary" type="button" data-action="start-disbursement-otp">Send OTP</button>
+        </div>
       </div>
       <div class="disbursement-credential-step" id="disbursement-otp-step" hidden>
         <p class="otp-countdown" id="disb-otp-countdown">OTP berlaku 60 detik.</p>
-        <label class="field">
-          <span>OTP</span>
-          <input id="disb-otp" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
-        </label>
+        <div class="otp-row disbursement-digit-row" aria-label="6 digit disbursement OTP">
+          <input class="disb-otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code">
+          <input class="disb-otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="disb-otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="disb-otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="disb-otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+          <input class="disb-otp-digit" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="1">
+        </div>
+        <input id="disb-otp" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" hidden>
         <div class="button-row">
-          <button class="btn primary" type="button" data-action="confirm-disbursement-otp">Confirm Disbursement</button>
+          <button class="btn ghost" type="button" data-action="close-modal">Cancel</button>
           <button class="btn ghost" id="disb-otp-resend" type="button" data-action="resend-disbursement-otp" disabled>Resend OTP</button>
+          <button class="btn primary" type="button" data-action="confirm-disbursement-otp">Confirm Disbursement</button>
         </div>
       </div>
       <p class="auth-status" id="disb-credential-status"></p>
@@ -1288,7 +1303,7 @@
   <script src="/theme-engine.js?v=10"></script>
   <script src="/qris-frame.js?v=8"></script>
   <script src="/image-crop.js?v=2"></script>
-  <script src="/app.js?v=28"></script>
+  <script src="/app.js?v=29"></script>
   <script src="/qris-frame-admin.js?v=9"></script>
 </body>
 </html>

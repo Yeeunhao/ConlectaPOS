@@ -1508,6 +1508,21 @@ h2 {
   flex-direction: column;
 }
 
+.checkout-panel {
+  position: sticky;
+  top: 12px;
+  height: calc(100vh - 270px);
+  max-height: calc(100vh - 270px);
+  overflow: hidden;
+}
+
+.checkout-panel .panel-head,
+.checkout-panel .checkout-form,
+.checkout-panel .cart-title,
+.checkout-panel .checkout-footer {
+  flex: 0 0 auto;
+}
+
 .catalog-tools {
   padding: 14px 18px;
   display: grid;
@@ -1797,6 +1812,10 @@ textarea:focus {
   align-content: start;
   overflow: auto;
   padding: 8px 12px 12px;
+}
+
+.checkout-panel .cart-list {
+  min-height: 0;
 }
 
 .empty-state {
@@ -3573,6 +3592,37 @@ body[data-theme="midnight_teal"] {
   display: none;
 }
 
+.disbursement-credential-step .muted {
+  margin-bottom: 0;
+}
+
+.disbursement-digit-row {
+  margin: 8px 0 4px;
+}
+
+.disbursement-digit-row input {
+  width: 100%;
+  height: 58px;
+  min-height: 58px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 900;
+  font-family: var(--mono);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+  padding: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.disbursement-digit-row input:focus {
+  border-color: rgba(255, 246, 216, 0.78);
+  background: rgba(255, 255, 255, 0.13);
+  box-shadow: 0 0 0 4px rgba(244, 169, 205, 0.12), 0 0 24px rgba(191, 245, 255, 0.16);
+}
+
 .system-txn-form {
   display: grid;
   gap: 14px;
@@ -4598,6 +4648,10 @@ body[data-theme="midnight_teal"] {
 
   .checkout-panel {
     order: -1;
+    position: static;
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .stats-grid {
@@ -4796,6 +4850,10 @@ body[data-theme="midnight_teal"] {
     max-height: none;
   }
 
+  .checkout-panel .cart-list {
+    min-height: 180px;
+  }
+
   .stats-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -4823,6 +4881,16 @@ body[data-theme="midnight_teal"] {
 
   .modal {
     padding: 24px 18px;
+  }
+
+  .disbursement-digit-row {
+    gap: 7px;
+  }
+
+  .disbursement-digit-row input {
+    height: 48px;
+    min-height: 48px;
+    font-size: 21px;
   }
 
   .payment-detail div,

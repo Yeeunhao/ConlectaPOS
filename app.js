@@ -1450,6 +1450,14 @@ function pinConfirmInputs() {
   return $$(".pin-confirm-digit");
 }
 
+function disbursementPinInputs() {
+  return $$(".disb-pin-digit");
+}
+
+function disbursementOtpInputs() {
+  return $$(".disb-otp-digit");
+}
+
 function setDigitCode(inputs, hiddenSelector, value = "") {
   const clean = String(value || "").replace(/\D/g, "").slice(0, 6);
   const hidden = $(hiddenSelector);
@@ -1513,6 +1521,30 @@ function clearPinRegisterCode(focus = false) {
   setPinRegisterStep(1);
   $$(".pin-row").forEach((row) => row.classList.remove("is-error"));
   if (focus) focusDigitInput(pinNewInputs());
+}
+
+function setDisbursementPinCode(value = "") {
+  return setDigitCode(disbursementPinInputs(), "#disb-pin", value);
+}
+
+function getDisbursementPinCode() {
+  return getDigitCode(disbursementPinInputs(), "#disb-pin");
+}
+
+function setDisbursementOtpCode(value = "") {
+  return setDigitCode(disbursementOtpInputs(), "#disb-otp", value);
+}
+
+function getDisbursementOtpCode() {
+  return getDigitCode(disbursementOtpInputs(), "#disb-otp");
+}
+
+function clearDisbursementCredentialCodes(focusPin = false) {
+  setDisbursementPinCode("");
+  setDisbursementOtpCode("");
+  disbursementPinInputs()[0]?.closest?.(".otp-row")?.classList.remove("is-error");
+  disbursementOtpInputs()[0]?.closest?.(".otp-row")?.classList.remove("is-error");
+  if (focusPin) focusDigitInput(disbursementPinInputs());
 }
 
 function setPinRegisterStep(step) {
@@ -1631,6 +1663,8 @@ function bindPinInputs() {
   bindDigitInputs(pinInputs(), "#pin-code", maybeAutoSubmitPin);
   bindDigitInputs(pinNewInputs(), "#pin-new-code", maybeAutoAdvancePinRegister);
   bindDigitInputs(pinConfirmInputs(), "#pin-confirm-code", maybeAutoRegisterPin);
+  bindDigitInputs(disbursementPinInputs(), "#disb-pin");
+  bindDigitInputs(disbursementOtpInputs(), "#disb-otp");
 }
 
 function applyPendingLogin(pending) {
@@ -3077,6 +3111,7 @@ function closeModal(force = false) {
   if (disbursementCredentialWasOpen) {
     state.pendingDisbursement = null;
     stopDisbursementOtpTimer();
+    clearDisbursementCredentialCodes(false);
   }
   state.activePaymentModalTxn = "";
   $("#modal-backdrop").hidden = true;
@@ -4062,6 +4097,31 @@ function resetDisbursementBeneficiary() {
   renderDisbursementBeneficiary();
 }
 
+function resetDisbursementRequestForm() {
+  state.disbursementBeneficiary = null;
+  state.disbursementDraft = null;
+  state.pendingDisbursement = null;
+  stopDisbursementOtpTimer();
+  [
+    "#disb-bank-search",
+    "#disb-bank-code",
+    "#disb-account-number",
+    "#disb-amount",
+    "#disb-pin",
+    "#disb-otp",
+  ].forEach((selector) => {
+    const el = $(selector);
+    if (el) el.value = "";
+  });
+  setDisbursementPinCode("");
+  setDisbursementOtpCode("");
+  if ($("#disb-status")) $("#disb-status").textContent = "";
+  if ($("#disb-credential-status")) $("#disb-credential-status").textContent = "";
+  renderDisbursementBeneficiary();
+  renderDisbursementBankOptions();
+  updateDisbursementAmountPreview({ clampMax: false });
+}
+
 function collectDisbursementDraft() {
   const s = disbursementSummary();
   const bankCode = $("#disb-bank-code")?.value.trim() || "";
@@ -4128,13 +4188,12 @@ function openDisbursementCredentials() {
   $("#disbursement-credential-modal").hidden = false;
   $("#disbursement-pin-step").hidden = false;
   $("#disbursement-otp-step").hidden = true;
-  $("#disb-pin").value = "";
-  $("#disb-otp").value = "";
+  clearDisbursementCredentialCodes(false);
   $("#disb-credential-status").textContent = "";
   $("#disbursement-credential-summary").innerHTML = disbursementConfirmRows().slice(0, 4).map(([label, value]) => `
     <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
   `).join("");
-  $("#disb-pin")?.focus();
+  focusDigitInput(disbursementPinInputs());
 }
 
 function stopDisbursementOtpTimer() {
@@ -4164,12 +4223,12 @@ function applyPendingDisbursement(pending) {
   if (pending?.request) state.disbursementDraft = pending.request;
   $("#disbursement-pin-step").hidden = true;
   $("#disbursement-otp-step").hidden = false;
-  $("#disb-otp").value = "";
+  setDisbursementOtpCode("");
   $("#disb-credential-status").textContent = "OTP dikirim ke email admin.";
   stopDisbursementOtpTimer();
   renderDisbursementOtpCountdown();
   disbursementOtpTimer = setInterval(renderDisbursementOtpCountdown, 1000);
-  $("#disb-otp")?.focus();
+  focusDigitInput(disbursementOtpInputs());
 }
 
 async function checkDisbursementBeneficiary() {
@@ -4217,8 +4276,10 @@ async function checkDisbursementBeneficiary() {
 
 async function startDisbursementOtp() {
   if (!state.disbursementDraft) return;
-  const pin = $("#disb-pin")?.value.trim() || "";
+  const pin = getDisbursementPinCode();
   if (!/^\d{6}$/.test(pin)) {
+    markDigitError(disbursementPinInputs());
+    focusDigitInput(disbursementPinInputs());
     $("#disb-credential-status").textContent = "PIN wajib 6 angka.";
     return;
   }
@@ -4241,8 +4302,10 @@ async function resendDisbursementOtp() {
 }
 
 async function confirmDisbursementOtp() {
-  const otp = $("#disb-otp")?.value.trim() || "";
+  const otp = getDisbursementOtpCode();
   if (!/^\d{6}$/.test(otp)) {
+    markDigitError(disbursementOtpInputs());
+    focusDigitInput(disbursementOtpInputs());
     $("#disb-credential-status").textContent = "OTP wajib 6 angka.";
     return;
   }
@@ -4254,9 +4317,7 @@ async function confirmDisbursementOtp() {
   state.disbursementSummary = result.summary || state.disbursementSummary;
   state.disbursementRequests = result.requests || state.disbursementRequests;
   state.disbursementBanks = result.banks || state.disbursementBanks;
-  state.pendingDisbursement = null;
-  state.disbursementDraft = null;
-  stopDisbursementOtpTimer();
+  resetDisbursementRequestForm();
   closeModal(true);
   setDisbursementTab("history");
   renderDisbursement();
