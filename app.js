@@ -1104,9 +1104,6 @@ async function loadPackageData({ loading = false, optional = true } = {}) {
 }
 
 async function savePackageData(packages) {
-  if (state.packageApiAvailable === false) {
-    throw new Error("Backend package belum aktif di production. Deploy backend Python terbaru dulu.");
-  }
   try {
     const result = await api("/api/packages/save", { method: "POST", body: { packages } });
     state.packageApiAvailable = true;
