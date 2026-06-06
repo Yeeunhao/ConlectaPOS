@@ -2274,15 +2274,11 @@ async function pollStockFromServer() {
   if (!state.auth || isSystemAdmin() || stockPollInFlight) return;
   stockPollInFlight = true;
   try {
-    const [result, packageResult] = await Promise.all([
-      api("/api/stock", { loading: false }),
-      loadPackageData({ loading: false }),
-    ]);
+    const result = await api("/api/stock", { loading: false });
     const nextProducts = Array.isArray(result.products) ? result.products : [];
     state.products = nextProducts;
-    state.packages = Array.isArray(packageResult.packages) ? packageResult.packages : state.packages;
     reconcileCartWithStock();
-    renderStock();
+    renderStock({ renderRelated: false });
     renderCatalog();
     renderCart();
     updateTotals();
@@ -4237,10 +4233,12 @@ function selectedStockItem() {
   return idx >= 0 ? state.products[idx] : null;
 }
 
-function renderStock() {
-  renderVendorOptions();
-  renderVendors();
-  renderPackages();
+function renderStock({ renderRelated = true } = {}) {
+  if (renderRelated) {
+    renderVendorOptions();
+    renderVendors();
+    renderPackages();
+  }
   const selectedIndex = selectedStockIndex();
   state.selectedStockIndex = selectedIndex;
   const selectedItem = selectedStockItem();
@@ -4426,6 +4424,15 @@ function collectPackageSetupDraft() {
   return draft;
 }
 
+function persistPackageSetupDraftFromDom() {
+  const builder = state.packageBuilder || {};
+  if (builder.mode !== "setup" || !builder.draft || !$("#package-name")) return;
+  state.packageBuilder = {
+    ...builder,
+    draft: collectPackageSetupDraft(),
+  };
+}
+
 function updatePackageSetupTotal() {
   const total = $$("[data-package-setup-price]").reduce((sum, input) => sum + parseMoney(input.value), 0);
   if ($("#package-total-preview")) $("#package-total-preview").textContent = formatRp(total);
@@ -4468,6 +4475,7 @@ async function savePackageDraft() {
 function renderPackages() {
   const container = $("#package-manager");
   if (!container) return;
+  persistPackageSetupDraftFromDom();
   const builder = state.packageBuilder || { mode: "list" };
   if ($("#package-count")) $("#package-count").textContent = `${state.packages.length} packages`;
   if (builder.mode === "select") {
@@ -7603,6 +7611,11 @@ function bindEvents() {
     if (packagePriceInput) {
       packagePriceInput.value = formatPlainNumber(parseMoney(packagePriceInput.value));
       updatePackageSetupTotal();
+      persistPackageSetupDraftFromDom();
+      return;
+    }
+    if (event.target.closest("#package-name")) {
+      persistPackageSetupDraftFromDom();
       return;
     }
     if (event.target.closest("#system-txn-search")) {
