@@ -968,7 +968,7 @@ function canCrudStock() {
 }
 
 function canCrudPackage() {
-  return isMerchantAdmin() && adminAllowPackageCrud() && packageBackendReady();
+  return isMerchantAdmin() && adminAllowPackageCrud();
 }
 
 function canViewAnalytics() {
@@ -1013,10 +1013,6 @@ function assertCanCrudPackage(action = "mengubah package") {
   }
   if (!adminAllowPackageCrud()) {
     showToast("CRUD package belum diaktifkan di Admin Setting.", "error");
-    return false;
-  }
-  if (!packageBackendReady()) {
-    showToast("Backend package belum aktif di production. Deploy backend Python terbaru dulu.", "error", 5200);
     return false;
   }
   return true;
@@ -3283,15 +3279,6 @@ function triggerCatalogFlip() {
 
 function setCatalogMode(mode) {
   const next = mode === "packages" ? "packages" : "items";
-  if (next === "packages" && !packageBackendReady()) {
-    showToast("Backend package belum aktif di production.", "error", 4200);
-    if (state.catalogMode !== "items") {
-      state.catalogMode = "items";
-      triggerCatalogFlip();
-    }
-    renderCatalog();
-    return;
-  }
   if (state.catalogMode !== next) {
     state.catalogMode = next;
     triggerCatalogFlip();
@@ -3303,19 +3290,19 @@ function renderCatalog() {
   const grid = $("#product-grid");
   const search = ($("#search-input").value || "").trim().toLowerCase();
   const packageUnavailable = !packageBackendReady();
-  const mode = state.catalogMode === "packages" && !packageUnavailable ? "packages" : "items";
-  if (state.catalogMode !== mode) state.catalogMode = mode;
+  const mode = state.catalogMode === "packages" ? "packages" : "items";
   $$(".seg[data-catalog-mode]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.catalogMode === mode);
-    if (btn.dataset.catalogMode === "packages") {
-      btn.disabled = packageUnavailable;
-      btn.title = packageUnavailable ? "Backend package belum aktif" : "";
-    }
+    if (btn.dataset.catalogMode === "packages") btn.title = packageUnavailable ? "Backend package belum aktif" : "";
   });
   if ($("#catalog-title")) $("#catalog-title").textContent = mode === "packages" ? "Package Catalog" : "Product Catalog";
   if ($("#catalog-hint")) $("#catalog-hint").textContent = mode === "packages" ? "Tap package controls to update cart" : "Tap item controls to update cart";
 
   if (mode === "packages") {
+    if (packageUnavailable) {
+      grid.innerHTML = `<div class="empty-state">Backend package belum aktif di production. Menu tetap tampil, tapi data package baru muncul setelah backend Python terbaru di-deploy.</div>`;
+      return;
+    }
     let packages = state.packages.filter((item) => String(item.name || "").toLowerCase().includes(search));
     if (state.filter === "low") packages = packages.filter((item) => packageAvailableStock(item) <= 5);
     if (state.filter === "cart") packages = packages.filter((item) => packageCartRaw(item.id).qty > 0);
