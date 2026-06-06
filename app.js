@@ -4,6 +4,7 @@ const state = {
   pendingLogin: null,
   products: [],
   packages: [],
+  packageApiAvailable: null,
   vendors: [],
   history: [],
   assets: { videos: [], payment_icons: [] },
@@ -954,6 +955,10 @@ function adminAllowPackageCrud() {
   return state.settings?.admin_allow_package_crud !== false;
 }
 
+function packageBackendReady() {
+  return state.packageApiAvailable !== false;
+}
+
 function adminAllowAnalytics() {
   return state.settings?.admin_allow_analytics !== false;
 }
@@ -963,7 +968,7 @@ function canCrudStock() {
 }
 
 function canCrudPackage() {
-  return isMerchantAdmin() && adminAllowPackageCrud();
+  return isMerchantAdmin() && adminAllowPackageCrud() && packageBackendReady();
 }
 
 function canViewAnalytics() {
@@ -1008,6 +1013,10 @@ function assertCanCrudPackage(action = "mengubah package") {
   }
   if (!adminAllowPackageCrud()) {
     showToast("CRUD package belum diaktifkan di Admin Setting.", "error");
+    return false;
+  }
+  if (!packageBackendReady()) {
+    showToast("Backend package belum aktif di production. Deploy backend Python terbaru dulu.", "error", 5200);
     return false;
   }
   return true;
@@ -1065,6 +1074,53 @@ async function api(path, options = {}) {
     return payload;
   } finally {
     if (loadingMessage) hideLoading();
+  }
+}
+
+function isMissingPackageEndpointError(err) {
+  const message = String(err?.message || err || "").toLowerCase();
+  return message.includes("unknown api route") || message.includes("http 404");
+}
+
+function markPackageApiUnavailable(err) {
+  state.packageApiAvailable = false;
+  if (err) console.warn("Package API belum tersedia di backend production.", err);
+}
+
+async function loadPackageData({ loading = false, optional = true } = {}) {
+  if (state.packageApiAvailable === false) {
+    return { ok: true, packages: state.packages || [], skipped: true };
+  }
+  try {
+    const result = await api("/api/packages", { loading });
+    state.packageApiAvailable = true;
+    return {
+      ...result,
+      packages: Array.isArray(result.packages) ? result.packages : [],
+    };
+  } catch (err) {
+    if (optional && isMissingPackageEndpointError(err)) {
+      markPackageApiUnavailable(err);
+      return { ok: true, packages: state.packages || [], skipped: true };
+    }
+    throw err;
+  }
+}
+
+async function savePackageData(packages) {
+  if (state.packageApiAvailable === false) {
+    throw new Error("Backend package belum aktif di production. Deploy backend Python terbaru dulu.");
+  }
+  try {
+    const result = await api("/api/packages/save", { method: "POST", body: { packages } });
+    state.packageApiAvailable = true;
+    return result;
+  } catch (err) {
+    if (isMissingPackageEndpointError(err)) {
+      markPackageApiUnavailable(err);
+      throw new Error("Backend package belum aktif di production. Deploy backend Python terbaru dulu.");
+    }
+    throw err;
   }
 }
 function showToast(message, type = "success", duration = 3200) {
@@ -2224,7 +2280,7 @@ async function pollStockFromServer() {
   try {
     const [result, packageResult] = await Promise.all([
       api("/api/stock", { loading: false }),
-      api("/api/packages", { loading: false }),
+      loadPackageData({ loading: false }),
     ]);
     const nextProducts = Array.isArray(result.products) ? result.products : [];
     state.products = nextProducts;
@@ -3227,6 +3283,15 @@ function triggerCatalogFlip() {
 
 function setCatalogMode(mode) {
   const next = mode === "packages" ? "packages" : "items";
+  if (next === "packages" && !packageBackendReady()) {
+    showToast("Backend package belum aktif di production.", "error", 4200);
+    if (state.catalogMode !== "items") {
+      state.catalogMode = "items";
+      triggerCatalogFlip();
+    }
+    renderCatalog();
+    return;
+  }
   if (state.catalogMode !== next) {
     state.catalogMode = next;
     triggerCatalogFlip();
@@ -3237,8 +3302,16 @@ function setCatalogMode(mode) {
 function renderCatalog() {
   const grid = $("#product-grid");
   const search = ($("#search-input").value || "").trim().toLowerCase();
-  const mode = state.catalogMode === "packages" ? "packages" : "items";
-  $$(".seg[data-catalog-mode]").forEach((btn) => btn.classList.toggle("active", btn.dataset.catalogMode === mode));
+  const packageUnavailable = !packageBackendReady();
+  const mode = state.catalogMode === "packages" && !packageUnavailable ? "packages" : "items";
+  if (state.catalogMode !== mode) state.catalogMode = mode;
+  $$(".seg[data-catalog-mode]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.catalogMode === mode);
+    if (btn.dataset.catalogMode === "packages") {
+      btn.disabled = packageUnavailable;
+      btn.title = packageUnavailable ? "Backend package belum aktif" : "";
+    }
+  });
   if ($("#catalog-title")) $("#catalog-title").textContent = mode === "packages" ? "Package Catalog" : "Product Catalog";
   if ($("#catalog-hint")) $("#catalog-hint").textContent = mode === "packages" ? "Tap package controls to update cart" : "Tap item controls to update cart";
 
@@ -4289,7 +4362,7 @@ async function deletePackage(packageId) {
   if (!packageItem) return;
   if (!confirm(`Delete package ${packageItem.name}?`)) return;
   const packages = state.packages.filter((item) => String(item.id) !== String(packageId));
-  const result = await api("/api/packages/save", { method: "POST", body: { packages } });
+  const result = await savePackageData(packages);
   state.packages = result.packages || packages;
   delete state.packageCart[packageId];
   resetPackageBuilder();
@@ -4394,7 +4467,7 @@ async function savePackageDraft() {
   const packages = existingId
     ? state.packages.map((item) => String(item.id) === String(existingId) ? { ...draft, id: existingId } : item)
     : state.packages.concat(draft);
-  const result = await api("/api/packages/save", { method: "POST", body: { packages } });
+  const result = await savePackageData(packages);
   state.packages = result.packages || packages;
   resetPackageBuilder();
   reconcileCartWithStock();
@@ -6913,7 +6986,7 @@ async function refreshStockData({ loading = false } = {}) {
   const [stockResult, vendorResult, packageResult] = await Promise.all([
     api("/api/stock", { loading: loading ? "Loading item from Database..." : false }),
     api("/api/vendors", { loading: false }),
-    api("/api/packages", { loading: false }),
+    loadPackageData({ loading: false }),
   ]);
   const nextProducts = Array.isArray(stockResult.products) ? stockResult.products : [];
   state.products = nextProducts;
@@ -7002,6 +7075,7 @@ async function reloadBootstrap({ bootProgress = false } = {}) {
   if (bootProgress) prepareLoginSplashForBootstrap();
   const bootProducts = Array.isArray(result.products) ? result.products : [];
   state.products = bootProducts;
+  state.packageApiAvailable = Object.prototype.hasOwnProperty.call(result, "packages");
   state.packages = Array.isArray(result.packages) ? result.packages : [];
   if (bootProgress) updateBootLoading("vendor", 48);
   state.vendors = result.vendors || [];
